@@ -1,0 +1,45 @@
+{
+  "name": "git-vibe",
+  "version": "0.1.0",
+  "description": "GitVibe - AI Agent Orchestration with Patch Management",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend && npm run build:shared",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build:shared": "cd shared && npm run build",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install && cd ../shared && npm install",
+    "setup": "npm run install:all && cd backend && npm run db:migrate",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "lint": "npm run lint:backend && npm run lint:frontend && npm run lint:shared",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:shared": "cd shared && npm run lint",
+    "format": "npm run format:backend && npm run format:frontend && npm run format:shared",
+    "format:backend": "cd backend && npm run format",
+    "format:frontend": "cd frontend && npm run format",
+    "format:shared": "cd shared && npm run format"
+  },
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": [
+    "git",
+    "ai-agents",
+    "patch-management",
+    "monorepo"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,49 @@
+{
+  "name": "git-vibe-backend",
+  "version": "0.1.0",
+  "description": "GitVibe Backend - Fastify API with SQLite and Agent Integration",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "db:generate": "drizzle-kit generate:sqlite",
+    "db:migrate": "tsx drizzle/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "better-sqlite3": "^11.5.0",
+    "drizzle-orm": "^0.45.1",
+    "fastify": "^5.2.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.2.2",
+    "uuid": "^11.0.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.17.0",
+    "@typescript-eslint/parser": "^8.17.0",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "git",
+    "ai-agents",
+    "patch-management",
+    "fastify",
+    "sqlite"
+  ],
+  "license": "MIT"
+}
