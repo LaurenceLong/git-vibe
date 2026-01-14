@@ -1,3 +1,18 @@
+export type WorkItem = {
+  id: string;
+  projectId: string;
+  type: 'issue' | 'feature-request';
+  title: string;
+  body: string | null;
+  status: 'open' | 'closed';
+  branchName: string;
+  baseSha: string;
+  headSha: string | null;
+  worktreePath: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -20,14 +35,18 @@ export type TargetRepo = {
 export type ChangeSet = {
   id: string;
   projectId: string;
+  workItemId: string | null;
   title: string;
   body: string | null;
   status: 'draft' | 'active' | 'completed' | 'cancelled';
+  prStatus: 'open' | 'merged' | 'closed' | null;
   baseBranch: string;
   baseSha: string;
   branchName: string;
   headSha: string | null;
   worktreePath: string;
+  mergedAt: Date | null;
+  closedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

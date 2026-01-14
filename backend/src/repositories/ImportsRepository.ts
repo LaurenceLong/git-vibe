@@ -40,11 +40,7 @@ export class ImportsRepository {
 
   async findById(id: string): Promise<Import | undefined> {
     const db = await this.getDbInstance();
-    const [importRecord] = await db
-      .select()
-      .from(imports)
-      .where(eq(imports.id, id))
-      .execute();
+    const [importRecord] = await db.select().from(imports).where(eq(imports.id, id)).execute();
 
     return importRecord as Import | undefined;
   }
@@ -62,7 +58,7 @@ export class ImportsRepository {
 
   async update(
     id: string,
-    data: Partial<Omit<Import, 'id' | 'changesetId' | 'targetRepoId' | 'strategy' | 'createdAt'>>,
+    data: Partial<Omit<Import, 'id' | 'changesetId' | 'targetRepoId' | 'strategy' | 'createdAt'>>
   ): Promise<Import | undefined> {
     const db = await this.getDbInstance();
     const [importRecord] = await db

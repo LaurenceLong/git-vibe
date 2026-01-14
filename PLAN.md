@@ -1,4 +1,4 @@
-# GitVibe — Plan (Multi‑Agent *Trigger* Integration + Patch Import) with Tech Stack
+# GitVibe — Plan (Multi‑Agent _Trigger_ Integration + Patch Import) with Tech Stack
 
 GitVibe is a local-first web app that **triggers multiple coding agents** to work inside an isolated **ChangeSet worktree**, captures their outputs and code changes, supports review, and then **imports the final changes into our target repository using patch**.
 
@@ -29,7 +29,9 @@ GitVibe exists to:
 ## 3) Tech Stack Choice (Modern + Upgrade-Friendly)
 
 ### Frontend (Web UI)
+
 - **React + Vite + TypeScript**
+- **Shadcn Components**
 - **Tailwind CSS**
 - **TanStack Query** (async state, polling long-running jobs)
 - **TanStack Router** (routing + data loading)
@@ -37,21 +39,25 @@ GitVibe exists to:
 - (Optional) **React Hook Form** (forms)
 
 ### Local Backend Service (API + Jobs)
+
 - **Node.js (TypeScript) + Fastify**
 - **SQLite** (local DB)
 - **Drizzle ORM + migrations** (schema versioning and upgrades)
 
 ### Git Integration
+
 - **Git CLI** invoked from backend (not from browser)
   - Worktrees, diff generation, patch apply, commit are done with real git.
   - Encapsulate all commands in a single `GitService`.
 
 ### Agent Execution (Trigger Mode)
+
 - **Adapter-based execution layer** in backend: `AgentAdapter`
 - Default executor: **local process runner** (spawned by Node)
 - Optional hardened executor (future): **container-based sandbox** (e.g., Docker) if required
 
 ### Packaging (Optional, depending on product shape)
+
 - If desktop app is required later: **Tauri** (preferred) or Electron
 - If browser + localhost is fine: run backend as a local service and open UI in the browser
 
@@ -60,6 +66,7 @@ GitVibe exists to:
 ## 4) High-Level Architecture
 
 **UI (React)** → calls → **Local API (Fastify)** → runs:
+
 - DB operations (SQLite)
 - Git operations (Git CLI)
 - Agent runs (spawn/adapter)
@@ -102,11 +109,13 @@ Key boundary: **frontend never touches Git or filesystem directly**. All privile
 ## 6) Patch Import (Deterministic Delivery)
 
 ### Preconditions
+
 - Source worktree exists and is clean enough to diff (committed or not—see policy below).
 - Target repo working tree must be **clean**.
 - Target repo is on a chosen branch (default: target default branch).
 
 ### Procedure (v1)
+
 1. Refresh ChangeSet `head_sha` from worktree: `git rev-parse HEAD`
 2. Generate patch: `git diff --no-color <base_sha>..<head_sha>`
 3. In target repo:
@@ -118,6 +127,7 @@ Key boundary: **frontend never touches Git or filesystem directly**. All privile
 4. Record an `imports` row with status + logs
 
 ### No-op policy
+
 If the patch is empty: record **succeeded** with log “nothing to import”, do not create a commit.
 
 ---
@@ -125,6 +135,7 @@ If the patch is empty: record **succeeded** with log “nothing to import”, do
 ## 7) Agent Triggering (Execution Model)
 
 ### Agent Adapter Interface (backend)
+
 Each agent integration implements:
 
 - `validate(config)`: validate configuration and permissions
@@ -137,6 +148,7 @@ Each agent integration implements:
   - structured summary (optional)
 
 ### Execution Isolation & Security Constraints (required)
+
 Minimum constraints for v1:
 
 - Run agents under a **restricted OS user** (no admin privileges)
@@ -162,6 +174,7 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 ### Tables
 
 #### `projects` (source repos)
+
 - `id`, `name`
 - `source_repo_path` (unique)
 - `source_repo_url` (optional)
@@ -169,12 +182,14 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 - timestamps
 
 #### `target_repos` (our repos)
+
 - `id`, `name`
 - `repo_path` (unique)
 - `default_branch`
 - timestamps
 
 #### `changesets`
+
 - `id`, `project_id`
 - `title`, `body`
 - `status`
@@ -184,16 +199,19 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 - timestamps
 
 #### `review_threads`
+
 - `id`, `changeset_id`
 - `status`, `severity`
 - `anchor` (JSON)
 - timestamps
 
 #### `review_comments`
+
 - `id`, `thread_id`
 - `body`, `created_at`
 
 #### `agent_runs` (triggered runs)
+
 - `id`, `changeset_id`
 - `agent_key` (e.g., `claude-code`, `openai-codex`, `local-script`)
 - `status` (`queued/running/succeeded/failed/cancelled`)
@@ -205,6 +223,7 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 - timestamps
 
 #### `imports` (patch import records)
+
 - `id`, `changeset_id`, `target_repo_id`
 - `strategy` = `patch`
 - `status`
@@ -254,6 +273,7 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 - All runs and imports are auditable from the UI.
 
 ## Sequence Diagram
+
 ```
 sequenceDiagram
     autonumber
@@ -322,10 +342,10 @@ sequenceDiagram
         note over User,Agent: 3) Trigger Agent Run, produce changes, record Agent Run
         User->>UI: Select agent_key + configure input + click "Run"
         UI->>API: POST /changesets/:id/agent-runs {agent_key, input_json}
-        
+
         API->>Agent: AgentAdapter.validate(config)
         Agent-->>API: validation result
-        
+
         alt Validation failed
             API-->>UI: 400 {error: validation failed}
         else Validation passed
@@ -339,12 +359,12 @@ sequenceDiagram
             DB-->>API: ok
 
             API->>Agent: AgentAdapter.run({worktreePath, changesetId,<br/>input, envPolicy})
-            
+
             loop Agent execution (with streaming logs)
                 Agent->>Src: Read/write files in worktree_path<br/>(restricted to worktree only)
                 Agent-->>API: Stream log/progress events
                 API->>DB: Append to agent_runs.log
-                
+
                 alt UI polling for status
                     UI->>API: GET /agent-runs/:run_id
                     API->>DB: SELECT status, log, timestamps

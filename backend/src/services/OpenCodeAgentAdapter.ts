@@ -89,7 +89,9 @@ export class OpenCodeAgentAdapter {
     }
   }
 
-  async getStatus(runId: string): Promise<{ status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' }> {
+  async getStatus(
+    runId: string
+  ): Promise<{ status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' }> {
     if (this.activeProcesses.has(runId)) {
       return { status: 'running' };
     }

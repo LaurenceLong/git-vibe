@@ -16,12 +16,14 @@ A local-first web application that orchestrates multiple AI coding agents to wor
 ## Tech Stack
 
 ### Backend
+
 - Node.js + TypeScript
 - Fastify web framework
 - SQLite database with Drizzle ORM
 - Git CLI integration
 
 ### Frontend
+
 - React 18 + TypeScript
 - Vite build tool
 - TanStack Query for data fetching
@@ -40,17 +42,20 @@ A local-first web application that orchestrates multiple AI coding agents to wor
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd git-vibe
 ```
 
 2. Install dependencies:
+
 ```bash
 npm run install:all
 ```
 
 3. Run database migrations:
+
 ```bash
 npm run db:migrate
 ```
@@ -64,6 +69,7 @@ npm run dev
 ```
 
 This will start:
+
 - Backend API server at `http://127.0.0.1:3001`
 - Frontend UI at `http://localhost:3000`
 
@@ -85,6 +91,7 @@ OPENCODE_EXECUTABLE=/path/to/opencode
 ### 1. Register a Project
 
 Navigate to **Projects** and add a source Git repository:
+
 - Name: My Project
 - Source Repo Path: `/path/to/repo`
 - Source Repo URL: https://github.com/user/repo (optional)
@@ -92,12 +99,14 @@ Navigate to **Projects** and add a source Git repository:
 ### 2. Register a Target Repo
 
 Navigate to **Target Repos** and add a destination repository:
+
 - Name: My Target Repo
 - Repo Path: `/path/to/target/repo`
 
 ### 3. Create a ChangeSet
 
 Navigate to **Changesets** and create a new changeset:
+
 - Select a project
 - Title: Feature description
 - Body: Detailed description (optional)
@@ -108,6 +117,7 @@ This creates an isolated Git worktree for agent work.
 ### 4. Trigger an Agent Run
 
 In the Changeset detail view, trigger an agent:
+
 - Agent Key: `opencode`
 - Prompt: Your task description
 - Config: OpenCode executable path and arguments
@@ -121,10 +131,12 @@ View the diff of changes made by agents. Add review threads with comments if nee
 ### 6. Import to Target Repo
 
 When satisfied with changes, import to your target repository:
+
 - Select target repo
 - Click Import
 
 GitVibe will:
+
 1. Generate a patch from changeset diff
 2. Apply patch to target repo
 3. Create a commit with changeset metadata
@@ -133,6 +145,7 @@ GitVibe will:
 ### 7. Clean Up
 
 When done, delete the changeset to:
+
 - Remove the worktree
 - Delete all associated records
 
@@ -166,16 +179,19 @@ git-vibe/
 ## API Endpoints
 
 ### Projects
+
 - `GET /api/projects` - List all projects
 - `POST /api/projects` - Create a project
 - `GET /api/projects/:id` - Get project details
 
 ### Target Repos
+
 - `GET /api/target-repos` - List all target repos
 - `POST /api/target-repos` - Create a target repo
 - `GET /api/target-repos/:id` - Get target repo details
 
 ### Changesets
+
 - `GET /api/changesets` - List changesets
 - `POST /api/changesets` - Create a changeset
 - `GET /api/changesets/:id` - Get changeset details
@@ -183,19 +199,23 @@ git-vibe/
 - `DELETE /api/changesets/:id` - Delete changeset and worktree
 
 ### Diff
+
 - `GET /api/diffs/changesets/:id` - Get diff for changeset
 
 ### Agent Runs
+
 - `POST /api/changesets/:id/agent-runs` - Trigger agent run
 - `GET /api/agent-runs/:id` - Get run status and logs
 - `POST /api/agent-runs/:id/cancel` - Cancel running agent
 
 ### Imports
+
 - `POST /api/changesets/:id/imports` - Start patch import
 - `GET /api/imports/:id` - Get import status
 - `GET /api/changesets/:id/imports` - List imports for changeset
 
 ### Reviews
+
 - `GET /api/changesets/:id/reviews/threads` - List review threads
 - `POST /api/changesets/:id/reviews/threads` - Create thread
 - `GET /api/changesets/:id/reviews/threads/:threadId` - Get thread details
@@ -205,10 +225,12 @@ git-vibe/
 ## Storage
 
 All data is stored in the system temp directory:
+
 - Linux/Mac: `/tmp/git-vibe/`
 - Windows: `%TEMP%\git-vibe\`
 
 Directory structure:
+
 ```
 git-vibe/
 ├── data/

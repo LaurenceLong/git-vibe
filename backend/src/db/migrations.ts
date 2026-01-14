@@ -41,14 +41,12 @@ export async function runMigrations() {
     // Fallback: raw .sql files without Drizzle meta journal.
     // Execute each migration as a whole script (no naive splitting),
     // and fail fast on any error so the server doesn't start with a broken schema.
-    const files = (await fs.readdir(migrationsFolder))
-      .filter((f) => f.endsWith('.sql'))
-      .sort();
+    const files = (await fs.readdir(migrationsFolder)).filter((f) => f.endsWith('.sql')).sort();
 
     if (files.length === 0) {
       console.warn(
         `No migrations found in ${migrationsFolder}. ` +
-          `Either generate drizzle-kit migrations (recommended) or add *.sql migrations.`,
+          `Either generate drizzle-kit migrations (recommended) or add *.sql migrations.`
       );
       return;
     }

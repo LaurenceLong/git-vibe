@@ -39,11 +39,7 @@ export class AgentRunsRepository {
 
   async findById(id: string): Promise<AgentRun | undefined> {
     const db = await this.getDbInstance();
-    const [agentRun] = await db
-      .select()
-      .from(agentRuns)
-      .where(eq(agentRuns.id, id))
-      .execute();
+    const [agentRun] = await db.select().from(agentRuns).where(eq(agentRuns.id, id)).execute();
 
     return agentRun as AgentRun | undefined;
   }
@@ -61,7 +57,7 @@ export class AgentRunsRepository {
 
   async update(
     id: string,
-    data: Partial<Omit<AgentRun, 'id' | 'changesetId' | 'createdAt'>>,
+    data: Partial<Omit<AgentRun, 'id' | 'changesetId' | 'createdAt'>>
   ): Promise<AgentRun | undefined> {
     const db = await this.getDbInstance();
     const [agentRun] = await db

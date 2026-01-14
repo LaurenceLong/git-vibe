@@ -1,6 +1,29 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
+export const workItems = sqliteTable('work_items', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  type: text('type', { enum: ['issue', 'feature-request'] }).notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  status: text('status', { enum: ['open', 'closed'] })
+    .notNull()
+    .default('open'),
+  branchName: text('branch_name').notNull(),
+  baseSha: text('base_sha').notNull(),
+  headSha: text('head_sha'),
+  worktreePath: text('worktree_path'),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -33,16 +56,20 @@ export const changesets = sqliteTable('changesets', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
+  workItemId: text('work_item_id').references(() => workItems.id, { onDelete: 'set null' }),
   title: text('title').notNull(),
   body: text('body'),
   status: text('status', { enum: ['draft', 'active', 'completed', 'cancelled'] })
     .notNull()
     .default('draft'),
+  prStatus: text('pr_status', { enum: ['open', 'merged', 'closed'] }),
   baseBranch: text('base_branch').notNull(),
   baseSha: text('base_sha').notNull(),
   branchName: text('branch_name').notNull(),
   headSha: text('head_sha'),
   worktreePath: text('worktree_path').notNull(),
+  mergedAt: integer('merged_at', { mode: 'timestamp' }),
+  closedAt: integer('closed_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),

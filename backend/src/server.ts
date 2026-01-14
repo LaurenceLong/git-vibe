@@ -1,5 +1,4 @@
 import { createServer } from './middleware/setup.js';
-import { ensureStorageDirectories } from './utils/storage.js';
 import { getDb } from './db/client.js';
 import { projectsRoutes } from './routes/projects.js';
 import { targetReposRoutes } from './routes/targetRepos.js';
@@ -8,6 +7,7 @@ import { diffsRoutes } from './routes/diffs.js';
 import { agentRunsRoutes } from './routes/agentRuns.js';
 import { importsRoutes } from './routes/imports.js';
 import { reviewRoutes } from './routes/reviews.js';
+import { workitemsRoutes } from './routes/workitems.js';
 import { runMigrations } from './db/migrations.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -31,6 +31,7 @@ async function start() {
   await server.register(agentRunsRoutes);
   await server.register(importsRoutes);
   await server.register(reviewRoutes);
+  await server.register(workitemsRoutes);
 
   try {
     await server.listen({ port: PORT, host: HOST });

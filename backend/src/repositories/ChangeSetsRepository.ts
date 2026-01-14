@@ -16,11 +16,15 @@ export class ChangeSetsRepository {
   async create(data: {
     id: string;
     projectId: string;
+    workItemId?: string;
     title: string;
     body?: string;
+    status?: ChangeSet['status'];
+    prStatus?: ChangeSet['prStatus'];
     baseBranch: string;
     baseSha: string;
     branchName: string;
+    headSha?: string;
     worktreePath: string;
   }): Promise<ChangeSet> {
     const db = await this.getDbInstance();
@@ -29,11 +33,15 @@ export class ChangeSetsRepository {
       .values({
         id: data.id,
         projectId: data.projectId,
+        workItemId: data.workItemId || null,
         title: data.title,
         body: data.body || null,
+        status: data.status || 'draft',
+        prStatus: data.prStatus || null,
         baseBranch: data.baseBranch,
         baseSha: data.baseSha,
         branchName: data.branchName,
+        headSha: data.headSha || null,
         worktreePath: data.worktreePath,
       })
       .returning()
@@ -56,11 +64,7 @@ export class ChangeSetsRepository {
 
   async findById(id: string): Promise<ChangeSet | undefined> {
     const db = await this.getDbInstance();
-    const [changeset] = await db
-      .select()
-      .from(changesets)
-      .where(eq(changesets.id, id))
-      .execute();
+    const [changeset] = await db.select().from(changesets).where(eq(changesets.id, id)).execute();
 
     return changeset as ChangeSet | undefined;
   }
@@ -70,7 +74,10 @@ export class ChangeSetsRepository {
     data: {
       headSha?: string;
       status?: ChangeSet['status'];
-    },
+      prStatus?: ChangeSet['prStatus'];
+      mergedAt?: Date;
+      closedAt?: Date;
+    }
   ): Promise<ChangeSet | undefined> {
     const db = await this.getDbInstance();
     const [changeset] = await db

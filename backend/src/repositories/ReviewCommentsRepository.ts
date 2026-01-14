@@ -13,11 +13,7 @@ export class ReviewCommentsRepository {
     return this.db;
   }
 
-  async create(data: {
-    id: string;
-    threadId: string;
-    body: string;
-  }): Promise<ReviewComment> {
+  async create(data: { id: string; threadId: string; body: string }): Promise<ReviewComment> {
     const db = await this.getDbInstance();
     const [comment] = await db
       .insert(reviewComments)

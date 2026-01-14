@@ -44,11 +44,7 @@ export class ProjectsRepository {
 
   async findById(id: string): Promise<Project | undefined> {
     const db = await this.getDbInstance();
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, id))
-      .execute();
+    const [project] = await db.select().from(projects).where(eq(projects.id, id)).execute();
 
     return project as Project | undefined;
   }
@@ -58,7 +54,7 @@ export class ProjectsRepository {
     data: {
       name?: string;
       sourceRepoUrl?: string;
-    },
+    }
   ): Promise<Project | undefined> {
     const db = await this.getDbInstance();
     const [project] = await db

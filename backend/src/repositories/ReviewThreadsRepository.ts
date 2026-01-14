@@ -18,6 +18,7 @@ export class ReviewThreadsRepository {
     changesetId: string;
     severity: ReviewThread['severity'];
     anchor: string;
+    status?: ReviewThread['status'];
   }): Promise<ReviewThread> {
     const db = await this.getDbInstance();
     const [thread] = await db
@@ -27,7 +28,7 @@ export class ReviewThreadsRepository {
         changesetId: data.changesetId,
         severity: data.severity,
         anchor: data.anchor,
-        status: 'open',
+        status: data.status || 'open',
       })
       .returning()
       .execute();
@@ -57,7 +58,10 @@ export class ReviewThreadsRepository {
     return thread as ReviewThread | undefined;
   }
 
-  async update(id: string, data: { status: ReviewThread['status'] }): Promise<ReviewThread | undefined> {
+  async update(
+    id: string,
+    data: { status: ReviewThread['status'] }
+  ): Promise<ReviewThread | undefined> {
     const db = await this.getDbInstance();
     const [thread] = await db
       .update(reviewThreads)
@@ -70,6 +74,14 @@ export class ReviewThreadsRepository {
       .execute();
 
     return thread as ReviewThread | undefined;
+  }
+
+  async resolveThread(id: string): Promise<ReviewThread | undefined> {
+    return this.update(id, { status: 'resolved' });
+  }
+
+  async unresolveThread(id: string): Promise<ReviewThread | undefined> {
+    return this.update(id, { status: 'open' });
   }
 }
 

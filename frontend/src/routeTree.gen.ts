@@ -13,7 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TargetReposIndexRouteImport } from './routes/target-repos/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ChangesetsIndexRouteImport } from './routes/changesets/index'
+import { Route as WorkitemsIdRouteImport } from './routes/workitems/$id'
+import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id'
+import { Route as ProjectsIdRouteImport } from './routes/projects/$id'
+import { Route as ChangesetsNewRouteImport } from './routes/changesets/new'
 import { Route as ChangesetsIdRouteImport } from './routes/changesets/$id'
+import { Route as ProjectsIdWorkitemsRouteImport } from './routes/projects/$id.workitems'
+import { Route as ProjectsIdSettingsRouteImport } from './routes/projects/$id.settings'
+import { Route as ProjectsIdPullrequestsRouteImport } from './routes/projects/$id.pullrequests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -35,56 +42,142 @@ const ChangesetsIndexRoute = ChangesetsIndexRouteImport.update({
   path: '/changesets/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkitemsIdRoute = WorkitemsIdRouteImport.update({
+  id: '/workitems/$id',
+  path: '/workitems/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TargetReposIdRoute = TargetReposIdRouteImport.update({
+  id: '/target-repos/$id',
+  path: '/target-repos/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsIdRoute = ProjectsIdRouteImport.update({
+  id: '/projects/$id',
+  path: '/projects/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangesetsNewRoute = ChangesetsNewRouteImport.update({
+  id: '/changesets/new',
+  path: '/changesets/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChangesetsIdRoute = ChangesetsIdRouteImport.update({
   id: '/changesets/$id',
   path: '/changesets/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsIdWorkitemsRoute = ProjectsIdWorkitemsRouteImport.update({
+  id: '/workitems',
+  path: '/workitems',
+  getParentRoute: () => ProjectsIdRoute,
+} as any)
+const ProjectsIdSettingsRoute = ProjectsIdSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => ProjectsIdRoute,
+} as any)
+const ProjectsIdPullrequestsRoute = ProjectsIdPullrequestsRouteImport.update({
+  id: '/pullrequests',
+  path: '/pullrequests',
+  getParentRoute: () => ProjectsIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/changesets/$id': typeof ChangesetsIdRoute
+  '/changesets/new': typeof ChangesetsNewRoute
+  '/projects/$id': typeof ProjectsIdRouteWithChildren
+  '/target-repos/$id': typeof TargetReposIdRoute
+  '/workitems/$id': typeof WorkitemsIdRoute
   '/changesets': typeof ChangesetsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
+  '/projects/$id/pullrequests': typeof ProjectsIdPullrequestsRoute
+  '/projects/$id/settings': typeof ProjectsIdSettingsRoute
+  '/projects/$id/workitems': typeof ProjectsIdWorkitemsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/changesets/$id': typeof ChangesetsIdRoute
+  '/changesets/new': typeof ChangesetsNewRoute
+  '/projects/$id': typeof ProjectsIdRouteWithChildren
+  '/target-repos/$id': typeof TargetReposIdRoute
+  '/workitems/$id': typeof WorkitemsIdRoute
   '/changesets': typeof ChangesetsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
+  '/projects/$id/pullrequests': typeof ProjectsIdPullrequestsRoute
+  '/projects/$id/settings': typeof ProjectsIdSettingsRoute
+  '/projects/$id/workitems': typeof ProjectsIdWorkitemsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/changesets/$id': typeof ChangesetsIdRoute
+  '/changesets/new': typeof ChangesetsNewRoute
+  '/projects/$id': typeof ProjectsIdRouteWithChildren
+  '/target-repos/$id': typeof TargetReposIdRoute
+  '/workitems/$id': typeof WorkitemsIdRoute
   '/changesets/': typeof ChangesetsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/target-repos/': typeof TargetReposIndexRoute
+  '/projects/$id/pullrequests': typeof ProjectsIdPullrequestsRoute
+  '/projects/$id/settings': typeof ProjectsIdSettingsRoute
+  '/projects/$id/workitems': typeof ProjectsIdWorkitemsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/changesets/$id'
+    | '/changesets/new'
+    | '/projects/$id'
+    | '/target-repos/$id'
+    | '/workitems/$id'
     | '/changesets'
     | '/projects'
     | '/target-repos'
+    | '/projects/$id/pullrequests'
+    | '/projects/$id/settings'
+    | '/projects/$id/workitems'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/changesets/$id' | '/changesets' | '/projects' | '/target-repos'
+  to:
+    | '/'
+    | '/changesets/$id'
+    | '/changesets/new'
+    | '/projects/$id'
+    | '/target-repos/$id'
+    | '/workitems/$id'
+    | '/changesets'
+    | '/projects'
+    | '/target-repos'
+    | '/projects/$id/pullrequests'
+    | '/projects/$id/settings'
+    | '/projects/$id/workitems'
   id:
     | '__root__'
     | '/'
     | '/changesets/$id'
+    | '/changesets/new'
+    | '/projects/$id'
+    | '/target-repos/$id'
+    | '/workitems/$id'
     | '/changesets/'
     | '/projects/'
     | '/target-repos/'
+    | '/projects/$id/pullrequests'
+    | '/projects/$id/settings'
+    | '/projects/$id/workitems'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangesetsIdRoute: typeof ChangesetsIdRoute
+  ChangesetsNewRoute: typeof ChangesetsNewRoute
+  ProjectsIdRoute: typeof ProjectsIdRouteWithChildren
+  TargetReposIdRoute: typeof TargetReposIdRoute
+  WorkitemsIdRoute: typeof WorkitemsIdRoute
   ChangesetsIndexRoute: typeof ChangesetsIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   TargetReposIndexRoute: typeof TargetReposIndexRoute
@@ -120,6 +213,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChangesetsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workitems/$id': {
+      id: '/workitems/$id'
+      path: '/workitems/$id'
+      fullPath: '/workitems/$id'
+      preLoaderRoute: typeof WorkitemsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/target-repos/$id': {
+      id: '/target-repos/$id'
+      path: '/target-repos/$id'
+      fullPath: '/target-repos/$id'
+      preLoaderRoute: typeof TargetReposIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$id': {
+      id: '/projects/$id'
+      path: '/projects/$id'
+      fullPath: '/projects/$id'
+      preLoaderRoute: typeof ProjectsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changesets/new': {
+      id: '/changesets/new'
+      path: '/changesets/new'
+      fullPath: '/changesets/new'
+      preLoaderRoute: typeof ChangesetsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/changesets/$id': {
       id: '/changesets/$id'
       path: '/changesets/$id'
@@ -127,12 +248,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChangesetsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$id/workitems': {
+      id: '/projects/$id/workitems'
+      path: '/workitems'
+      fullPath: '/projects/$id/workitems'
+      preLoaderRoute: typeof ProjectsIdWorkitemsRouteImport
+      parentRoute: typeof ProjectsIdRoute
+    }
+    '/projects/$id/settings': {
+      id: '/projects/$id/settings'
+      path: '/settings'
+      fullPath: '/projects/$id/settings'
+      preLoaderRoute: typeof ProjectsIdSettingsRouteImport
+      parentRoute: typeof ProjectsIdRoute
+    }
+    '/projects/$id/pullrequests': {
+      id: '/projects/$id/pullrequests'
+      path: '/pullrequests'
+      fullPath: '/projects/$id/pullrequests'
+      preLoaderRoute: typeof ProjectsIdPullrequestsRouteImport
+      parentRoute: typeof ProjectsIdRoute
+    }
   }
 }
+
+interface ProjectsIdRouteChildren {
+  ProjectsIdPullrequestsRoute: typeof ProjectsIdPullrequestsRoute
+  ProjectsIdSettingsRoute: typeof ProjectsIdSettingsRoute
+  ProjectsIdWorkitemsRoute: typeof ProjectsIdWorkitemsRoute
+}
+
+const ProjectsIdRouteChildren: ProjectsIdRouteChildren = {
+  ProjectsIdPullrequestsRoute: ProjectsIdPullrequestsRoute,
+  ProjectsIdSettingsRoute: ProjectsIdSettingsRoute,
+  ProjectsIdWorkitemsRoute: ProjectsIdWorkitemsRoute,
+}
+
+const ProjectsIdRouteWithChildren = ProjectsIdRoute._addFileChildren(
+  ProjectsIdRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangesetsIdRoute: ChangesetsIdRoute,
+  ChangesetsNewRoute: ChangesetsNewRoute,
+  ProjectsIdRoute: ProjectsIdRouteWithChildren,
+  TargetReposIdRoute: TargetReposIdRoute,
+  WorkitemsIdRoute: WorkitemsIdRoute,
   ChangesetsIndexRoute: ChangesetsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   TargetReposIndexRoute: TargetReposIndexRoute,

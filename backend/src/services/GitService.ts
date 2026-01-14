@@ -32,7 +32,7 @@ export class GitService {
     try {
       return this.execCommand(
         'git symbolic-ref refs/remotes/origin/HEAD | sed "s@^refs/remotes/origin/@@"',
-        repoPath,
+        repoPath
       ).trim();
     } catch {
       return 'main';
@@ -62,6 +62,35 @@ export class GitService {
 
   removeWorktree(worktreePath: string, repoPath: string): void {
     this.execCommand(`git worktree remove ${worktreePath}`, repoPath);
+  }
+
+  recreateWorktree(
+    repoPath: string,
+    worktreePath: string,
+    branchName: string,
+    baseRef: string
+  ): void {
+    // Remove existing worktree if it exists
+    try {
+      this.removeWorktree(worktreePath, repoPath);
+    } catch {
+      // Worktree doesn't exist, continue
+    }
+    // Create new worktree
+    this.createWorktree(repoPath, worktreePath, branchName, baseRef);
+  }
+
+  getWorktreeStatus(repoPath: string, worktreePath: string): 'present' | 'missing' {
+    try {
+      // Check if worktree exists by listing worktrees
+      const worktrees = this.execCommand('git worktree list --porcelain', repoPath);
+      const worktreeExists = worktrees
+        .split('\n')
+        .some((line) => line.startsWith('worktree ') && line.substring(9) === worktreePath);
+      return worktreeExists ? 'present' : 'missing';
+    } catch {
+      return 'missing';
+    }
   }
 
   getWorktreeHead(worktreePath: string): string {

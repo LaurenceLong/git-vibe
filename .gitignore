@@ -38,3 +38,9 @@ disassemble.py
 *.sql
 *.sqlite
 *.txt
+
+*.tsbuildinfo
+
+clean_js.py
+
+*.md

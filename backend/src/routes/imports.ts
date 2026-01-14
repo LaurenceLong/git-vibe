@@ -71,7 +71,11 @@ export async function importsRoutes(server: FastifyInstance) {
       });
 
       try {
-        const patch = gitService.generatePatch(changeset.baseSha, sourceHeadSha, changeset.worktreePath);
+        const patch = gitService.generatePatch(
+          changeset.baseSha,
+          sourceHeadSha,
+          changeset.worktreePath
+        );
 
         if (!patch.trim()) {
           const updated = await importsRepository.update(importId, {
