@@ -5,12 +5,13 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { workItemsApi } from '@/lib/api';
 import { Project, WorkItem, WorkItemType, WorkItemStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/Button';
+import { Pagination } from '@/components/ui/Pagination';
 import { CreateWorkItemModal } from '@/components/workitem/CreateWorkItemModal';
 import { useCreateWorkItem } from '@/hooks/useWorkItem';
 
@@ -22,12 +23,17 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
   const [statusFilter, setStatusFilter] = useState<WorkItemStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const navigate = useNavigate();
 
-  const { data: workItems, isLoading } = useQuery({
-    queryKey: ['workitems', project.id],
-    queryFn: () => workItemsApi.list(project.id).then((res) => res.data),
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['workitems', project.id, currentPage, itemsPerPage],
+    queryFn: () => workItemsApi.list(project.id, currentPage, itemsPerPage).then((res) => res.data),
   });
+
+  const workItems = response?.data || [];
+  const pagination = response?.pagination;
 
   const { createWorkItem, isLoading: isCreating } = useCreateWorkItem();
 
@@ -42,12 +48,11 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
     setIsCreateModalOpen(false);
   };
 
-  const filteredWorkItems =
-    workItems?.filter((wi: WorkItem) => {
-      if (statusFilter !== 'all' && wi.status !== statusFilter) return false;
-      if (typeFilter !== 'all' && wi.type !== typeFilter) return false;
-      return true;
-    }) || [];
+  const filteredWorkItems = workItems.filter((wi: WorkItem) => {
+    if (statusFilter !== 'all' && wi.status !== statusFilter) return false;
+    if (typeFilter !== 'all' && wi.type !== typeFilter) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -135,12 +140,25 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
           }
           action={
             statusFilter === 'all' && typeFilter === 'all' ? (
-              <Link to={`/workitems/new`} search={{ project_id: project.id }}>
-                <Button variant="primary">Create Work Item</Button>
-              </Link>
+              <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
+                Create Work Item
+              </Button>
             ) : undefined
           }
         />
+      )}
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="mt-6">
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={pagination.total}
+            itemsPerPage={pagination.limit}
+          />
+        </div>
       )}
     </div>
   );

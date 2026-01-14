@@ -17,12 +17,12 @@ export interface OverviewTabProps {
 export function OverviewTab({ project }: OverviewTabProps) {
   const { data: workItems, isLoading: isLoadingWorkItems } = useQuery({
     queryKey: ['workitems', project.id],
-    queryFn: () => workItemsApi.list(project.id).then((res) => res.data),
+    queryFn: () => workItemsApi.list(project.id).then((res) => res.data.data),
   });
 
   const { data: changesets, isLoading: isLoadingChangesets } = useQuery({
     queryKey: ['changesets', project.id],
-    queryFn: () => changesetsApi.list(project.id).then((res) => res.data),
+    queryFn: () => changesetsApi.list(project.id).then((res) => res.data.data),
   });
 
   const totalWorkItems = workItems?.length || 0;

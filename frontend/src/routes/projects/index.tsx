@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/components/Toast';
 
 export const Route = createFileRoute('/projects/')({
@@ -26,11 +27,16 @@ function ProjectsIndex() {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  const { data: projects, isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projectsApi.list().then((res) => res.data),
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['projects', currentPage, itemsPerPage],
+    queryFn: () => projectsApi.list(currentPage, itemsPerPage).then((res) => res.data),
   });
+
+  const projects = response?.data || [];
+  const pagination = response?.pagination;
 
   const {
     register,
@@ -54,6 +60,7 @@ function ProjectsIndex() {
       success('Project created successfully!');
       setIsModalOpen(false);
       reset();
+      setCurrentPage(1);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err: Error) => {
@@ -97,32 +104,47 @@ function ProjectsIndex() {
           action={<Button onClick={() => setIsModalOpen(true)}>Create Project</Button>}
         />
       ) : (
-        <div className="grid gap-4">
-          {projects?.map((project) => (
-            <Link
-              key={project.id}
-              to={`/projects/${project.id}`}
-              className="block rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50"
-            >
-              <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
-              <p className="mt-1 text-sm text-gray-600">{project.sourceRepoPath}</p>
-              {project.sourceRepoUrl && (
-                <a
-                  href={project.sourceRepoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 block text-sm text-blue-600 hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {project.sourceRepoUrl}
-                </a>
-              )}
-              <div className="mt-2 text-xs text-gray-600">
-                <span className="font-medium">Default Branch:</span> {project.defaultBranch}
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4">
+            {projects?.map((project) => (
+              <Link
+                key={project.id}
+                to={`/projects/${project.name}`}
+                className="block rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50"
+              >
+                <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+                <p className="mt-1 text-sm text-gray-600">{project.sourceRepoPath}</p>
+                {project.sourceRepoUrl && (
+                  <a
+                    href={project.sourceRepoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block text-sm text-blue-600 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {project.sourceRepoUrl}
+                  </a>
+                )}
+                <div className="mt-2 text-xs text-gray-600">
+                  <span className="font-medium">Default Branch:</span> {project.defaultBranch}
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="mt-6">
+              <Pagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={pagination.total}
+                itemsPerPage={pagination.limit}
+              />
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Project Modal */}

@@ -19,7 +19,7 @@ import { ConversationTab } from '@/components/pr/ConversationTab';
 import { DiffReviewTab } from '@/components/changesets/DiffReviewTab';
 import { ChecksTab } from '@/components/pr/ChecksTab';
 import { ImportsTab } from '@/components/changesets/ImportsTab';
-import { WorktreeStatus } from '@/components/worktree/WorktreeStatus';
+import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
 import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
 
 // Import tabs components directly
@@ -193,7 +193,7 @@ export function PRDetail({ prId }: PRDetailProps) {
         </div>
 
         {/* Worktree Status */}
-        <WorktreeStatus
+        <WorktreeStatusComponent
           status={getWorktreeStatus()}
           path={pr?.worktreePath || null}
           branchName={pr?.branchName || ''}

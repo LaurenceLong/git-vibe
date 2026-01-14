@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# TypeScript build info
+*.tsbuildinfo
+*.d.ts.map
+
 # Database
 *.sqlite
 *.sqlite-shm

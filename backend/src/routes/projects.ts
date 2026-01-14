@@ -15,6 +15,15 @@ export async function projectsRoutes(server: FastifyInstance) {
     try {
       const body = createProjectSchema.parse(request.body);
 
+      // Check if project name already exists
+      const existingProject = await projectsRepository.findByName(body.name);
+      if (existingProject) {
+        return reply.status(400).send({
+          error: true,
+          message: 'Project name already exists',
+        });
+      }
+
       await gitService.validateRepo(body.sourceRepoPath);
 
       const defaultBranch = gitService.getDefaultBranch(body.sourceRepoPath);
@@ -41,12 +50,45 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.get('/api/projects', async () => {
-    return await projectsRepository.findAll();
-  });
+  server.get<{ Querystring: { page?: string; limit?: string } }>(
+    '/api/projects',
+    async (request) => {
+      const page = parseInt(request.query.page || '1', 10);
+      const limit = parseInt(request.query.limit || '10', 10);
+      const offset = (page - 1) * limit;
+
+      const allProjects = await projectsRepository.findAll();
+      const total = allProjects.length;
+      const projects = allProjects.slice(offset, offset + limit);
+
+      return {
+        data: projects,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    }
+  );
 
   server.get<{ Params: { id: string } }>('/api/projects/:id', async (request) => {
     const project = await projectsRepository.findById(request.params.id);
+
+    if (!project) {
+      return {
+        error: true,
+        message: 'Project not found',
+        statusCode: 404,
+      };
+    }
+
+    return project;
+  });
+
+  server.get<{ Params: { name: string } }>('/api/projects/name/:name', async (request) => {
+    const project = await projectsRepository.findByName(request.params.name);
 
     if (!project) {
       return {

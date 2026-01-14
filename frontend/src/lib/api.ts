@@ -10,8 +10,10 @@ export const api = axios.create({
 });
 
 export const projectsApi = {
-  list: () => api.get('/projects'),
+  list: (page?: number, limit?: number) =>
+    api.get('/projects', { params: { page, limit } }),
   get: (id: string) => api.get(`/projects/${id}`),
+  getByName: (name: string) => api.get(`/projects/name/${name}`),
   create: (data: { name: string; sourceRepoPath: string; sourceRepoUrl?: string }) =>
     api.post('/projects', data),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),
@@ -24,7 +26,8 @@ export const targetReposApi = {
 };
 
 export const changesetsApi = {
-  list: (projectId?: string) => api.get('/changesets', { params: { projectId } }),
+  list: (projectId?: string, page?: number, limit?: number) =>
+    api.get('/changesets', { params: { projectId, page, limit } }),
   get: (id: string) => api.get(`/changesets/${id}`),
   create: (data: { projectId: string; title: string; body?: string; baseBranch: string }) =>
     api.post('/changesets', {
@@ -95,7 +98,8 @@ export const reviewsApi = {
 
 export const workItemsApi = {
   // List WorkItems (optional filter by project)
-  list: (projectId?: string) => api.get('/workitems', { params: { projectId } }),
+  list: (projectId?: string, page?: number, limit?: number) =>
+    api.get('/workitems', { params: { projectId, page, limit } }),
   // Get WorkItem by ID
   get: (id: string) => api.get(`/workitems/${id}`),
   // Create new WorkItem

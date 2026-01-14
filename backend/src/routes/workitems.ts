@@ -75,16 +75,36 @@ export async function workitemsRoutes(server: FastifyInstance) {
     }
   });
 
-  // GET /api/workitems - List all WorkItems (with optional project_id filter)
-  server.get<{ Querystring: { projectId?: string } }>('/api/workitems', async (request) => {
-    const { projectId } = request.query;
+  // GET /api/workitems - List all WorkItems (with optional project_id filter and pagination)
+  server.get<{ Querystring: { projectId?: string; page?: string; limit?: string } }>(
+    '/api/workitems',
+    async (request) => {
+      const { projectId, page: pageStr, limit: limitStr } = request.query;
+      const page = parseInt(pageStr || '1', 10);
+      const limit = parseInt(limitStr || '10', 10);
+      const offset = (page - 1) * limit;
 
-    if (projectId) {
-      return await workItemsRepository.findByProjectId(projectId);
+      let allWorkItems;
+      if (projectId) {
+        allWorkItems = await workItemsRepository.findByProjectId(projectId);
+      } else {
+        allWorkItems = await workItemsRepository.findAll();
+      }
+
+      const total = allWorkItems.length;
+      const workItems = allWorkItems.slice(offset, offset + limit);
+
+      return {
+        data: workItems,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
     }
-
-    return await workItemsRepository.findAll();
-  });
+  );
 
   // GET /api/workitems/:id - Get WorkItem by ID
   server.get<{ Params: { id: string } }>('/api/workitems/:id', async (request, reply) => {

@@ -41,6 +41,15 @@ export async function runMigrations() {
     // Fallback: raw .sql files without Drizzle meta journal.
     // Execute each migration as a whole script (no naive splitting),
     // and fail fast on any error so the server doesn't start with a broken schema.
+    
+    // Create migrations tracking table if it doesn't exist
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        filename TEXT PRIMARY KEY NOT NULL,
+        executed_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+    `);
+
     const files = (await fs.readdir(migrationsFolder)).filter((f) => f.endsWith('.sql')).sort();
 
     if (files.length === 0) {
@@ -51,12 +60,45 @@ export async function runMigrations() {
       return;
     }
 
+    // Get already executed migrations
+    const executedMigrations = sqlite
+      .prepare('SELECT filename FROM _migrations')
+      .all() as { filename: string }[];
+    const executedSet = new Set(executedMigrations.map((m) => m.filename));
+
+    // Helper function to check if a column exists in a table
+    function columnExists(tableName: string, columnName: string): boolean {
+      const result = sqlite
+        .prepare(`PRAGMA table_info(${tableName})`)
+        .all() as { name: string }[];
+      return result.some((col) => col.name === columnName);
+    }
+
     for (const file of files) {
+      if (executedSet.has(file)) {
+        console.log(`Skipping already executed migration: ${file}`);
+        continue;
+      }
+
       const fullPath = path.join(migrationsFolder, file);
-      const sql = await fs.readFile(fullPath, 'utf-8');
+      let sql = await fs.readFile(fullPath, 'utf-8');
+
+      // Handle ALTER TABLE ADD COLUMN statements to avoid duplicate column errors
+      // This is a workaround for SQLite's lack of IF NOT EXISTS in ALTER TABLE
+      const alterTableRegex = /ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)\s+[^;]+;/gi;
+      sql = sql.replace(alterTableRegex, (match, tableName, columnName) => {
+        if (columnExists(tableName, columnName)) {
+          // Comment out the ALTER TABLE statement if column already exists
+          return `-- ${match} (column already exists, skipping)`;
+        }
+        return match;
+      });
 
       console.log(`Running migration (raw sql): ${file}`);
       sqlite.exec(sql);
+      
+      // Record this migration as executed
+      sqlite.prepare('INSERT INTO _migrations (filename) VALUES (?)').run(file);
       console.log(`Completed migration: ${file}`);
     }
 

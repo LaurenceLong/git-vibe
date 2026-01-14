@@ -80,18 +80,31 @@ export function CreateWorkItemModal({
       <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
         {/* Type Selection */}
         <div>
-          <label htmlFor="type" className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
             Type
           </label>
-          <select
-            id="type"
-            {...register('type')}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading || isSubmitting}
-          >
-            <option value="issue">Issue</option>
-            <option value="feature-request">Feature Request</option>
-          </select>
+          <div className="flex gap-4">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                value="issue"
+                {...register('type')}
+                disabled={isLoading || isSubmitting}
+                className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Issue</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                value="feature-request"
+                {...register('type')}
+                disabled={isLoading || isSubmitting}
+                className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Feature Request</span>
+            </label>
+          </div>
           <p className="mt-1 text-xs text-gray-500">
             Select whether this is an issue or a feature request
           </p>
@@ -110,6 +123,7 @@ export function CreateWorkItemModal({
             {...register('title')}
             error={errors.title?.message}
             disabled={isLoading || isSubmitting}
+            fullWidth
           />
           <p className="mt-1 text-xs text-gray-500">A short, descriptive title for the work item</p>
         </div>
@@ -126,6 +140,7 @@ export function CreateWorkItemModal({
             {...register('body')}
             error={errors.body?.message}
             disabled={isLoading || isSubmitting}
+            fullWidth
           />
           <p className="mt-1 text-xs text-gray-500">
             Provide more details about the work item (optional)

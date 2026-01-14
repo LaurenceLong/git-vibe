@@ -28,7 +28,7 @@ function ChangesetsIndex() {
     error,
   } = useQuery({
     queryKey: ['changesets', projectId],
-    queryFn: () => changesetsApi.list(projectId || undefined).then((res) => res.data),
+    queryFn: () => changesetsApi.list(projectId || undefined).then((res) => res.data.data),
   });
 
   // Handle errors

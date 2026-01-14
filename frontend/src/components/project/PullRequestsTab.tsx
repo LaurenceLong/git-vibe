@@ -11,6 +11,7 @@ import { Project, ChangeSet, PRStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/Button';
+import { Pagination } from '@/components/ui/Pagination';
 
 export interface PullRequestsTabProps {
   project: Project;
@@ -19,14 +20,19 @@ export interface PullRequestsTabProps {
 export function PullRequestsTab({ project }: PullRequestsTabProps) {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<PRStatus | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  const { data: changesets, isLoading } = useQuery({
-    queryKey: ['changesets', project.id],
-    queryFn: () => changesetsApi.list(project.id).then((res) => res.data),
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['changesets', project.id, currentPage, itemsPerPage],
+    queryFn: () => changesetsApi.list(project.id, currentPage, itemsPerPage).then((res) => res.data),
   });
 
+  const changesets = response?.data || [];
+  const pagination = response?.pagination;
+
   // Filter changesets that have a PR status (i.e., are Pull Requests)
-  const pullRequests = changesets?.filter((cs: ChangeSet) => cs.prStatus !== null) || [];
+  const pullRequests = changesets.filter((cs: ChangeSet) => cs.prStatus !== null);
 
   const filteredPRs = pullRequests.filter((pr: ChangeSet) => {
     if (statusFilter !== 'all' && pr.prStatus !== statusFilter) return false;
@@ -107,12 +113,25 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
           }
           action={
             statusFilter === 'all' ? (
-              <Button variant="primary" onClick={() => navigate({ to: `/projects/${project.id}` })}>
-                Create Pull Request
+              <Button variant="primary" onClick={() => navigate({ to: `/projects/${project.id}/workitems` })}>
+                Create Work Item
               </Button>
             ) : undefined
           }
         />
+      )}
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="mt-6">
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={pagination.total}
+            itemsPerPage={pagination.limit}
+          />
+        </div>
       )}
     </div>
   );

@@ -26,8 +26,8 @@ export const workItems = sqliteTable('work_items', {
 
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  sourceRepoPath: text('source_repo_path').notNull().unique(),
+  name: text('name').notNull().unique(),
+  sourceRepoPath: text('source_repo_path').notNull(),
   sourceRepoUrl: text('source_repo_url'),
   defaultBranch: text('default_branch').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' })

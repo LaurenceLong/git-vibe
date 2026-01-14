@@ -52,7 +52,7 @@ export interface WorktreeStatusProps {
  * @param isRemoving - Whether remove operation is in progress
  * @param error - Error message to display
  */
-export function WorktreeStatus({
+export function WorktreeStatusComponent({
   status,
   path,
   branchName,

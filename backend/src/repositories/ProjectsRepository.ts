@@ -49,6 +49,13 @@ export class ProjectsRepository {
     return project as Project | undefined;
   }
 
+  async findByName(name: string): Promise<Project | undefined> {
+    const db = await this.getDbInstance();
+    const [project] = await db.select().from(projects).where(eq(projects.name, name)).execute();
+
+    return project as Project | undefined;
+  }
+
   async update(
     id: string,
     data: {

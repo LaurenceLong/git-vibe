@@ -62,10 +62,29 @@ export async function changesetsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.get('/api/changesets', async (request) => {
-    const projectId = (request.query as { projectId?: string }).projectId;
-    return await changesetsRepository.findAll(projectId);
-  });
+  server.get<{ Querystring: { projectId?: string; page?: string; limit?: string } }>(
+    '/api/changesets',
+    async (request) => {
+      const { projectId, page: pageStr, limit: limitStr } = request.query;
+      const page = parseInt(pageStr || '1', 10);
+      const limit = parseInt(limitStr || '10', 10);
+      const offset = (page - 1) * limit;
+
+      const allChangesets = await changesetsRepository.findAll(projectId);
+      const total = allChangesets.length;
+      const changesets = allChangesets.slice(offset, offset + limit);
+
+      return {
+        data: changesets,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    }
+  );
 
   server.get<{ Params: { id: string } }>('/api/changesets/:id', async (request) => {
     const changeset = await changesetsRepository.findById(request.params.id);

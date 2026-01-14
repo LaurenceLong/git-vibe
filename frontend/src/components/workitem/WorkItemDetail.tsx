@@ -11,7 +11,7 @@ import { ControlledTabs, Tab, TabPanel } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WorktreeStatus } from '@/components/worktree/WorktreeStatus';
+import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
 import { AlertCircle, GitBranch, Calendar, Hash } from 'lucide-react';
 
 export interface WorkItemDetailProps {
@@ -153,7 +153,7 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
         )}
 
         {/* Worktree Status */}
-        <WorktreeStatus
+        <WorktreeStatusComponent
           status={getWorktreeStatus()}
           path={workItem?.worktreePath || null}
           branchName={workItem?.branchName || ''}

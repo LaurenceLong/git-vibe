@@ -1,13 +1,16 @@
 /**
  * Tab Navigation Component
- * Reusable tab navigation component for project shell
+ * GitHub-style tab navigation for project pages
  */
 
 import React from 'react';
+import { Link } from '@tanstack/react-router';
 
 export interface Tab {
   id: string;
   label: string;
+  path?: string;
+  icon?: React.ReactNode;
 }
 
 export interface TabNavigationProps {
@@ -18,18 +21,35 @@ export interface TabNavigationProps {
 export function TabNavigation({ tabs, activeTab }: TabNavigationProps) {
   return (
     <div className="border-b border-gray-200">
-      <nav className="flex space-x-8" role="tablist">
+      <nav className="flex space-x-6" role="tablist">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
+          if (tab.path) {
+            return (
+              <Link
+                key={tab.id}
+                to={tab.path}
+                className={`flex items-center space-x-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                } `}
+                role="tab"
+                aria-selected={isActive}
+              >
+                {tab.icon && <span className="text-base">{tab.icon}</span>}
+                <span>{tab.label}</span>
+              </Link>
+            );
+          }
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => {
-                // Navigate to tab - this will be handled by parent component
                 window.history.pushState({}, '', `?tab=${tab.id}`);
               }}
-              className={`border-b-2 px-4 py-1 text-sm font-medium transition-colors ${
+              className={`flex items-center space-x-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
                 isActive
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -37,7 +57,8 @@ export function TabNavigation({ tabs, activeTab }: TabNavigationProps) {
               role="tab"
               aria-selected={isActive}
             >
-              {tab.label}
+              {tab.icon && <span className="text-base">{tab.icon}</span>}
+              <span>{tab.label}</span>
             </button>
           );
         })}

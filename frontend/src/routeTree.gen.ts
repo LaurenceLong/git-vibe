@@ -15,12 +15,14 @@ import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ChangesetsIndexRouteImport } from './routes/changesets/index'
 import { Route as WorkitemsIdRouteImport } from './routes/workitems/$id'
 import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id'
-import { Route as ProjectsIdRouteImport } from './routes/projects/$id'
+import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName'
 import { Route as ChangesetsNewRouteImport } from './routes/changesets/new'
 import { Route as ChangesetsIdRouteImport } from './routes/changesets/$id'
-import { Route as ProjectsIdWorkitemsRouteImport } from './routes/projects/$id.workitems'
-import { Route as ProjectsIdSettingsRouteImport } from './routes/projects/$id.settings'
-import { Route as ProjectsIdPullrequestsRouteImport } from './routes/projects/$id.pullrequests'
+import { Route as ProjectsProjectNameWorkitemsRouteImport } from './routes/projects/$projectName.workitems'
+import { Route as ProjectsProjectNameSettingsRouteImport } from './routes/projects/$projectName.settings'
+import { Route as ProjectsProjectNamePullrequestsRouteImport } from './routes/projects/$projectName.pullrequests'
+import { Route as ProjectsProjectNameCodeRouteImport } from './routes/projects/$projectName.code'
+import { Route as ProjectsProjectNameActionsRouteImport } from './routes/projects/$projectName.actions'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,9 +54,9 @@ const TargetReposIdRoute = TargetReposIdRouteImport.update({
   path: '/target-repos/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProjectsIdRoute = ProjectsIdRouteImport.update({
-  id: '/projects/$id',
-  path: '/projects/$id',
+const ProjectsProjectNameRoute = ProjectsProjectNameRouteImport.update({
+  id: '/projects/$projectName',
+  path: '/projects/$projectName',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChangesetsNewRoute = ChangesetsNewRouteImport.update({
@@ -67,64 +69,84 @@ const ChangesetsIdRoute = ChangesetsIdRouteImport.update({
   path: '/changesets/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProjectsIdWorkitemsRoute = ProjectsIdWorkitemsRouteImport.update({
-  id: '/workitems',
-  path: '/workitems',
-  getParentRoute: () => ProjectsIdRoute,
+const ProjectsProjectNameWorkitemsRoute =
+  ProjectsProjectNameWorkitemsRouteImport.update({
+    id: '/workitems',
+    path: '/workitems',
+    getParentRoute: () => ProjectsProjectNameRoute,
+  } as any)
+const ProjectsProjectNameSettingsRoute =
+  ProjectsProjectNameSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsProjectNameRoute,
+  } as any)
+const ProjectsProjectNamePullrequestsRoute =
+  ProjectsProjectNamePullrequestsRouteImport.update({
+    id: '/pullrequests',
+    path: '/pullrequests',
+    getParentRoute: () => ProjectsProjectNameRoute,
+  } as any)
+const ProjectsProjectNameCodeRoute = ProjectsProjectNameCodeRouteImport.update({
+  id: '/code',
+  path: '/code',
+  getParentRoute: () => ProjectsProjectNameRoute,
 } as any)
-const ProjectsIdSettingsRoute = ProjectsIdSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => ProjectsIdRoute,
-} as any)
-const ProjectsIdPullrequestsRoute = ProjectsIdPullrequestsRouteImport.update({
-  id: '/pullrequests',
-  path: '/pullrequests',
-  getParentRoute: () => ProjectsIdRoute,
-} as any)
+const ProjectsProjectNameActionsRoute =
+  ProjectsProjectNameActionsRouteImport.update({
+    id: '/actions',
+    path: '/actions',
+    getParentRoute: () => ProjectsProjectNameRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/changesets/$id': typeof ChangesetsIdRoute
   '/changesets/new': typeof ChangesetsNewRoute
-  '/projects/$id': typeof ProjectsIdRouteWithChildren
+  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
   '/workitems/$id': typeof WorkitemsIdRoute
   '/changesets': typeof ChangesetsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
-  '/projects/$id/pullrequests': typeof ProjectsIdPullrequestsRoute
-  '/projects/$id/settings': typeof ProjectsIdSettingsRoute
-  '/projects/$id/workitems': typeof ProjectsIdWorkitemsRoute
+  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
+  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
+  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
+  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
+  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/changesets/$id': typeof ChangesetsIdRoute
   '/changesets/new': typeof ChangesetsNewRoute
-  '/projects/$id': typeof ProjectsIdRouteWithChildren
+  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
   '/workitems/$id': typeof WorkitemsIdRoute
   '/changesets': typeof ChangesetsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
-  '/projects/$id/pullrequests': typeof ProjectsIdPullrequestsRoute
-  '/projects/$id/settings': typeof ProjectsIdSettingsRoute
-  '/projects/$id/workitems': typeof ProjectsIdWorkitemsRoute
+  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
+  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
+  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
+  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
+  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/changesets/$id': typeof ChangesetsIdRoute
   '/changesets/new': typeof ChangesetsNewRoute
-  '/projects/$id': typeof ProjectsIdRouteWithChildren
+  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
   '/workitems/$id': typeof WorkitemsIdRoute
   '/changesets/': typeof ChangesetsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/target-repos/': typeof TargetReposIndexRoute
-  '/projects/$id/pullrequests': typeof ProjectsIdPullrequestsRoute
-  '/projects/$id/settings': typeof ProjectsIdSettingsRoute
-  '/projects/$id/workitems': typeof ProjectsIdWorkitemsRoute
+  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
+  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
+  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
+  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
+  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -132,50 +154,56 @@ export interface FileRouteTypes {
     | '/'
     | '/changesets/$id'
     | '/changesets/new'
-    | '/projects/$id'
+    | '/projects/$projectName'
     | '/target-repos/$id'
     | '/workitems/$id'
     | '/changesets'
     | '/projects'
     | '/target-repos'
-    | '/projects/$id/pullrequests'
-    | '/projects/$id/settings'
-    | '/projects/$id/workitems'
+    | '/projects/$projectName/actions'
+    | '/projects/$projectName/code'
+    | '/projects/$projectName/pullrequests'
+    | '/projects/$projectName/settings'
+    | '/projects/$projectName/workitems'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/changesets/$id'
     | '/changesets/new'
-    | '/projects/$id'
+    | '/projects/$projectName'
     | '/target-repos/$id'
     | '/workitems/$id'
     | '/changesets'
     | '/projects'
     | '/target-repos'
-    | '/projects/$id/pullrequests'
-    | '/projects/$id/settings'
-    | '/projects/$id/workitems'
+    | '/projects/$projectName/actions'
+    | '/projects/$projectName/code'
+    | '/projects/$projectName/pullrequests'
+    | '/projects/$projectName/settings'
+    | '/projects/$projectName/workitems'
   id:
     | '__root__'
     | '/'
     | '/changesets/$id'
     | '/changesets/new'
-    | '/projects/$id'
+    | '/projects/$projectName'
     | '/target-repos/$id'
     | '/workitems/$id'
     | '/changesets/'
     | '/projects/'
     | '/target-repos/'
-    | '/projects/$id/pullrequests'
-    | '/projects/$id/settings'
-    | '/projects/$id/workitems'
+    | '/projects/$projectName/actions'
+    | '/projects/$projectName/code'
+    | '/projects/$projectName/pullrequests'
+    | '/projects/$projectName/settings'
+    | '/projects/$projectName/workitems'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangesetsIdRoute: typeof ChangesetsIdRoute
   ChangesetsNewRoute: typeof ChangesetsNewRoute
-  ProjectsIdRoute: typeof ProjectsIdRouteWithChildren
+  ProjectsProjectNameRoute: typeof ProjectsProjectNameRouteWithChildren
   TargetReposIdRoute: typeof TargetReposIdRoute
   WorkitemsIdRoute: typeof WorkitemsIdRoute
   ChangesetsIndexRoute: typeof ChangesetsIndexRoute
@@ -227,11 +255,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TargetReposIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/projects/$id': {
-      id: '/projects/$id'
-      path: '/projects/$id'
-      fullPath: '/projects/$id'
-      preLoaderRoute: typeof ProjectsIdRouteImport
+    '/projects/$projectName': {
+      id: '/projects/$projectName'
+      path: '/projects/$projectName'
+      fullPath: '/projects/$projectName'
+      preLoaderRoute: typeof ProjectsProjectNameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/changesets/new': {
@@ -248,51 +276,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChangesetsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/projects/$id/workitems': {
-      id: '/projects/$id/workitems'
+    '/projects/$projectName/workitems': {
+      id: '/projects/$projectName/workitems'
       path: '/workitems'
-      fullPath: '/projects/$id/workitems'
-      preLoaderRoute: typeof ProjectsIdWorkitemsRouteImport
-      parentRoute: typeof ProjectsIdRoute
+      fullPath: '/projects/$projectName/workitems'
+      preLoaderRoute: typeof ProjectsProjectNameWorkitemsRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
     }
-    '/projects/$id/settings': {
-      id: '/projects/$id/settings'
+    '/projects/$projectName/settings': {
+      id: '/projects/$projectName/settings'
       path: '/settings'
-      fullPath: '/projects/$id/settings'
-      preLoaderRoute: typeof ProjectsIdSettingsRouteImport
-      parentRoute: typeof ProjectsIdRoute
+      fullPath: '/projects/$projectName/settings'
+      preLoaderRoute: typeof ProjectsProjectNameSettingsRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
     }
-    '/projects/$id/pullrequests': {
-      id: '/projects/$id/pullrequests'
+    '/projects/$projectName/pullrequests': {
+      id: '/projects/$projectName/pullrequests'
       path: '/pullrequests'
-      fullPath: '/projects/$id/pullrequests'
-      preLoaderRoute: typeof ProjectsIdPullrequestsRouteImport
-      parentRoute: typeof ProjectsIdRoute
+      fullPath: '/projects/$projectName/pullrequests'
+      preLoaderRoute: typeof ProjectsProjectNamePullrequestsRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
+    }
+    '/projects/$projectName/code': {
+      id: '/projects/$projectName/code'
+      path: '/code'
+      fullPath: '/projects/$projectName/code'
+      preLoaderRoute: typeof ProjectsProjectNameCodeRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
+    }
+    '/projects/$projectName/actions': {
+      id: '/projects/$projectName/actions'
+      path: '/actions'
+      fullPath: '/projects/$projectName/actions'
+      preLoaderRoute: typeof ProjectsProjectNameActionsRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
     }
   }
 }
 
-interface ProjectsIdRouteChildren {
-  ProjectsIdPullrequestsRoute: typeof ProjectsIdPullrequestsRoute
-  ProjectsIdSettingsRoute: typeof ProjectsIdSettingsRoute
-  ProjectsIdWorkitemsRoute: typeof ProjectsIdWorkitemsRoute
+interface ProjectsProjectNameRouteChildren {
+  ProjectsProjectNameActionsRoute: typeof ProjectsProjectNameActionsRoute
+  ProjectsProjectNameCodeRoute: typeof ProjectsProjectNameCodeRoute
+  ProjectsProjectNamePullrequestsRoute: typeof ProjectsProjectNamePullrequestsRoute
+  ProjectsProjectNameSettingsRoute: typeof ProjectsProjectNameSettingsRoute
+  ProjectsProjectNameWorkitemsRoute: typeof ProjectsProjectNameWorkitemsRoute
 }
 
-const ProjectsIdRouteChildren: ProjectsIdRouteChildren = {
-  ProjectsIdPullrequestsRoute: ProjectsIdPullrequestsRoute,
-  ProjectsIdSettingsRoute: ProjectsIdSettingsRoute,
-  ProjectsIdWorkitemsRoute: ProjectsIdWorkitemsRoute,
+const ProjectsProjectNameRouteChildren: ProjectsProjectNameRouteChildren = {
+  ProjectsProjectNameActionsRoute: ProjectsProjectNameActionsRoute,
+  ProjectsProjectNameCodeRoute: ProjectsProjectNameCodeRoute,
+  ProjectsProjectNamePullrequestsRoute: ProjectsProjectNamePullrequestsRoute,
+  ProjectsProjectNameSettingsRoute: ProjectsProjectNameSettingsRoute,
+  ProjectsProjectNameWorkitemsRoute: ProjectsProjectNameWorkitemsRoute,
 }
 
-const ProjectsIdRouteWithChildren = ProjectsIdRoute._addFileChildren(
-  ProjectsIdRouteChildren,
-)
+const ProjectsProjectNameRouteWithChildren =
+  ProjectsProjectNameRoute._addFileChildren(ProjectsProjectNameRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangesetsIdRoute: ChangesetsIdRoute,
   ChangesetsNewRoute: ChangesetsNewRoute,
-  ProjectsIdRoute: ProjectsIdRouteWithChildren,
+  ProjectsProjectNameRoute: ProjectsProjectNameRouteWithChildren,
   TargetReposIdRoute: TargetReposIdRoute,
   WorkitemsIdRoute: WorkitemsIdRoute,
   ChangesetsIndexRoute: ChangesetsIndexRoute,
