@@ -1,6 +1,7 @@
 /**
  * WorkItems Tab Component
  * Lists and filters WorkItems (Issues & Feature Requests)
+ * WorkItems are task definitions only - Changesets handle workspaces
  */
 
 import { useState } from 'react';

@@ -12,10 +12,6 @@ export const workItems = sqliteTable('work_items', {
   status: text('status', { enum: ['open', 'closed'] })
     .notNull()
     .default('open'),
-  branchName: text('branch_name').notNull(),
-  baseSha: text('base_sha').notNull(),
-  headSha: text('head_sha'),
-  worktreePath: text('worktree_path'),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),
@@ -29,6 +25,7 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull().unique(),
   sourceRepoPath: text('source_repo_path').notNull(),
   sourceRepoUrl: text('source_repo_url'),
+  relayRepoPath: text('relay_repo_path').notNull(),
   defaultBranch: text('default_branch').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
@@ -70,6 +67,7 @@ export const changesets = sqliteTable('changesets', {
   worktreePath: text('worktree_path').notNull(),
   mergedAt: integer('merged_at', { mode: 'timestamp' }),
   closedAt: integer('closed_at', { mode: 'timestamp' }),
+  syncedAt: integer('synced_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),

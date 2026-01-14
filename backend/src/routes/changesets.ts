@@ -27,15 +27,16 @@ export async function changesetsRoutes(server: FastifyInstance) {
         });
       }
 
-      // PLAN: base_sha should come from base_branch (not current HEAD)
+      // Get base SHA from relay repo (or source repo if relay not set)
       const baseRef = body.baseBranch;
-      const baseSha = gitService.getRefSha(project.sourceRepoPath, baseRef);
+      const repoPath = project.relayRepoPath || project.sourceRepoPath;
+      const baseSha = gitService.getRefSha(repoPath, baseRef);
 
-      const branchName = `gitvibe-${body.projectId}-${Date.now()}`;
+      const branchName = `changeset-${body.projectId}-${Date.now()}`;
       const worktreePath = path.join(STORAGE_CONFIG.worktreesDir, uuidv4());
 
-      // PLAN: create worktree from base_branch
-      gitService.createWorktree(project.sourceRepoPath, worktreePath, branchName, baseRef);
+      // Create worktree from relay repo
+      gitService.createWorktree(repoPath, worktreePath, branchName, baseRef);
 
       const changeset = await changesetsRepository.create({
         id: uuidv4(),
@@ -130,7 +131,8 @@ export async function changesetsRoutes(server: FastifyInstance) {
     try {
       const project = await projectsRepository.findById(changeset.projectId);
       if (project) {
-        gitService.removeWorktree(changeset.worktreePath, project.sourceRepoPath);
+        const repoPath = project.relayRepoPath || project.sourceRepoPath;
+        gitService.removeWorktree(changeset.worktreePath, repoPath);
       }
 
       await changesetsRepository.delete(changeset.id);
@@ -179,7 +181,8 @@ export async function changesetsRoutes(server: FastifyInstance) {
           });
         }
 
-        gitService.removeWorktree(changeset.worktreePath, project.sourceRepoPath);
+        const repoPath = project.relayRepoPath || project.sourceRepoPath;
+        gitService.removeWorktree(changeset.worktreePath, repoPath);
 
         return reply.status(200).send({
           success: true,

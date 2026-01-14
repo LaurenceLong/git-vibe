@@ -5,7 +5,8 @@
 
 /**
  * WorkItem represents an Issue or Feature Request
- * Created from a project, owns a worktree + branch, and optionally creates a PR
+ * WorkItems are task definitions only - they do NOT own worktrees or branches
+ * Changesets (PRs) handle workspaces and can optionally link to WorkItems
  */
 export interface WorkItem {
   id: string;
@@ -14,10 +15,6 @@ export interface WorkItem {
   title: string;
   body: string | null;
   status: WorkItemStatus;
-  branchName: string;
-  baseSha: string;
-  headSha: string | null;
-  worktreePath: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +57,7 @@ export interface ChangeSet {
   worktreePath: string;
   mergedAt: Date | null;
   closedAt: Date | null;
+  syncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -143,6 +141,7 @@ export interface Project {
   name: string;
   sourceRepoPath: string;
   sourceRepoUrl: string | null;
+  relayRepoPath: string;
   defaultBranch: string;
   createdAt: Date;
   updatedAt: Date;
@@ -158,6 +157,16 @@ export interface TargetRepo {
   defaultBranch: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * RepoFile represents a file or directory in a repository
+ */
+export interface RepoFile {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size?: number;
 }
 
 /**

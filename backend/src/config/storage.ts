@@ -21,6 +21,7 @@ export const STORAGE_CONFIG = {
   logsDir: path.join(baseTempDir, 'logs'),
   patchesDir: path.join(baseTempDir, 'patches'),
   worktreesDir: path.join(baseTempDir, 'worktrees'),
+  projectsDir: path.join(baseTempDir, 'projects'),
   projectRoot,
 } as const;
 

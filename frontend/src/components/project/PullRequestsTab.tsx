@@ -5,12 +5,11 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { changesetsApi } from '@/lib/api';
 import { Project, ChangeSet, PRStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 
 export interface PullRequestsTabProps {
@@ -18,7 +17,6 @@ export interface PullRequestsTabProps {
 }
 
 export function PullRequestsTab({ project }: PullRequestsTabProps) {
-  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<PRStatus | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -41,7 +39,7 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header with filter and create button */}
+      {/* Header with filter */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Status Filter */}
         <select
@@ -54,11 +52,6 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
           <option value="merged">Merged</option>
           <option value="closed">Closed</option>
         </select>
-
-        {/* Create PR Button - links to WorkItems tab */}
-        <Button variant="primary" onClick={() => navigate({ to: `/projects/${project.id}` })}>
-          Create Pull Request
-        </Button>
       </div>
 
       {/* Pull Requests List */}
@@ -109,14 +102,7 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
           description={
             statusFilter !== 'all'
               ? 'Try adjusting your filters'
-              : 'Create a work item and then create a pull request from it'
-          }
-          action={
-            statusFilter === 'all' ? (
-              <Button variant="primary" onClick={() => navigate({ to: `/projects/${project.id}/workitems` })}>
-                Create Work Item
-              </Button>
-            ) : undefined
+              : 'No pull requests available'
           }
         />
       )}

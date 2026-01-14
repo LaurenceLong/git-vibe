@@ -17,12 +17,16 @@ GitVibe exists to:
 
 ## 2) Core Concepts (Plain Language)
 
-- **Project (Source Repo)**: a local Git repo (contains `.git`) where ChangeSet worktrees are created.
-- **Target Repo**: our local Git repo where imported changes become commits.
-- **ChangeSet**: one unit of work (issue/title/body) + one worktree folder + base commit (`base_sha`) + current head (`head_sha`).
-- **Agent Run**: a recorded execution of an agent against a ChangeSet workspace, including logs and the before/after commit SHAs.
+- **Source Repo**: a local Git repo (contains `.git`) that is the original source of code.
+- **Project**: a GitVibe project that creates a **Relay Repo** by copying the `.git` directory from the source repo to `baseTempDir/projects/${project_name}` and running `git reset --hard` to restore files. This relay repo serves as the workspace for all operations.
+- **Relay Repo**: a copy of the source repo's git history stored in the GitVibe workspace. Changesets (PRs) are created in this repo, and the user can manually sync the relay repo back to the source repo.
+- **Target Repo**: our local Git repo where imported changes become commits (optional, for patch-based import workflow).
+- **WorkItem**: a task definition (issue/feature request) with title, body, type, and status. WorkItems do NOT have worktrees or branches - they are pure task trackers.
+- **ChangeSet (PR)**: represents a Pull Request with its own worktree, branch, base SHA, and head SHA. Changesets are the sole workspace entities and handle all code changes, review, and merge workflows. A Changeset can optionally be linked to a WorkItem for traceability.
+- **Agent Run**: a recorded execution of an agent against a ChangeSet's worktree, including logs and the before/after commit SHAs. Agent runs push commits to the ChangeSet's branch.
 - **Review Thread**: an inline comment anchored to a diff location.
-- **Import (Patch)**: generate diff from `base_sha..head_sha` and apply it in target repo, then commit.
+- **Import (Patch)**: generate diff from `base_sha..head_sha` and apply it in target repo, then commit (optional workflow).
+- **Sync to Source**: user manually syncs changes from relay repo back to source repo.
 
 ---
 
@@ -69,39 +73,72 @@ GitVibe exists to:
 
 - DB operations (SQLite)
 - Git operations (Git CLI)
+- Relay repo creation and management
 - Agent runs (spawn/adapter)
 - Import jobs (patch apply + commit)
 
 Key boundary: **frontend never touches Git or filesystem directly**. All privileged actions happen in the backend.
 
+### Relay Repo Architecture
+
+The relay repo is the core workspace for GitVibe operations:
+
+1. **Creation**: When a project is created, the `.git` directory from the source repo is copied to `baseTempDir/projects/${project_name}/.git`, and `git reset --hard` is run to restore all files.
+
+2. **WorkItems and PRs**: WorkItems are task definitions. PRs (Changesets) are created from WorkItems with their own worktrees and branches in the relay repo.
+
+3. **Agent Runs**: Agents work in ChangeSet worktrees and push commits to the ChangeSet's branch in the relay repo.
+
+4. **Sync to Source**: Users can manually sync changes from the relay repo back to the source repo when ready. The sync creates a branch called `relay-${project_name}` in the source repo, copies all files from the relay repo to the source repo (excluding `.git` directory), stages the changes, and creates a commit.
+
+This architecture provides:
+- Isolation from the source repo (agents never modify the original source)
+- Easy rollback and cleanup (relay repo can be recreated from source)
+- Manual control over when changes flow back to source
+- PR-based workflow within the relay repo
+
 ---
 
 ## 5) End-to-End Workflow
 
-1. **Register Project**
+1. **Create Project**
    - User points GitVibe to a local source repo path.
+   - GitVibe creates a relay repo by copying `.git` directory to `baseTempDir/projects/${project_name}` and running `git reset --hard` to restore files.
 
-2. **Register Target Repo**
-   - User points GitVibe to our local target repo path.
+2. **Create WorkItem**
+   - User creates a WorkItem (Issue or Feature Request) with title and description.
+   - WorkItem is a task definition only - no worktree or branch is created.
+   - WorkItem can optionally create a ChangeSet (PR) when ready to start working.
 
-3. **Create ChangeSet**
-   - GitVibe creates a worktree from `base_branch` and records `base_sha`.
-   - ChangeSet becomes the “workspace” that agents will modify.
+3. **Create PR (ChangeSet)**
+   - User creates a PR (ChangeSet) from the WorkItem.
+   - GitVibe creates a worktree from the relay repo's base branch with a new branch.
+   - ChangeSet tracks the PR's state and becomes the workspace for all work.
 
 4. **Trigger Agent Runs**
    - User selects an agent + inputs (task prompt/config).
    - GitVibe triggers the run, captures logs, and records:
      - `head_sha_before` and `head_sha_after`
      - status and runtime metadata
+   - Agent runs push commits to the ChangeSet's branch in the relay repo.
 
 5. **Review**
-   - Reviewers view diff (`base_sha → head_sha`) and add inline threads.
+   - Reviewers view diff (`base_sha → head_sha`) on the ChangeSet and add inline threads.
    - Threads can be resolved or marked outdated.
 
 6. **Iterate**
    - Trigger more agent runs to address review feedback.
+   - Each run pushes new commits to the same ChangeSet branch.
 
-7. **Import (Patch)**
+7. **Merge PR**
+   - User merges the ChangeSet (PR) in the relay repo.
+   - Changes are merged into the relay repo's base branch.
+   - ChangeSet status becomes `completed` and `pr_status` becomes `merged`.
+
+8. **Sync to Source**
+   - User manually syncs changes from the relay repo back to the source repo when ready.
+
+9. **Import (Patch) - Optional**
    - GitVibe generates patch from the ChangeSet and applies it to target repo, commits, and records result.
 
 ---
@@ -173,11 +210,12 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 
 ### Tables
 
-#### `projects` (source repos)
+#### `projects`
 
 - `id`, `name`
-- `source_repo_path` (unique)
-- `source_repo_url` (optional)
+- `source_repo_path` (unique) - path to the original source repository
+- `source_repo_url` (optional) - URL of the source repository
+- `relay_repo_path` (not null) - path to the relay repo in `baseTempDir/projects/${project_name}`
 - `default_branch`
 - timestamps
 
@@ -188,6 +226,15 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 - `default_branch`
 - timestamps
 
+#### `work_items`
+
+- `id`, `project_id`
+- `type` (issue/feature-request)
+- `title`, `body`
+- `status` (open/closed)
+- timestamps
+- Note: WorkItems are task definitions only - no worktree, branch, or SHA tracking
+
 #### `changesets`
 
 - `id`, `project_id`
@@ -196,6 +243,7 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 - `base_branch`, `base_sha`
 - `branch_name`, `head_sha`
 - `worktree_path`
+- `synced_at` (timestamp when synced to source repo, null if not synced)
 - timestamps
 
 #### `review_threads`
@@ -238,7 +286,8 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
 
 - Projects: create/list/get
 - Target repos: create/list/get
-- ChangeSets: create/list/get, refresh head sha
+- WorkItems: create/list/get, create PR
+- ChangeSets (PRs): create/list/get, refresh head sha
 - Diff: get diff for changeset (`base_sha..head_sha`)
 - Review: create thread/comment, resolve, list
 - Agent runs:
@@ -249,27 +298,39 @@ Database: SQLite. IDs: UUID. JSON stored as TEXT.
   - `POST /changesets/:id/imports` (start)
   - `GET /imports/:id` (status + logs)
   - list imports by changeset
+- Relay repo sync:
+  - `POST /projects/:id/sync` (sync relay repo to source)
 
 ---
 
 ## 10) UI Pages (Minimal)
 
-- Projects
-- Target repos
-- ChangeSets (create/view)
-- ChangeSet Diff + Review Threads
-- Agent Runs (trigger + live status/logs)
+- Projects (create/list)
+- Project Detail (WorkItems, PRs, Settings)
+- WorkItems (create/list/detail)
+- WorkItem Detail (discussion, agents, PR status)
+- PRs (create/list/detail)
+- PR Detail (overview, conversation, files changed, checks/agents)
+- Target repos (create/list)
 - Imports (run + history)
+
+Note: WorkItems are task definitions only. PRs (Changesets) handle all workspace operations including worktrees, branches, and code changes.
 
 ---
 
 ## 11) Acceptance Criteria
 
+- Can create a project that creates a relay repo by copying `.git` from source repo and running `git reset --hard`.
+- Can create a WorkItem (task definition only - no worktree).
+- Can create a PR (ChangeSet) from a WorkItem, which creates a worktree from the relay repo.
 - Can trigger an agent run for a ChangeSet and capture:
   - status, logs, `head_sha_before/after`
+- Agent runs push commits to the ChangeSet's branch in the relay repo.
 - Diff view updates as agents change code.
 - Review threads persist; threads become `outdated` if anchor no longer matches.
-- Patch import creates a commit in target repo matching the ChangeSet diff.
+- PR (ChangeSet) can be merged into the relay repo's base branch.
+- User can manually sync changes from the relay repo back to the source repo.
+- Patch import creates a commit in target repo matching the ChangeSet diff (optional workflow).
 - All runs and imports are auditable from the UI.
 
 ## Sequence Diagram
@@ -287,16 +348,18 @@ sequenceDiagram
     participant Tgt as Target Repo
     participant Review as Review (Human/Agent)
 
-    %% ============ 0. Setup: Register Project & Target Repo ============
+    %% ============ 0. Setup: Create Project (with Relay Repo) & Target Repo ============
     rect rgb(245,245,245)
-        note over User,DB: 0) Register Project (Source Repo) & Target Repo
+        note over User,DB: 0) Create Project (Source Repo -> Relay Repo) & Target Repo
         User->>UI: Click "Create Project"<br/>(input: name, source_repo_path or source_repo_url)
         UI->>API: POST /projects {name, source_repo_path|url}
         API->>Git: Validate path is a git repo<br/>(git rev-parse --git-dir)
         Git-->>API: OK / error
         API->>Git: Get default branch<br/>(git symbolic-ref refs/remotes/origin/HEAD)
         Git-->>API: default_branch
-        API->>DB: INSERT projects(name, source_repo_path, source_repo_url, default_branch)
+        API->>Git: Create relay repo<br/>(copy .git to baseTempDir/projects/${name} + git reset --hard)
+        Git-->>API: relay_repo_path
+        API->>DB: INSERT projects(name, source_repo_path, source_repo_url,<br/>relay_repo_path, default_branch)
         DB-->>API: project_id
         API-->>UI: 201 {project}
 
@@ -314,32 +377,46 @@ sequenceDiagram
         note over User,DB: 1) Open Project
         User->>UI: Open Project detail page
         UI->>API: GET /projects/:id
-        API->>DB: SELECT project + changesets summary
-        DB-->>API: project + changesets[]
-        API-->>UI: 200 {project, changesets}
+        API->>DB: SELECT project + workitems summary
+        DB-->>API: project + workitems[]
+        API-->>UI: 200 {project, workitems}
     end
 
-    %% ============ 2. Create ChangeSet (Issue/Feature Request) ============
+    %% ============ 2. Create WorkItem (Issue/Feature Request) ============
     rect rgb(235,248,255)
-        note over User,DB: 2) Create ChangeSet (title, body, base_branch)
-        User->>UI: Fill Issue/Feature Request form<br/>(title, body, base_branch)
-        UI->>API: POST /projects/:id/changesets {title, body, base_branch}
-        API->>Git: Get base_sha<br/>(git rev-parse <base_branch>)
+        note over User,DB: 2) Create WorkItem (title, body, type)
+        User->>UI: Fill Issue/Feature Request form<br/>(title, body, type)
+        UI->>API: POST /workitems {project_id, title, body, type}
+        API->>DB: INSERT workitems(project_id, title, body, type, status="open")
+        DB-->>API: workitem_id
+        API-->>UI: 201 {workitem}
+    end
+
+    %% ============ 3. Create PR (ChangeSet) from WorkItem ============
+    rect rgb(235,248,255)
+        note over User,DB: 3) Create PR (ChangeSet) from WorkItem
+        User->>UI: Click "Create PR" on WorkItem
+        UI->>API: POST /workitems/:id/create-pr
+        API->>DB: SELECT workitem
+        DB-->>API: workitem
+        API->>Git: Get relay repo default branch<br/>(git symbolic-ref refs/remotes/origin/HEAD)
+        Git-->>API: default_branch
+        API->>Git: Get base SHA from relay repo<br/>(git rev-parse <default_branch>)
         Git-->>API: base_sha
-        API->>Git: Create worktree with new branch<br/>(git worktree add -b <branch_name> <worktree_path> <base_branch>)
-        Git->>Src: Create worktree directory
+        API->>Git: Create worktree with new branch<br/>(git worktree add -b <branch_name> <worktree_path> <default_branch>)
+        Git->>Src: Create worktree directory in relay repo
         Src-->>Git: worktree created
         Git-->>API: worktree_path
-        API->>Git: Get worktree head_sha<br/>(git -C <worktree_path> rev-parse HEAD)
-        Git-->>API: head_sha (= base_sha initially)
-        API->>DB: INSERT changesets(project_id, title, body,<br/>base_branch, base_sha, branch_name, head_sha,<br/>worktree_path, status="open")
+        API->>Git: Get initial head SHA<br/>(git -C <worktree_path> rev-parse HEAD)
+        Git-->>API: head_sha
+        API->>DB: INSERT changesets(project_id, workitem_id,<br/>title, body, base_branch=default_branch,<br/>base_sha, branch_name, head_sha,<br/>worktree_path, status="active", pr_status="open")
         DB-->>API: changeset_id
         API-->>UI: 201 {changeset}
     end
 
-    %% ============ 3. Trigger Agent Run -> Generate Code Changes ============
+    %% ============ 4. Trigger Agent Run -> Generate Code Changes ============
     rect rgb(255,250,230)
-        note over User,Agent: 3) Trigger Agent Run, produce changes, record Agent Run
+        note over User,Agent: 4) Trigger Agent Run, produce changes, record Agent Run
         User->>UI: Select agent_key + configure input + click "Run"
         UI->>API: POST /changesets/:id/agent-runs {agent_key, input_json}
 
@@ -423,9 +500,43 @@ sequenceDiagram
         end
     end
 
-    %% ============ 5. Import (Patch to Target Repo) ============
+    %% ============ 5. Merge PR in Relay Repo ============
+    rect rgb(235,248,255)
+        note over User,DB: 5) Merge PR into relay repo base branch
+        User->>UI: Click "Merge PR"
+        UI->>API: POST /changesets/:id/merge
+        API->>Git: Merge PR branch into base<br/>(git merge <branch_name>)
+        Git-->>API: merge result
+        API->>DB: UPDATE changesets SET status="completed",<br/>pr_status="merged", merged_at=now()
+        DB-->>API: ok
+        API-->>UI: 200 {changeset}
+    end
+
+    %% ============ 6. Sync Relay Repo to Source Repo ============
+    rect rgb(245,245,245)
+        note over User,DB: 6) Sync relay repo changes back to source repo
+        User->>UI: Click "Sync to Source"
+        UI->>API: POST /projects/:id/sync
+        API->>DB: SELECT project(relay_repo_path, source_repo_path, name)
+        DB-->>API: project refs
+        API->>Git: Fetch updates from source<br/>(git fetch origin)
+        Git-->>API: fetch result
+        API->>Git: Switch to or create relay branch<br/>(git checkout relay-${project_name} or git checkout -b)
+        Git-->>API: branch result
+        API->>Git: Copy files from relay repo to source repo<br/>(copy all files excluding .git)
+        Git-->>API: copy result
+        API->>Git: Stage all changes<br/>(git add -A)
+        Git-->>API: staged
+        API->>Git: Commit changes<br/>(git commit -m "GitVibe sync from relay repo")
+        Git-->>API: commit result
+        API->>DB: UPDATE changesets SET synced_at=now()<br/>WHERE pr_status='merged' AND synced_at IS NULL
+        DB-->>API: ok
+        API-->>UI: 200 {sync: succeeded}
+    end
+
+    %% ============ 7. Import (Patch to Target Repo) - Optional ============
     rect rgb(255,240,245)
-        note over User,Tgt: 5) Import: generate patch from ChangeSet, apply to Target Repo
+        note over User,Tgt: 7) Import: generate patch from ChangeSet, apply to Target Repo
         User->>UI: Select Target Repo + click "Import (Patch)"
         UI->>API: POST /changesets/:id/imports<br/>{target_repo_id, strategy:"patch"}
         API->>DB: INSERT imports(changeset_id, target_repo_id,<br/>strategy="patch", status="running")
@@ -437,13 +548,13 @@ sequenceDiagram
         API->>DB: SELECT target_repo(repo_path, default_branch)
         DB-->>API: target_repo refs
 
-        %% 5.1 Refresh source head_sha
+        %% 7.1 Refresh source head_sha
         API->>Git: Refresh head_sha from worktree<br/>(git -C <worktree_path> rev-parse HEAD)
         Git-->>API: source_head_sha
         API->>DB: UPDATE changesets SET head_sha=source_head_sha
         DB-->>API: ok
 
-        %% 5.2 Generate patch
+        %% 7.2 Generate patch
         API->>Git: Generate patch<br/>(git -C <worktree_path> diff --no-color <base_sha>..<source_head_sha>)
         Git-->>API: patch_text
 
@@ -452,7 +563,7 @@ sequenceDiagram
             DB-->>API: ok
             API-->>UI: 200 {import: succeeded, no-op}
         else Patch is not empty
-            %% 5.3 Verify target repo is clean
+            %% 7.3 Verify target repo is clean
             API->>Git: Check target is clean<br/>(git -C <target_path> status --porcelain)
             Git-->>API: clean / dirty
 
@@ -464,7 +575,7 @@ sequenceDiagram
                 API->>Git: Get target_base_sha<br/>(git -C <target_path> rev-parse HEAD)
                 Git-->>API: target_base_sha
 
-                %% 5.4 Apply patch + commit
+                %% 7.4 Apply patch + commit
                 API->>Git: Apply patch (3-way)<br/>(git -C <target_path> apply --3way --whitespace=nowarn)
                 Git-->>API: apply result
 
@@ -488,25 +599,14 @@ sequenceDiagram
         end
     end
 
-    %% ============ 6. Cleanup & Close ChangeSet ============
+    %% ============ 8. Cleanup & Close WorkItem ============
     rect rgb(245,245,245)
-        note over User,DB: 6) Cleanup: close ChangeSet, optionally remove worktree
-        User->>UI: Mark ChangeSet as merged/closed
-        UI->>API: POST /changesets/:id/close {status:"merged"}
-        API->>DB: UPDATE changesets SET status="merged"
+        note over User,DB: 8) Cleanup: close WorkItem
+        User->>UI: Mark WorkItem as closed
+        UI->>API: POST /workitems/:id {status:"closed"}
+        API->>DB: UPDATE workitems SET status="closed"
         DB-->>API: ok
         API-->>UI: 200
-
-        opt Remove worktree (optional cleanup)
-            User->>UI: Click "Remove worktree"
-            UI->>API: POST /changesets/:id/remove-worktree
-            API->>Git: Remove worktree<br/>(git worktree remove <worktree_path>)
-            Git->>Src: Remove worktree directory
-            Src-->>Git: removed
-            Git-->>API: ok
-            API->>DB: UPDATE changesets SET worktree_path=NULL
-            DB-->>API: ok
-            API-->>UI: 200
         end
     end
 ```

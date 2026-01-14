@@ -5,10 +5,6 @@ export type WorkItem = {
   title: string;
   body: string | null;
   status: 'open' | 'closed';
-  branchName: string;
-  baseSha: string;
-  headSha: string | null;
-  worktreePath: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -18,6 +14,7 @@ export type Project = {
   name: string;
   sourceRepoPath: string;
   sourceRepoUrl: string | null;
+  relayRepoPath: string;
   defaultBranch: string;
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +44,7 @@ export type ChangeSet = {
   worktreePath: string;
   mergedAt: Date | null;
   closedAt: Date | null;
+  syncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

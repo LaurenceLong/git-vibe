@@ -9,6 +9,7 @@ export async function ensureStorageDirectories(): Promise<void> {
     STORAGE_CONFIG.logsDir,
     STORAGE_CONFIG.patchesDir,
     STORAGE_CONFIG.worktreesDir,
+    STORAGE_CONFIG.projectsDir,
   ];
 
   for (const dir of dirs) {

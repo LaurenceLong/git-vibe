@@ -77,6 +77,7 @@ export class ChangeSetsRepository {
       prStatus?: ChangeSet['prStatus'];
       mergedAt?: Date;
       closedAt?: Date;
+      syncedAt?: Date;
     }
   ): Promise<ChangeSet | undefined> {
     const db = await this.getDbInstance();

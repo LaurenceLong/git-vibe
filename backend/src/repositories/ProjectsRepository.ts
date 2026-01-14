@@ -18,6 +18,7 @@ export class ProjectsRepository {
     name: string;
     sourceRepoPath: string;
     sourceRepoUrl?: string;
+    relayRepoPath: string;
     defaultBranch: string;
   }): Promise<Project> {
     const db = await this.getDbInstance();
@@ -28,6 +29,7 @@ export class ProjectsRepository {
         name: data.name,
         sourceRepoPath: data.sourceRepoPath,
         sourceRepoUrl: data.sourceRepoUrl || null,
+        relayRepoPath: data.relayRepoPath,
         defaultBranch: data.defaultBranch,
       })
       .returning()

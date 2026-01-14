@@ -12,7 +12,6 @@ export async function workitemsRoutes(server: FastifyInstance) {
     type: z.enum(['issue', 'feature-request']),
     title: z.string().min(1),
     body: z.string().optional(),
-    baseBranch: z.string().optional(),
   });
 
   const updateWorkItemSchema = z.object({
@@ -21,7 +20,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
     status: z.enum(['open', 'closed']).optional(),
   });
 
-  // POST /api/workitems - Create new WorkItem (creates worktree + branch)
+  // POST /api/workitems - Create new WorkItem (task definition only)
   server.post('/api/workitems', async (request, reply) => {
     try {
       const body = createWorkItemSchema.parse(request.body);
@@ -35,30 +34,13 @@ export async function workitemsRoutes(server: FastifyInstance) {
         });
       }
 
-      // Validate repo
-      await gitService.validateRepo(project.sourceRepoPath);
-
-      // Get base branch (use provided or project default)
-      const baseBranch = body.baseBranch || project.defaultBranch;
-      const baseSha = gitService.getRefSha(project.sourceRepoPath, baseBranch);
-
-      // Generate branch name and worktree path
-      const branchName = `workitem/${uuidv4()}`;
-      const worktreePath = `${project.sourceRepoPath}-worktrees/${branchName}`;
-
-      // Create worktree and branch
-      gitService.createWorktree(project.sourceRepoPath, worktreePath, branchName, baseSha);
-
-      // Create WorkItem in database
+      // Create WorkItem in database (no worktree - Changesets handle workspaces)
       const workItem = await workItemsRepository.create({
         id: uuidv4(),
         projectId: body.projectId,
         type: body.type,
         title: body.title,
         body: body.body,
-        branchName,
-        baseSha,
-        worktreePath,
       });
 
       return reply.status(201).send(workItem);
@@ -159,25 +141,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
       });
     }
 
-    // Get project to access repo path
-    const project = await projectsRepository.findById(workItem.projectId);
-    if (!project) {
-      return reply.status(404).send({
-        error: true,
-        message: 'Project not found',
-      });
-    }
-
-    // Remove worktree if it exists
-    if (workItem.worktreePath) {
-      try {
-        gitService.removeWorktree(workItem.worktreePath, project.sourceRepoPath);
-      } catch {
-        // Worktree may not exist, continue with deletion
-      }
-    }
-
-    // Delete from database
+    // Delete from database (worktrees are managed by Changesets)
     await workItemsRepository.delete(request.params.id);
 
     return reply.status(204).send();
@@ -204,10 +168,29 @@ export async function workitemsRoutes(server: FastifyInstance) {
         });
       }
 
-      // Get current head SHA from worktree
-      const headSha = gitService.getWorktreeHead(workItem.worktreePath || '');
+      // Validate repo
+      await gitService.validateRepo(project.sourceRepoPath);
 
-      // Create ChangeSet
+      // Get base branch SHA from relay repo
+      const baseBranch = project.defaultBranch;
+      const baseSha = gitService.getRefSha(project.relayRepoPath || project.sourceRepoPath, baseBranch);
+
+      // Generate branch name and worktree path
+      const branchName = `pr/${uuidv4()}`;
+      const worktreePath = `${project.relayRepoPath || project.sourceRepoPath}-worktrees/${branchName}`;
+
+      // Create worktree and branch from relay repo
+      gitService.createWorktree(
+        project.relayRepoPath || project.sourceRepoPath,
+        worktreePath,
+        branchName,
+        baseSha
+      );
+
+      // Get initial head SHA (same as baseSha initially)
+      const headSha = gitService.getWorktreeHead(worktreePath);
+
+      // Create ChangeSet (PR) with workspace
       const changeset = await changesetsRepository.create({
         id: uuidv4(),
         projectId: workItem.projectId,
@@ -216,11 +199,11 @@ export async function workitemsRoutes(server: FastifyInstance) {
         body: workItem.body || undefined,
         status: 'active',
         prStatus: 'open',
-        baseBranch: project.defaultBranch,
-        baseSha: workItem.baseSha,
-        branchName: workItem.branchName,
+        baseBranch,
+        baseSha,
+        branchName,
         headSha,
-        worktreePath: workItem.worktreePath || '',
+        worktreePath,
       });
 
       return reply.status(201).send(changeset);

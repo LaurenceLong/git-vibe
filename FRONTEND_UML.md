@@ -2,9 +2,9 @@
 
 Rules integrated:
 
-1. **After a PR is created, agent runs push commits to the same PR head branch** (PR updates in place).
-2. **Issues also create worktrees and PRs** (not just Feature Requests).
-3. **PR code review comments are handled in the corresponding worktree** (review actions may trigger agent work in that PR’s worktree/branch).
+1. **After a PR (ChangeSet) is created, agent runs push commits to the same PR head branch** (PR updates in place).
+2. **WorkItems are task definitions only** - they do NOT create worktrees or branches. WorkItems can create PRs (Changesets) which have their own worktrees.
+3. **PR code review comments are handled in the corresponding worktree** (review actions may trigger agent work in that PR's worktree/branch).
 
 To avoid duplicating “Issue vs Feature Request” flows, I’ll model them as a single **WorkItem** type (kind = Issue | FeatureRequest) with identical automation behavior.
 
@@ -12,13 +12,18 @@ To avoid duplicating “Issue vs Feature Request” flows, I’ll model them as 
 
 ## 0) Mental model (what the state machine assumes)
 
-- **Project** = workspace repo (created by copying `.git` from a source repo into a temp/workspace directory).
-- A **WorkItem** (Issue/FeatureRequest) owns:
-  - a **worktree + head branch** (created at WorkItem creation time)
-  - **agent runs** that commit to that branch
-  - optionally a **PR** (ChangeSet) whose head is that same branch
-- A **PR** is always: `base = project.workspace_base_branch`, `head = workitem.branch`
+- **Source Repo** = original local Git repo (contains `.git`) that is the source of code.
+- **Project** = a GitVibe project that creates a **Relay Repo** by copying `.git` from the source repo to `baseTempDir/projects/${project_name}` and running `git reset --hard` to restore files. This relay repo serves as the workspace for all operations.
+- A **WorkItem** (Issue/FeatureRequest) is a **task definition only** - it contains title, body, type, and status. It does NOT have worktrees, branches, or SHAs.
+- A **PR (ChangeSet)** owns:
+  - a **worktree + head branch** (created at PR creation time from the relay repo)
+  - **agent runs** that commit to that branch in the relay repo
+  - optionally links to a **WorkItem** for traceability
+  - **syncedAt** timestamp when synced to source repo (null if not synced yet)
+- A **PR** is always: `base = relay_repo.default_branch`, `head = changeset.branch_name`
 - **PR review comments/threads** belong to the PR but are _actioned_ by agents in the same head branch/worktree.
+- **Sync to Source**: user manually syncs changes from the relay repo back to the source repo when ready. The sync creates a branch called `relay-${project_name}` in the source repo, copies all files from the relay repo to the source repo (excluding `.git` directory), stages the changes, and creates a commit. After successful sync, the changeset's `syncedAt` field is updated.
+- **Pending Sync**: merged PRs that have `prStatus='merged'` but `syncedAt=null` are considered "pending sync" - they are merged in the relay repo but haven't been synced to the source repo yet.
 
 ---
 
@@ -39,7 +44,7 @@ stateDiagram-v2
 
 ---
 
-## 2) Create Project (copy `.git` from source repo → workspace repo)
+## 2) Create Project (copy `.git` from source repo → relay repo)
 
 ```mermaid
 stateDiagram-v2
@@ -47,18 +52,20 @@ stateDiagram-v2
 
   Draft --> Validating: submit
   Validating --> Draft: invalid (missing name/source)
-  Validating --> WorkspaceInit: valid
+  Validating --> RelayRepoInit: valid
 
-  state WorkspaceInit {
-    [*] --> CreateWorkspaceDir
-    CreateWorkspaceDir --> CopyGitDir: copy source/.git -> workspace/.git
-    CopyGitDir --> VerifyGit: verify HEAD/refs, ensure usable repo
-    VerifyGit --> SetWorkspaceBranch: checkout/init base branch (e.g., main)
-    SetWorkspaceBranch --> PersistProject: store project + workspace paths
+  state RelayRepoInit {
+    [*] --> CreateRelayRepoDir
+    CreateRelayRepoDir --> CopyGitDir: copy source/.git -> relay/.git
+    CopyGitDir --> ResetHard: git reset --hard HEAD
+    ResetHard --> CleanUntracked: git clean -fd
+    CleanUntracked --> VerifyGit: verify HEAD/refs, ensure usable repo
+    VerifyGit --> SetRelayBranch: checkout/init base branch (e.g., main)
+    SetRelayBranch --> PersistProject: store project + relay paths
     PersistProject --> [*]
   }
 
-  WorkspaceInit --> Draft: failed (fs/git error)
+  RelayRepoInit --> Draft: failed (fs/git error)
 ```
 
 ---
@@ -88,7 +95,9 @@ stateDiagram-v2
 
 ---
 
-## 4) WorkItem (Issue/Feature Request) lifecycle: create → worktree → agents → PR
+## 4) WorkItem (Issue/Feature Request) lifecycle: create → discussion → PR
+
+**Note:** WorkItems do NOT create worktrees. WorkItems are task definitions only. PRs (Changesets) own worktrees, branches, and handle agent runs.
 
 ### 4.1 WorkItem list + creation
 
@@ -108,23 +117,20 @@ stateDiagram-v2
 
   state CreatingWorkItem {
     [*] --> CreateWorkItemRecord
-    CreateWorkItemRecord --> CreateWorktreeFromWorkspace
-    CreateWorktreeFromWorkspace --> CreateHeadBranch
-    CreateHeadBranch --> CheckoutBranchInWorktree
-    CheckoutBranchInWorktree --> CaptureBaseSha
-    CaptureBaseSha --> CaptureHeadSha
-    CaptureHeadSha --> [*]
+    CreateWorkItemRecord --> [*]
   }
 
-  CreatingWorkItem --> CreateModal: failed (git/worktree error)
+  CreatingWorkItem --> CreateModal: failed (db error)
   CreatingWorkItem --> WorkItemDetail: success (route /work-items/:id)
 ```
 
-**Key point:** Worktree is created **at WorkItem creation**, per your rule that issues also create worktrees/PRs.
+**Key point:** WorkItems are **task definitions only** - they do NOT create worktrees or branches. WorkItems can create PRs (Changesets) which have their own worktrees.
 
 ---
 
-### 4.2 WorkItem detail (discussion + agents + PR creation)
+### 4.2 WorkItem detail (discussion + PR creation)
+
+**Note:** WorkItems do NOT have worktrees. Agent runs and code changes happen in PRs (Changesets) which are created from WorkItems.
 
 ```mermaid
 stateDiagram-v2
@@ -141,24 +147,10 @@ stateDiagram-v2
     PostingComment --> Discussion: success
     PostingComment --> CommentComposer: failed
 
-    %% Agent run on the WorkItem branch/worktree
-    Discussion --> AgentConfig: click "Run Agents"
-    AgentConfig --> AgentQueued: submit
-    AgentQueued --> AgentRunning
-    AgentRunning --> AgentSucceeded
-    AgentRunning --> AgentFailed
-    AgentRunning --> AgentCancelled
-
-    AgentQueued --> AgentQueued: poll status/log
-    AgentRunning --> AgentRunning: poll status/log
-
-    AgentSucceeded --> HeadAdvanced: commits pushed to same WorkItem branch
-    HeadAdvanced --> Discussion
-
-    %% PR creation or linking
+    %% PR creation (WorkItems do NOT have worktrees - PRs own worktrees)
     Discussion --> PRStatus: view PR panel
     PRStatus --> PreparingPR: click "Create PR" (if none)
-    PreparingPR --> PRCreated: success (PR points to same branch)
+    PreparingPR --> PRCreated: success (PR has its own worktree/branch)
     PreparingPR --> PRCreateFailed: failed
     PRCreateFailed --> PRStatus: show error
 
@@ -167,11 +159,15 @@ stateDiagram-v2
   }
 ```
 
+**Note:** Agent runs happen in the PR (ChangeSet) detail view, not in the WorkItem detail view. WorkItems are for discussion and task tracking only.
+
 ---
 
-## 5) PR (ChangeSet) lifecycle: created from WorkItem branch, updated by agents, review comments handled via same worktree
+## 5) PR (ChangeSet) lifecycle: created from WorkItem (or independently), updated by agents, review comments handled via same worktree
 
-This is the “full” part where your rule (agents keep pushing to same head branch) and “review comments deal in corresponding worktree” are explicit.
+This is the "full" part where your rule (agents keep pushing to same head branch) and "review comments deal in corresponding worktree" are explicit.
+
+**Note:** PRs (Changesets) can be created independently without a WorkItem, but when created from a WorkItem, they link back for traceability. PRs own their own worktrees, branches, and SHAs.
 
 ```mermaid
 stateDiagram-v2
@@ -210,7 +206,7 @@ stateDiagram-v2
     ResolvingThread --> DiffLoaded: success
     ResolvingThread --> DiffLoaded: failed
 
-    %% Head updates (agents push commits to SAME head branch)
+    %% Head updates (agents push commits to SAME head branch in relay repo)
     DiffLoaded --> HeadMoved: head branch advanced (new commits)
     HeadMoved --> RecomputeDiff: refresh diff against same base
     RecomputeDiff --> AnchorRecheck: recompute anchors
@@ -232,7 +228,7 @@ stateDiagram-v2
     %% Merge/Close
     OverviewTab --> MergeConfirm: click Merge
     MergeConfirm --> Merging
-    Merging --> Merged: success (merged into workspace base branch)
+    Merging --> Merged: success (merged into relay repo base branch)
     Merging --> OverviewTab: failed
 
     OverviewTab --> CloseConfirm: click Close
@@ -246,7 +242,7 @@ stateDiagram-v2
 
 ## 6) Worktree management (because everything depends on it)
 
-Since you rely heavily on worktrees, you need explicit “worktree present/missing” gating. This applies to WorkItems and PRs (same underlying worktree/branch).
+Since you rely heavily on worktrees, you need explicit "worktree present/missing" gating. This applies to PRs (Changesets) only, since WorkItems no longer have worktrees.
 
 ```mermaid
 stateDiagram-v2
@@ -264,14 +260,19 @@ stateDiagram-v2
   WorktreeMissing --> WorktreeMissing: agents/diff/apply disabled, show CTA
 ```
 
+**Note:** Worktree management applies to PRs (Changesets) only, since WorkItems no longer have worktrees.
+
 ---
 
 ## 7) Cross-object coupling (the important invariants)
 
-These are not “states” but they explain why the machine is structured this way:
+These are not "states" but they explain why the machine is structured this way:
 
-- **WorkItem.branch == PR.head_branch** (if PR exists)
-- Agent runs always target **that branch/worktree**
-- PR is updated when agent run succeeds (new commits pushed)
+- **WorkItems are task definitions only** - no worktree, branch, or SHA tracking
+- **PRs (Changesets) own worktrees, branches, and SHAs**
+- Agent runs always target **that PR's branch/worktree in relay repo**
+- PR is updated when agent run succeeds (new commits pushed to relay repo)
 - Review threads can become **outdated** when head moves
-- Merging PR applies changes into the **workspace repo base branch**
+- Merging PR applies changes into the **relay repo base branch**
+- **Pending Sync**: merged PRs (`prStatus='merged'`) with `syncedAt=null` are waiting to be synced to source repo
+- User can manually sync changes from the **relay repo to source repo** (creates `relay-${project_name}` branch, copies files excluding `.git`, stages and commits changes, updates `syncedAt`)

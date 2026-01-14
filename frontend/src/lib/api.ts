@@ -16,7 +16,12 @@ export const projectsApi = {
   getByName: (name: string) => api.get(`/projects/name/${name}`),
   create: (data: { name: string; sourceRepoPath: string; sourceRepoUrl?: string }) =>
     api.post('/projects', data),
+  delete: (id: string) => api.delete(`/projects/${id}`),
+  sync: (id: string) => api.post(`/projects/${id}/sync`),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),
+  getFiles: (id: string) => api.get(`/projects/${id}/files`),
+  getFileContent: (id: string, filePath: string) =>
+    api.get(`/projects/${id}/files/content`, { params: { path: filePath } }),
 };
 
 export const targetReposApi = {

@@ -1,20 +1,28 @@
 /**
  * Overview Tab Component
  * Displays project statistics, recent activity, and metadata
+ * WorkItems are task definitions, Changesets handle workspaces
+ * Pending Sync shows merged PRs that haven't been synced to source repo yet
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { workItemsApi, changesetsApi } from '@/lib/api';
+import { workItemsApi, changesetsApi, projectsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/Button';
+import { Folder, GitBranch, GitPullRequest, CheckCircle, AlertCircle, Clock, FileCode, RefreshCw } from 'lucide-react';
 
 export interface OverviewTabProps {
   project: Project;
 }
 
 export function OverviewTab({ project }: OverviewTabProps) {
+  const queryClient = useQueryClient();
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const { data: workItems, isLoading: isLoadingWorkItems } = useQuery({
     queryKey: ['workitems', project.id],
     queryFn: () => workItemsApi.list(project.id).then((res) => res.data.data),
@@ -25,35 +33,147 @@ export function OverviewTab({ project }: OverviewTabProps) {
     queryFn: () => changesetsApi.list(project.id).then((res) => res.data.data),
   });
 
+  const syncMutation = useMutation({
+    mutationFn: () => projectsApi.sync(project.id),
+    onSuccess: () => {
+      setIsSyncing(false);
+      queryClient.invalidateQueries({ queryKey: ['changesets', project.id] });
+    },
+    onError: () => {
+      setIsSyncing(false);
+    },
+  });
+
+  const handleSync = async () => {
+    if (window.confirm('Sync all merged PRs to source repo? This will copy all changes from the relay repo to the source repo.')) {
+      setIsSyncing(true);
+      syncMutation.mutate();
+    }
+  };
+
+  // Work Items Statistics
   const totalWorkItems = workItems?.length || 0;
   const openWorkItems = workItems?.filter((wi: any) => wi.status === 'open').length || 0;
+  const closedWorkItems = workItems?.filter((wi: any) => wi.status === 'closed').length || 0;
+  const issueCount = workItems?.filter((wi: any) => wi.type === 'issue').length || 0;
+  const featureRequestCount = workItems?.filter((wi: any) => wi.type === 'feature-request').length || 0;
+
+  // Pull Requests Statistics
+  const totalPRs = changesets?.filter((cs: any) => cs.prStatus).length || 0;
   const openPRs = changesets?.filter((cs: any) => cs.prStatus === 'open').length || 0;
   const mergedPRs = changesets?.filter((cs: any) => cs.prStatus === 'merged').length || 0;
+  const closedPRs = changesets?.filter((cs: any) => cs.prStatus === 'closed').length || 0;
+  const draftPRs = changesets?.filter((cs: any) => cs.status === 'draft').length || 0;
+
+  // Pending Sync Statistics (merged PRs that haven't been synced to source repo yet)
+  const pendingSyncTotal = changesets?.filter((cs: any) => cs.prStatus === 'merged' && !cs.syncedAt).length || 0;
 
   const recentWorkItems = workItems?.slice(0, 5) || [];
   const recentPRs = changesets?.filter((cs: any) => cs.prStatus).slice(0, 5) || [];
 
   return (
     <div className="space-y-8">
-      {/* Statistics */}
+      {/* Project Statistics - Enhanced */}
       <div>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Project Statistics</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="rounded-lg border bg-gray-50 p-4">
-            <div className="text-2xl font-bold text-gray-900">{totalWorkItems}</div>
-            <div className="mt-1 text-sm text-gray-600">Total Work Items</div>
+        
+        {/* Work Items Stats */}
+        <div className="mb-6">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Folder className="h-4 w-4" />
+            Work Items
+          </h3>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <div className="flex items-center gap-2">
+                <FileCode className="h-4 w-4 text-gray-500" />
+                <div className="text-xl font-bold text-gray-900">{totalWorkItems}</div>
+              </div>
+              <div className="mt-1 text-xs text-gray-600">Total</div>
+            </div>
+            <div className="rounded-lg border bg-blue-50 p-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <div className="text-xl font-bold text-blue-600">{openWorkItems}</div>
+              </div>
+              <div className="mt-1 text-xs text-gray-600">Open</div>
+            </div>
+            <div className="rounded-lg border bg-green-50 p-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <div className="text-xl font-bold text-green-600">{closedWorkItems}</div>
+              </div>
+              <div className="mt-1 text-xs text-gray-600">Closed</div>
+            </div>
+            <div className="rounded-lg border bg-purple-50 p-3">
+              <div className="text-xl font-bold text-purple-600">{issueCount}</div>
+              <div className="mt-1 text-xs text-gray-600">Issues</div>
+            </div>
+            <div className="rounded-lg border bg-orange-50 p-3">
+              <div className="text-xl font-bold text-orange-600">{featureRequestCount}</div>
+              <div className="mt-1 text-xs text-gray-600">Features</div>
+            </div>
           </div>
-          <div className="rounded-lg border bg-gray-50 p-4">
-            <div className="text-2xl font-bold text-blue-600">{openWorkItems}</div>
-            <div className="mt-1 text-sm text-gray-600">Open Work Items</div>
+        </div>
+
+        {/* Pull Requests Stats */}
+        <div className="mb-6">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+            <GitPullRequest className="h-4 w-4" />
+            Pull Requests
+          </h3>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <div className="text-xl font-bold text-gray-900">{totalPRs}</div>
+              <div className="mt-1 text-xs text-gray-600">Total</div>
+            </div>
+            <div className="rounded-lg border bg-green-50 p-3">
+              <div className="text-xl font-bold text-green-600">{openPRs}</div>
+              <div className="mt-1 text-xs text-gray-600">Open</div>
+            </div>
+            <div className="rounded-lg border bg-purple-50 p-3">
+              <div className="text-xl font-bold text-purple-600">{mergedPRs}</div>
+              <div className="mt-1 text-xs text-gray-600">Merged</div>
+            </div>
+            <div className="rounded-lg border bg-gray-100 p-3">
+              <div className="text-xl font-bold text-gray-600">{closedPRs}</div>
+              <div className="mt-1 text-xs text-gray-600">Closed</div>
+            </div>
+            <div className="rounded-lg border bg-yellow-50 p-3">
+              <div className="text-xl font-bold text-yellow-600">{draftPRs}</div>
+              <div className="mt-1 text-xs text-gray-600">Draft</div>
+            </div>
           </div>
-          <div className="rounded-lg border bg-gray-50 p-4">
-            <div className="text-2xl font-bold text-green-600">{openPRs}</div>
-            <div className="mt-1 text-sm text-gray-600">Open Pull Requests</div>
-          </div>
-          <div className="rounded-lg border bg-gray-50 p-4">
-            <div className="text-2xl font-bold text-purple-600">{mergedPRs}</div>
-            <div className="mt-1 text-sm text-gray-600">Merged Pull Requests</div>
+        </div>
+
+        {/* Pending Sync Stats */}
+        <div>
+          <h3 className="mb-3 flex items-center justify-between gap-2 text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Pending Sync
+            </div>
+            {pendingSyncTotal > 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSync}
+                loading={isSyncing}
+                disabled={isSyncing}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Sync to Source
+              </Button>
+            )}
+          </h3>
+          <div className="rounded-lg border bg-amber-50 p-3 max-w-xs">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
+              <div className="text-2xl font-bold text-amber-600">{pendingSyncTotal}</div>
+            </div>
+            <div className="mt-1 text-xs text-gray-600">
+              Merged PRs waiting to sync to source repo
+            </div>
           </div>
         </div>
       </div>
@@ -156,39 +276,51 @@ export function OverviewTab({ project }: OverviewTabProps) {
         )}
       </div>
 
-      {/* Project Metadata */}
+      {/* Project Details */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Project Metadata</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Project Details</h2>
         <div className="rounded-lg border bg-gray-50 p-4">
-          <div className="space-y-2 text-sm">
-            <div>
-              <span className="font-medium text-gray-700">Default Branch:</span>{' '}
-              <span className="text-gray-900">{project.defaultBranch}</span>
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Source Path:</span>{' '}
-              <span className="text-gray-900">{project.sourceRepoPath}</span>
-            </div>
-            {project.sourceRepoUrl && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3 text-sm">
+              <h3 className="font-medium text-gray-900">Repository Information</h3>
               <div>
-                <span className="font-medium text-gray-700">Source URL:</span>{' '}
-                <a
-                  href={project.sourceRepoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  {project.sourceRepoUrl}
-                </a>
+                <span className="text-gray-600">Default Branch:</span>
+                <div className="mt-1 font-mono text-sm text-gray-900">{project.defaultBranch}</div>
               </div>
-            )}
-            <div>
-              <span className="font-medium text-gray-700">Created:</span>{' '}
-              <span className="text-gray-900">{new Date(project.createdAt).toLocaleString()}</span>
+              <div>
+                <span className="text-gray-600">Source Path:</span>
+                <div className="mt-1 font-mono text-sm text-gray-900">{project.sourceRepoPath}</div>
+              </div>
+              {project.sourceRepoUrl && (
+                <div>
+                  <span className="text-gray-600">Source URL:</span>
+                  <div className="mt-1">
+                    <a
+                      href={project.sourceRepoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-sm text-blue-600 hover:underline"
+                    >
+                      {project.sourceRepoUrl}
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <span className="font-medium text-gray-700">Last Updated:</span>{' '}
-              <span className="text-gray-900">{new Date(project.updatedAt).toLocaleString()}</span>
+            <div className="space-y-3 text-sm">
+              <h3 className="font-medium text-gray-900">Timeline</h3>
+              <div>
+                <span className="text-gray-600">Created:</span>
+                <div className="mt-1 text-gray-900">{new Date(project.createdAt).toLocaleString()}</div>
+              </div>
+              <div>
+                <span className="text-gray-600">Last Updated:</span>
+                <div className="mt-1 text-gray-900">{new Date(project.updatedAt).toLocaleString()}</div>
+              </div>
+              <div>
+                <span className="text-gray-600">Project ID:</span>
+                <div className="mt-1 font-mono text-xs text-gray-500">{project.id}</div>
+              </div>
             </div>
           </div>
         </div>

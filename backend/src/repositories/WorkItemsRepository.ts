@@ -19,9 +19,6 @@ export class WorkItemsRepository {
     type: 'issue' | 'feature-request';
     title: string;
     body?: string;
-    branchName: string;
-    baseSha: string;
-    worktreePath?: string;
   }): Promise<WorkItem> {
     const db = await this.getDbInstance();
     const [workItem] = await db
@@ -32,9 +29,6 @@ export class WorkItemsRepository {
         type: data.type,
         title: data.title,
         body: data.body || null,
-        branchName: data.branchName,
-        baseSha: data.baseSha,
-        worktreePath: data.worktreePath || null,
       })
       .returning()
       .execute();
@@ -71,8 +65,6 @@ export class WorkItemsRepository {
       title?: string;
       body?: string;
       status?: 'open' | 'closed';
-      headSha?: string;
-      worktreePath?: string;
     }
   ): Promise<WorkItem | undefined> {
     const db = await this.getDbInstance();

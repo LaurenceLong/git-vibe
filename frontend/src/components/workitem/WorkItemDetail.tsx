@@ -2,17 +2,16 @@
  * WorkItemDetail Component
  *
  * Main WorkItem detail page with tabs for Discussion, Agent Config, and PR Status
+ * WorkItems are task definitions only - Changesets handle workspaces
  */
 
 import { useState } from 'react';
 import { useWorkItem, useCloseWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItem';
-import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
 import { ControlledTabs, Tab, TabPanel } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
-import { AlertCircle, GitBranch, Calendar, Hash } from 'lucide-react';
+import { AlertCircle, Calendar } from 'lucide-react';
 
 export interface WorkItemDetailProps {
   workItemId: string;
@@ -28,15 +27,6 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
   const { data: workItem, isLoading, error } = useWorkItem(workItemId);
   const { closeWorkItem, isLoading: isClosing } = useCloseWorkItem(workItemId);
   const { deleteWorkItem, isLoading: isDeleting } = useDeleteWorkItem(workItemId);
-
-  // Worktree management - always call hook but only use when workItem is loaded
-  const worktreeManagement = useWorktreeManagement({
-    type: 'workitem',
-    id: workItemId,
-    projectId: workItem?.projectId || '',
-    worktreePath: workItem?.worktreePath || null,
-    branchName: workItem?.branchName || '',
-  });
 
   const handleClose = async () => {
     if (window.confirm('Are you sure you want to close this WorkItem?')) {
@@ -111,11 +101,6 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
     }
   };
 
-  // Determine worktree status
-  const getWorktreeStatus = (): 'present' | 'missing' | 'recreating' => {
-    if (worktreeManagement.isRecreating) return 'recreating';
-    return workItem?.worktreePath ? 'present' : 'missing';
-  };
 
   return (
     <div className="space-y-6">
@@ -152,49 +137,8 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
           <div className="mb-4 whitespace-pre-wrap text-gray-700">{workItem.body}</div>
         )}
 
-        {/* Worktree Status */}
-        <WorktreeStatusComponent
-          status={getWorktreeStatus()}
-          path={workItem?.worktreePath || null}
-          branchName={workItem?.branchName || ''}
-          projectId={workItem?.projectId || ''}
-          createdAt={workItem?.createdAt}
-          updatedAt={workItem?.updatedAt}
-          onRecreate={worktreeManagement.recreateWorktree}
-          onRemove={worktreeManagement.removeWorktree}
-          isRecreating={worktreeManagement.isRecreating}
-          isRemoving={worktreeManagement.isRemoving}
-          error={worktreeManagement.error?.message}
-        />
-
         {/* WorkItem Metadata */}
         <div className="grid grid-cols-1 gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <GitBranch className="h-4 w-4" />
-            <span>
-              <span className="font-medium">Branch:</span> {workItem.branchName}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <Hash className="h-4 w-4" />
-            <span>
-              <span className="font-medium">Base SHA:</span>{' '}
-              <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">
-                {workItem.baseSha.slice(0, 8)}
-              </code>
-            </span>
-          </div>
-          {workItem.headSha && (
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Hash className="h-4 w-4" />
-              <span>
-                <span className="font-medium">Head SHA:</span>{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">
-                  {workItem.headSha.slice(0, 8)}
-                </code>
-              </span>
-            </div>
-          )}
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <Calendar className="h-4 w-4" />
             <span>
@@ -213,7 +157,7 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
       </div>
 
       {/* Tabs */}
-      <ControlledTabs defaultValue="discussion" value={activeTab} onValueChange={setActiveTab}>
+      <ControlledTabs defaultValue="discussion">
         <div className="rounded-lg border bg-white shadow-sm">
           <div className="border-b border-gray-200 px-6">
             <div className="flex space-x-8" role="tablist">

@@ -66,12 +66,24 @@ export async function runMigrations() {
       .all() as { filename: string }[];
     const executedSet = new Set(executedMigrations.map((m) => m.filename));
 
-    // Helper function to check if a column exists in a table
-    function columnExists(tableName: string, columnName: string): boolean {
-      const result = sqlite
-        .prepare(`PRAGMA table_info(${tableName})`)
-        .all() as { name: string }[];
-      return result.some((col) => col.name === columnName);
+    // Clean up any old migration entries from previous incomplete runs
+    // Since this project hasn't been released, we can safely reset migration tracking
+    // if the schema is incomplete
+    const requiredTables = ['projects', 'work_items', 'changesets', 'review_threads',
+                            'review_comments', 'agent_runs', 'imports', 'target_repos'];
+    const existingTables = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all() as { name: string }[];
+    const existingTableNames = new Set(existingTables.map(t => t.name));
+    
+    // Check if all required tables exist
+    const allTablesExist = requiredTables.every(table => existingTableNames.has(table));
+    
+    // If we have migration records but tables are missing, reset the migration tracking
+    if (executedSet.size > 0 && !allTablesExist) {
+      console.log('Detected incomplete schema, resetting migration tracking');
+      sqlite.prepare('DELETE FROM _migrations').run();
+      executedSet.clear();
     }
 
     for (const file of files) {
@@ -81,18 +93,7 @@ export async function runMigrations() {
       }
 
       const fullPath = path.join(migrationsFolder, file);
-      let sql = await fs.readFile(fullPath, 'utf-8');
-
-      // Handle ALTER TABLE ADD COLUMN statements to avoid duplicate column errors
-      // This is a workaround for SQLite's lack of IF NOT EXISTS in ALTER TABLE
-      const alterTableRegex = /ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)\s+[^;]+;/gi;
-      sql = sql.replace(alterTableRegex, (match, tableName, columnName) => {
-        if (columnExists(tableName, columnName)) {
-          // Comment out the ALTER TABLE statement if column already exists
-          return `-- ${match} (column already exists, skipping)`;
-        }
-        return match;
-      });
+      const sql = await fs.readFile(fullPath, 'utf-8');
 
       console.log(`Running migration (raw sql): ${file}`);
       sqlite.exec(sql);
