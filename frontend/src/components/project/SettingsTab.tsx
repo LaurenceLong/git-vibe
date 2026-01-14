@@ -3,11 +3,12 @@
  * Displays and allows editing of project settings
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
-import { Project } from '@/types';
+import { Project, AgentParams } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { Select, SelectOption } from '@/components/ui/Select';
 
 export interface SettingsTabProps {
   project: Project;
@@ -16,17 +17,44 @@ export interface SettingsTabProps {
 export function SettingsTab({ project }: SettingsTabProps) {
   const [name, setName] = useState(project.name);
   const [defaultBranch, setDefaultBranch] = useState(project.defaultBranch);
+  const [defaultAgent, setDefaultAgent] = useState(project.defaultAgent || 'opencode');
+  const [agentParams, setAgentParams] = useState<AgentParams>({});
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string; provider?: string }[]>([]);
+
+  // Parse agentParams from JSON string on mount and when project changes
+  useEffect(() => {
+    if (project.agentParams) {
+      try {
+        setAgentParams(JSON.parse(project.agentParams));
+      } catch {
+        setAgentParams({});
+      }
+    } else {
+      setAgentParams({});
+    }
+  }, [project.agentParams]);
 
   const queryClient = useQueryClient();
 
+  // Fetch available models from OpenCode CLI
+  const { data: modelsData, isLoading: isLoadingModels } = useQuery({
+    queryKey: ['models'],
+    queryFn: () => projectsApi.getModels().then((res) => res.data.data),
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  // Update available models when data changes
+  useEffect(() => {
+    if (modelsData && Array.isArray(modelsData)) {
+      setAvailableModels(modelsData);
+    }
+  }, [modelsData]);
+
   const updateProjectMutation = useMutation({
-    mutationFn: (data: { name?: string; defaultBranch?: string }) =>
-      projectsApi.get(project.id).then(() => {
-        // Note: This is a placeholder - actual update endpoint may differ
-        return Promise.resolve({ data: { ...project, ...data } });
-      }),
+    mutationFn: (data: { name?: string; defaultBranch?: string; defaultAgent?: string; agentParams?: AgentParams }) =>
+      projectsApi.update(project.id, data),
     onSuccess: () => {
       setMessage({ type: 'success', text: 'Settings saved successfully' });
       setIsEditing(false);
@@ -55,15 +83,41 @@ export function SettingsTab({ project }: SettingsTabProps) {
     updateProjectMutation.mutate({
       name: name !== project.name ? name : undefined,
       defaultBranch: defaultBranch !== project.defaultBranch ? defaultBranch : undefined,
+      defaultAgent: defaultAgent !== project.defaultAgent ? defaultAgent : undefined,
+      agentParams: Object.keys(agentParams).length > 0 ? agentParams : undefined,
     });
   };
 
   const handleCancel = () => {
     setName(project.name);
     setDefaultBranch(project.defaultBranch);
+    setDefaultAgent(project.defaultAgent || 'opencode');
+    if (project.agentParams) {
+      try {
+        setAgentParams(JSON.parse(project.agentParams));
+      } catch {
+        setAgentParams({});
+      }
+    } else {
+      setAgentParams({});
+    }
     setIsEditing(false);
     setMessage(null);
   };
+
+  const agentOptions: SelectOption[] = [
+    { value: 'opencode', label: 'OpenCode' },
+    { value: 'claudcode', label: 'ClaudeCode' },
+  ];
+
+  // Build model options from fetched models
+  const modelOptions: SelectOption[] = [
+    { value: '', label: 'Default (use agent default)' },
+    ...availableModels.map((model) => ({
+      value: model.id,
+      label: model.name,
+    })),
+  ];
 
   return (
     <div className="space-y-6">
@@ -114,6 +168,54 @@ export function SettingsTab({ project }: SettingsTabProps) {
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
               placeholder="e.g., main, master"
             />
+          </div>
+
+          {/* Default Agent */}
+          <div className="mb-4">
+            <label htmlFor="default-agent" className="mb-2 block text-sm font-medium text-gray-700">
+              Default Code Agent
+            </label>
+            <Select
+              id="default-agent"
+              options={agentOptions}
+              value={defaultAgent}
+              onChange={(e) => setDefaultAgent(e.target.value)}
+              disabled={!isEditing}
+              fullWidth
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Select the default AI agent to use for code generation and tasks
+            </p>
+          </div>
+
+          {/* Default Model (stored in agentParams) */}
+          <div className="mb-4">
+            <label htmlFor="default-model" className="mb-2 block text-sm font-medium text-gray-700">
+              Default Model
+            </label>
+            {isLoadingModels ? (
+              <div className="flex items-center space-x-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div>
+                <span className="text-sm text-gray-500">Loading available models...</span>
+              </div>
+            ) : (
+              <Select
+                id="default-model"
+                options={modelOptions}
+                value={agentParams.model || ''}
+                onChange={(e) =>
+                  setAgentParams((prev) => ({
+                    ...prev,
+                    model: e.target.value || undefined,
+                  }))
+                }
+                disabled={!isEditing}
+                fullWidth
+              />
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              Select the default AI model. Leave empty to use the agent's default model. Models are fetched from OpenCode CLI.
+            </p>
           </div>
 
           {/* Source Path (Read-only) */}

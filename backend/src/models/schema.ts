@@ -27,6 +27,8 @@ export const projects = sqliteTable('projects', {
   sourceRepoUrl: text('source_repo_url'),
   relayRepoPath: text('relay_repo_path').notNull(),
   defaultBranch: text('default_branch').notNull(),
+  defaultAgent: text('default_agent').notNull().default('opencode'),
+  agentParams: text('agent_params'),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),

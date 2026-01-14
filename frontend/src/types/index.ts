@@ -134,6 +134,14 @@ export interface ReviewComment {
 }
 
 /**
+ * Agent params type for flexible agent configuration
+ */
+export interface AgentParams {
+  model?: string;
+  [key: string]: unknown;
+}
+
+/**
  * Project represents a source project
  */
 export interface Project {
@@ -143,6 +151,8 @@ export interface Project {
   sourceRepoUrl: string | null;
   relayRepoPath: string;
   defaultBranch: string;
+  defaultAgent: string;
+  agentParams: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

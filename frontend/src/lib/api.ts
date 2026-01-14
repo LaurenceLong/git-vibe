@@ -2,6 +2,12 @@ import axios from 'axios';
 
 const API_BASE_URL = '/api';
 
+export interface AgentModel {
+  id: string;
+  name: string;
+  provider?: string;
+}
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -14,8 +20,24 @@ export const projectsApi = {
     api.get('/projects', { params: { page, limit } }),
   get: (id: string) => api.get(`/projects/${id}`),
   getByName: (name: string) => api.get(`/projects/name/${name}`),
-  create: (data: { name: string; sourceRepoPath: string; sourceRepoUrl?: string }) =>
-    api.post('/projects', data),
+  getModels: (provider?: string) =>
+    api.get<{ data: AgentModel[] }>('/models', { params: { provider } }),
+  create: (data: {
+    name: string;
+    sourceRepoPath: string;
+    sourceRepoUrl?: string;
+    defaultAgent?: string;
+    agentParams?: Record<string, unknown>;
+  }) => api.post('/projects', data),
+  update: (
+    id: string,
+    data: {
+      name?: string;
+      sourceRepoUrl?: string;
+      defaultAgent?: string;
+      agentParams?: Record<string, unknown>;
+    }
+  ) => api.patch(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
   sync: (id: string) => api.post(`/projects/${id}/sync`),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),

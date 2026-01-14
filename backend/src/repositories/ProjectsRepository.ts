@@ -20,6 +20,8 @@ export class ProjectsRepository {
     sourceRepoUrl?: string;
     relayRepoPath: string;
     defaultBranch: string;
+    defaultAgent?: string;
+    agentParams?: string;
   }): Promise<Project> {
     const db = await this.getDbInstance();
     const [project] = await db
@@ -31,6 +33,8 @@ export class ProjectsRepository {
         sourceRepoUrl: data.sourceRepoUrl || null,
         relayRepoPath: data.relayRepoPath,
         defaultBranch: data.defaultBranch,
+        defaultAgent: data.defaultAgent || 'opencode',
+        agentParams: data.agentParams || null,
       })
       .returning()
       .execute();
@@ -63,6 +67,8 @@ export class ProjectsRepository {
     data: {
       name?: string;
       sourceRepoUrl?: string;
+      defaultAgent?: string;
+      agentParams?: string;
     }
   ): Promise<Project | undefined> {
     const db = await this.getDbInstance();

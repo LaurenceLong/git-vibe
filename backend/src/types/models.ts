@@ -9,6 +9,11 @@ export type WorkItem = {
   updatedAt: Date;
 };
 
+export type AgentParams = {
+  model?: string;
+  [key: string]: unknown;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -16,6 +21,8 @@ export type Project = {
   sourceRepoUrl: string | null;
   relayRepoPath: string;
   defaultBranch: string;
+  defaultAgent: string;
+  agentParams: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

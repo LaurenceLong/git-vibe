@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
+import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { gitService } from '../services/GitService.js';
+import { openCodeAgentAdapter } from '../services/OpenCodeAgentAdapter.js';
 import { STORAGE_CONFIG } from '../config/storage.js';
 import { cleanupDirectory } from '../utils/storage.js';
 import path from 'node:path';
@@ -14,6 +16,8 @@ export async function projectsRoutes(server: FastifyInstance) {
     name: z.string().min(1),
     sourceRepoPath: z.string().min(1),
     sourceRepoUrl: z.string().url().optional().or(z.literal('')),
+    defaultAgent: z.enum(['opencode', 'claudcode']).optional(),
+    agentParams: z.record(z.unknown()).optional(),
   });
 
   server.post('/api/projects', async (request, reply) => {
@@ -46,6 +50,8 @@ export async function projectsRoutes(server: FastifyInstance) {
         sourceRepoUrl: body.sourceRepoUrl || undefined,
         relayRepoPath,
         defaultBranch,
+        defaultAgent: body.defaultAgent || 'opencode',
+        agentParams: body.agentParams ? JSON.stringify(body.agentParams) : undefined,
       });
 
       return reply.status(201).send(project);
@@ -111,6 +117,62 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
 
     return project;
+  });
+
+  server.patch<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
+    try {
+      const updateProjectSchema = z.object({
+        name: z.string().min(1).optional(),
+        sourceRepoUrl: z.string().url().optional().or(z.literal('')),
+        defaultAgent: z.enum(['opencode', 'claudcode']).optional(),
+        agentParams: z.record(z.unknown()).optional(),
+      });
+
+      const body = updateProjectSchema.parse(request.body);
+      const projectId = request.params.id;
+
+      const existingProject = await projectsRepository.findById(projectId);
+      if (!existingProject) {
+        return reply.status(404).send({
+          error: true,
+          message: 'Project not found',
+        });
+      }
+
+      const updatedProject = await projectsRepository.update(projectId, {
+        name: body.name,
+        sourceRepoUrl: body.sourceRepoUrl || undefined,
+        defaultAgent: body.defaultAgent,
+        agentParams: body.agentParams ? JSON.stringify(body.agentParams) : undefined,
+      });
+
+      return reply.status(200).send(updatedProject);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.status(400).send({
+          error: true,
+          message: 'Validation failed',
+          details: error.errors,
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  server.get('/api/models', async (request, reply) => {
+    try {
+      const models = await openCodeAgentAdapter.getModels();
+      return reply.status(200).send({
+        data: models,
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        error: true,
+        message: 'Failed to fetch models',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
   });
 
   server.get<{ Params: { id: string } }>('/api/projects/:id/files', async (request, reply) => {
@@ -207,6 +269,52 @@ export async function projectsRoutes(server: FastifyInstance) {
       });
     }
   });
+
+  server.post<{ Params: { id: string } }>(
+    '/api/projects/:id/workitems',
+    async (request, reply) => {
+      try {
+        const createWorkItemSchema = z.object({
+          type: z.enum(['issue', 'feature-request']),
+          title: z.string().min(1),
+          body: z.string().optional(),
+        });
+
+        const body = createWorkItemSchema.parse(request.body);
+        const projectId = request.params.id;
+
+        // Verify project exists
+        const project = await projectsRepository.findById(projectId);
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        // Create WorkItem in database
+        const workItem = await workItemsRepository.create({
+          id: uuidv4(),
+          projectId,
+          type: body.type,
+          title: body.title,
+          body: body.body,
+        });
+
+        return reply.status(201).send(workItem);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Validation failed',
+            details: error.errors,
+          });
+        }
+
+        throw error;
+      }
+    }
+  );
 
   server.delete<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
     try {
