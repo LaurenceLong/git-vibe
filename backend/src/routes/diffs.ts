@@ -3,7 +3,7 @@ import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { gitService } from '../services/GitService.js';
 
 export async function diffsRoutes(server: FastifyInstance) {
-  server.get<{ Params: { id: string } }>('/api/diffs/changesets/:id', async (request, reply) => {
+  server.get<{ Params: { id: string } }>('/api/changesets/:id/diff', async (request, reply) => {
     const changeset = await changesetsRepository.findById(request.params.id);
 
     if (!changeset) {

@@ -123,4 +123,52 @@ export async function changesetsRoutes(server: FastifyInstance) {
       });
     }
   });
+
+  server.post<{ Params: { id: string } }>('/api/changesets/:id/close', async (request, reply) => {
+    const changeset = await changesetsRepository.findById(request.params.id);
+
+    if (!changeset) {
+      return reply.status(404).send({
+        error: true,
+        message: 'Changeset not found',
+      });
+    }
+
+    const updated = await changesetsRepository.update(changeset.id, { status: 'cancelled' });
+
+    return reply.status(200).send(updated);
+  });
+
+  server.post<{ Params: { id: string } }>('/api/changesets/:id/remove-worktree', async (request, reply) => {
+    const changeset = await changesetsRepository.findById(request.params.id);
+
+    if (!changeset) {
+      return reply.status(404).send({
+        error: true,
+        message: 'Changeset not found',
+      });
+    }
+
+    try {
+      const project = await projectsRepository.findById(changeset.projectId);
+      if (!project) {
+        return reply.status(404).send({
+          error: true,
+          message: 'Project not found',
+        });
+      }
+
+      gitService.removeWorktree(changeset.worktreePath, project.sourceRepoPath);
+
+      return reply.status(200).send({
+        success: true,
+        message: 'Worktree removed successfully',
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        error: true,
+        message: 'Failed to remove worktree',
+      });
+    }
+  });
 }

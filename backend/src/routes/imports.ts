@@ -46,7 +46,7 @@ export async function importsRoutes(server: FastifyInstance) {
       try {
         gitService.ensureCleanWorktree(targetRepo.repoPath);
       } catch (e) {
-        return reply.status(400).send({
+        return reply.status(409).send({
           error: true,
           message: 'Target repo is not clean',
           details: e instanceof Error ? e.message : String(e),

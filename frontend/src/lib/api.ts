@@ -35,11 +35,13 @@ export const changesetsApi = {
     body: data.body || undefined,
   }),
   refresh: (id: string) => api.post(`/changesets/${id}/refresh`),
+  close: (id: string) => api.post(`/changesets/${id}/close`),
+  removeWorktree: (id: string) => api.post(`/changesets/${id}/remove-worktree`),
   delete: (id: string) => api.delete(`/changesets/${id}`),
 };
 
 export const diffsApi = {
-  get: (changesetId: string) => api.get(`/diffs/changesets/${changesetId}`),
+  get: (changesetId: string) => api.get(`/changesets/${changesetId}/diff`),
 };
 
 export const agentRunsApi = {
@@ -65,4 +67,21 @@ export const importsApi = {
   get: (id: string) => api.get(`/imports/${id}`),
   start: (changesetId: string, data: { targetRepoId: string }) =>
     api.post(`/changesets/${changesetId}/imports`, data),
+};
+
+export const reviewsApi = {
+  getThreads: (changesetId: string) => api.get(`/changesets/${changesetId}/reviews/threads`),
+  getThread: (changesetId: string, threadId: string) =>
+    api.get(`/changesets/${changesetId}/reviews/threads/${threadId}`),
+  createThread: (
+    changesetId: string,
+    data: { file: string; line: number; comment: string },
+  ) => api.post(`/changesets/${changesetId}/reviews/threads`, data),
+  resolveThread: (changesetId: string, threadId: string) =>
+    api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/resolve`),
+  addComment: (
+    changesetId: string,
+    threadId: string,
+    data: { comment: string },
+  ) => api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/comments`, data),
 };

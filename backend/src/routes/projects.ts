@@ -17,7 +17,7 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       await gitService.validateRepo(body.sourceRepoPath);
 
-      const defaultBranch = gitService.getCurrentBranch(body.sourceRepoPath);
+      const defaultBranch = gitService.getDefaultBranch(body.sourceRepoPath);
 
       const project = await projectsRepository.create({
         id: uuidv4(),
