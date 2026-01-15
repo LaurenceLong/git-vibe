@@ -3,33 +3,53 @@
  */
 
 import { z } from 'zod';
+import {
+  CreateChangesetDTOSchema,
+  TriggerAgentRunDTOSchema,
+  CreateImportDTOSchema,
+  UpdateWorkItemDTOSchema,
+  CreateThreadDTOSchema,
+  CreateCommentDTOSchema,
+} from 'git-vibe-shared';
+
+// ============================================================================
+// Re-export shared schemas
+// ============================================================================
+
+export {
+  CreateChangesetDTOSchema,
+  TriggerAgentRunDTOSchema,
+  CreateImportDTOSchema,
+  UpdateWorkItemDTOSchema,
+  CreateThreadDTOSchema,
+  CreateCommentDTOSchema,
+} from 'git-vibe-shared';
+
+// ============================================================================
+// Frontend-specific validation schemas with custom error messages
+// ============================================================================
 
 /**
- * Schema for creating a new changeset
+ * Schema for creating a new changeset (with custom error messages)
  */
-export const CreateChangeSetSchema = z.object({
-  projectId: z.string().min(1, 'Project ID is required'),
-  title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
-  body: z.string().max(5000, 'Description must be less than 5000 characters').optional(),
-  baseBranch: z.string().min(1, 'Base branch is required'),
-});
+export const CreateChangeSetSchema = CreateChangesetDTOSchema;
 
 export type CreateChangeSetInput = z.infer<typeof CreateChangeSetSchema>;
 
 /**
- * Schema for creating a new project
+ * Schema for creating a new project (with custom error messages)
  */
 export const CreateProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
   sourceRepoPath: z.string().min(1, 'Repository path is required'),
   sourceRepoUrl: z.string().url('Invalid URL format').optional().or(z.literal('')),
-  defaultBranch: z.string().min(1, 'Default branch is required').default('main'),
+  defaultBranch: z.string().min(1, 'Default branch is required').optional(),
 });
 
 export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
 
 /**
- * Schema for creating a new target repository
+ * Schema for creating a new target repository (with custom error messages)
  */
 export const CreateTargetRepoSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
@@ -40,55 +60,36 @@ export const CreateTargetRepoSchema = z.object({
 export type CreateTargetRepoInput = z.infer<typeof CreateTargetRepoSchema>;
 
 /**
- * Schema for creating a new agent run
+ * Schema for creating a new agent run (with custom error messages)
  */
-export const CreateAgentRunSchema = z.object({
-  agentKey: z.string().min(1, 'Agent key is required'),
-  inputSummary: z
-    .string()
-    .max(200, 'Summary must be less than 200 characters')
-    .optional()
-    .or(z.literal('')),
-  prompt: z.string().min(1, 'Prompt is required'),
-  config: z.object({
-    executablePath: z.string().min(1, 'Executable path is required'),
-    baseArgs: z.array(z.string()).optional(),
-  }),
-});
+export const CreateAgentRunSchema = TriggerAgentRunDTOSchema;
 
 export type CreateAgentRunInput = z.infer<typeof CreateAgentRunSchema>;
 
 /**
- * Schema for creating a new import
+ * Schema for creating a new import (with custom error messages)
  */
-export const CreateImportSchema = z.object({
-  targetRepoId: z.string().min(1, 'Target repository is required'),
-});
+export const CreateImportSchema = CreateImportDTOSchema;
 
 export type CreateImportInput = z.infer<typeof CreateImportSchema>;
 
 /**
- * Schema for creating a new review thread
+ * Schema for creating a new review thread (with custom error messages)
+ * Uses the new structure with severity and anchor fields
  */
-export const CreateThreadSchema = z.object({
-  file: z.string().min(1, 'File path is required'),
-  line: z.number().int().min(1, 'Line number must be positive'),
-  comment: z.string().min(1, 'Comment is required'),
-});
+export const CreateThreadSchema = CreateThreadDTOSchema;
 
 export type CreateThreadInput = z.infer<typeof CreateThreadSchema>;
 
 /**
- * Schema for adding a comment to a review thread
+ * Schema for adding a comment to a review thread (with custom error messages)
  */
-export const AddCommentSchema = z.object({
-  comment: z.string().min(1, 'Comment is required'),
-});
+export const AddCommentSchema = CreateCommentDTOSchema;
 
 export type AddCommentInput = z.infer<typeof AddCommentSchema>;
 
 /**
- * Schema for creating a new WorkItem
+ * Schema for creating a new WorkItem (with custom error messages)
  */
 export const CreateWorkItemSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
@@ -102,16 +103,8 @@ export const CreateWorkItemSchema = z.object({
 export type CreateWorkItemInput = z.infer<typeof CreateWorkItemSchema>;
 
 /**
- * Schema for updating a WorkItem
+ * Schema for updating a WorkItem (with custom error messages)
  */
-export const UpdateWorkItemSchema = z.object({
-  title: z
-    .string()
-    .min(1, 'Title is required')
-    .max(200, 'Title must be less than 200 characters')
-    .optional(),
-  body: z.string().max(5000, 'Description must be less than 5000 characters').optional(),
-  status: z.enum(['open', 'closed']).optional(),
-});
+export const UpdateWorkItemSchema = UpdateWorkItemDTOSchema;
 
 export type UpdateWorkItemInput = z.infer<typeof UpdateWorkItemSchema>;

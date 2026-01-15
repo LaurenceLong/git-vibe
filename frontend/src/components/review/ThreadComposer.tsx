@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CreateThreadSchema, CreateThreadInput } from '@/lib/validation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
+import { Select, SelectOption } from '@/components/ui/Select';
 
 /**
  * Props for the ThreadComposer component
@@ -23,15 +23,26 @@ export interface ThreadComposerProps {
 }
 
 /**
+ * Severity options for the select dropdown
+ */
+const severityOptions: SelectOption[] = [
+  { value: 'info', label: 'Info' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'error', label: 'Error' },
+];
+
+/**
  * ThreadComposer component
  * Form for creating a new review thread
  *
  * Features:
+ * - Severity selection (info, warning, error)
  * - File path input
  * - Line number input
- * - Comment content textarea
  * - React Hook Form with Zod validation
  * - Loading state
+ *
+ * Note: Comments are added separately using CommentComposer after thread creation
  */
 export function ThreadComposer({
   onSubmit,
@@ -47,9 +58,11 @@ export function ThreadComposer({
   } = useForm<CreateThreadInput>({
     resolver: zodResolver(CreateThreadSchema),
     defaultValues: {
-      file: initialFile,
-      line: initialLine,
-      comment: '',
+      severity: 'info',
+      anchor: {
+        filePath: initialFile,
+        lineNumber: initialLine,
+      },
     },
   });
 
@@ -59,17 +72,33 @@ export function ThreadComposer({
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+      {/* Severity */}
+      <div>
+        <label htmlFor="severity" className="mb-1 block text-sm font-medium text-gray-700">
+          Severity
+        </label>
+        <Select
+          id="severity"
+          options={severityOptions}
+          placeholder="Select severity"
+          {...register('severity')}
+          error={errors.severity?.message}
+          disabled={isLoading}
+        />
+        <p className="mt-1 text-xs text-gray-500">The severity level of the review thread</p>
+      </div>
+
       {/* File Path */}
       <div>
-        <label htmlFor="file" className="mb-1 block text-sm font-medium text-gray-700">
+        <label htmlFor="anchor.filePath" className="mb-1 block text-sm font-medium text-gray-700">
           File Path
         </label>
         <Input
-          id="file"
+          id="anchor.filePath"
           type="text"
           placeholder="src/app.tsx"
-          {...register('file')}
-          error={errors.file?.message}
+          {...register('anchor.filePath')}
+          error={errors.anchor?.filePath?.message}
           disabled={isLoading}
         />
         <p className="mt-1 text-xs text-gray-500">Relative path to the file in the repository</p>
@@ -77,35 +106,19 @@ export function ThreadComposer({
 
       {/* Line Number */}
       <div>
-        <label htmlFor="line" className="mb-1 block text-sm font-medium text-gray-700">
+        <label htmlFor="anchor.lineNumber" className="mb-1 block text-sm font-medium text-gray-700">
           Line Number
         </label>
         <Input
-          id="line"
+          id="anchor.lineNumber"
           type="number"
           min="1"
           placeholder="10"
-          {...register('line', { valueAsNumber: true })}
-          error={errors.line?.message}
+          {...register('anchor.lineNumber', { valueAsNumber: true })}
+          error={errors.anchor?.lineNumber?.message}
           disabled={isLoading}
         />
         <p className="mt-1 text-xs text-gray-500">The line number to attach the thread to</p>
-      </div>
-
-      {/* Comment */}
-      <div>
-        <label htmlFor="comment" className="mb-1 block text-sm font-medium text-gray-700">
-          Comment
-        </label>
-        <Textarea
-          id="comment"
-          rows={4}
-          placeholder="Describe the issue or suggestion..."
-          {...register('comment')}
-          error={errors.comment?.message}
-          disabled={isLoading}
-        />
-        <p className="mt-1 text-xs text-gray-500">Add your review comment or feedback</p>
       </div>
 
       {/* Actions */}

@@ -1,18 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { CreateTargetRepoDTOSchema } from 'git-vibe-shared';
 import { targetReposRepository } from '../repositories/TargetReposRepository.js';
 import { gitService } from '../services/GitService.js';
 
 export async function targetReposRoutes(server: FastifyInstance) {
-  const createTargetRepoSchema = z.object({
-    name: z.string().min(1),
-    repoPath: z.string().min(1),
-  });
-
   server.post('/api/target-repos', async (request, reply) => {
     try {
-      const body = createTargetRepoSchema.parse(request.body);
+      const body = CreateTargetRepoDTOSchema.parse(request.body);
 
       await gitService.validateRepo(body.repoPath);
 

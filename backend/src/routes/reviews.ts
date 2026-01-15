@@ -1,25 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  CreateThreadDTOSchema,
+  AddressWithAgentDTOSchema,
+  CreateCommentDTOSchema,
+} from 'git-vibe-shared';
 import { reviewThreadsRepository } from '../repositories/ReviewThreadsRepository.js';
 import { reviewCommentsRepository } from '../repositories/ReviewCommentsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 
 export async function reviewRoutes(server: FastifyInstance) {
-  const createThreadSchema = z.object({
-    severity: z.enum(['info', 'warning', 'error']),
-    anchor: z.object({
-      filePath: z.string(),
-      lineNumber: z.number(),
-    }),
-  });
-
   server.post<{ Params: { id: string } }>(
     '/api/changesets/:id/reviews/threads',
     async (request, reply) => {
       try {
-        const body = createThreadSchema.parse(request.body);
+        const body = CreateThreadDTOSchema.parse(request.body);
 
         const thread = await reviewThreadsRepository.create({
           id: uuidv4(),
@@ -103,17 +100,11 @@ export async function reviewRoutes(server: FastifyInstance) {
     }
   );
 
-  const addressWithAgentSchema = z.object({
-    agentKey: z.string().min(1),
-    prompt: z.string().min(1),
-    inputSummary: z.string().optional(),
-  });
-
   server.post<{ Params: { id: string; threadId: string } }>(
     '/api/changesets/:id/reviews/threads/:threadId/address',
     async (request, reply) => {
       try {
-        const body = addressWithAgentSchema.parse(request.body);
+        const body = AddressWithAgentDTOSchema.parse(request.body);
 
         const thread = await reviewThreadsRepository.findById(request.params.threadId);
 
@@ -167,7 +158,7 @@ export async function reviewRoutes(server: FastifyInstance) {
     '/api/changesets/:id/reviews/threads/:threadId/comments',
     async (request, reply) => {
       try {
-        const body = z.object({ body: z.string().min(1) }).parse(request.body);
+        const body = CreateCommentDTOSchema.parse(request.body);
 
         const thread = await reviewThreadsRepository.findById(request.params.threadId);
 

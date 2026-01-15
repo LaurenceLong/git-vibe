@@ -1,6 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  CreateProjectDTOSchema,
+  UpdateProjectDTOSchema,
+  CreateWorkItemDTOSchema,
+  ModelsResponseSchema,
+  FilesResponseSchema,
+  FileContentResponseSchema,
+  BranchesResponseSchema,
+  SyncResponseSchema,
+  DeleteProjectResponseSchema,
+  AgentKeySchema,
+  AgentParamsSchema,
+} from 'git-vibe-shared';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
@@ -12,17 +25,9 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 
 export async function projectsRoutes(server: FastifyInstance) {
-  const createProjectSchema = z.object({
-    name: z.string().min(1),
-    sourceRepoPath: z.string().min(1),
-    sourceRepoUrl: z.string().url().optional().or(z.literal('')),
-    defaultAgent: z.enum(['opencode', 'claudcode']).optional(),
-    agentParams: z.record(z.unknown()).optional(),
-  });
-
   server.post('/api/projects', async (request, reply) => {
     try {
-      const body = createProjectSchema.parse(request.body);
+      const body = CreateProjectDTOSchema.parse(request.body);
 
       // Check if project name already exists
       const existingProject = await projectsRepository.findByName(body.name);
@@ -35,13 +40,14 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       await gitService.validateRepo(body.sourceRepoPath);
 
-      const defaultBranch = gitService.getDefaultBranch(body.sourceRepoPath);
+      // Use provided defaultBranch or auto-detect from source repo
+      const defaultBranch = body.defaultBranch || gitService.getDefaultBranch(body.sourceRepoPath);
 
       // Create relay repo path
       const relayRepoPath = path.join(STORAGE_CONFIG.projectsDir, body.name);
 
       // Create relay repo by copying .git directory and resetting
-      await gitService.createRelayRepo(body.sourceRepoPath, relayRepoPath, body.name);
+      await gitService.createRelayRepo(body.sourceRepoPath, relayRepoPath, defaultBranch);
 
       const project = await projectsRepository.create({
         id: uuidv4(),
@@ -91,29 +97,27 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   );
 
-  server.get<{ Params: { id: string } }>('/api/projects/:id', async (request) => {
+  server.get<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
     const project = await projectsRepository.findById(request.params.id);
 
     if (!project) {
-      return {
+      return reply.status(404).send({
         error: true,
         message: 'Project not found',
-        statusCode: 404,
-      };
+      });
     }
 
     return project;
   });
 
-  server.get<{ Params: { name: string } }>('/api/projects/name/:name', async (request) => {
+  server.get<{ Params: { name: string } }>('/api/projects/name/:name', async (request, reply) => {
     const project = await projectsRepository.findByName(request.params.name);
 
     if (!project) {
-      return {
+      return reply.status(404).send({
         error: true,
         message: 'Project not found',
-        statusCode: 404,
-      };
+      });
     }
 
     return project;
@@ -121,14 +125,7 @@ export async function projectsRoutes(server: FastifyInstance) {
 
   server.patch<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
     try {
-      const updateProjectSchema = z.object({
-        name: z.string().min(1).optional(),
-        sourceRepoUrl: z.string().url().optional().or(z.literal('')),
-        defaultAgent: z.enum(['opencode', 'claudcode']).optional(),
-        agentParams: z.record(z.unknown()).optional(),
-      });
-
-      const body = updateProjectSchema.parse(request.body);
+      const body = UpdateProjectDTOSchema.parse(request.body);
       const projectId = request.params.id;
 
       const existingProject = await projectsRepository.findById(projectId);
@@ -170,6 +167,34 @@ export async function projectsRoutes(server: FastifyInstance) {
       return reply.status(500).send({
         error: true,
         message: 'Failed to fetch models',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  server.get<{ Querystring: { repoPath?: string } }>('/api/branches', async (request, reply) => {
+    try {
+      const { repoPath } = request.query;
+      if (!repoPath) {
+        return reply.status(400).send({
+          error: true,
+          message: 'repoPath query parameter is required',
+        });
+      }
+
+      await gitService.validateRepo(repoPath);
+
+      const branches = gitService.listBranches(repoPath);
+      const defaultBranch = gitService.getDefaultBranch(repoPath);
+
+      return reply.status(200).send({
+        data: branches,
+        defaultBranch,
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        error: true,
+        message: 'Failed to fetch branches',
         details: error instanceof Error ? error.message : String(error),
       });
     }
@@ -239,16 +264,16 @@ export async function projectsRoutes(server: FastifyInstance) {
   server.post<{ Params: { id: string } }>('/api/projects/:id/sync', async (request, reply) => {
     try {
       const project = await projectsRepository.findById(request.params.id);
- 
+
       if (!project) {
         return reply.status(404).send({
           error: true,
           message: 'Project not found',
         });
       }
- 
+
       await gitService.syncRelayToSource(project.relayRepoPath, project.sourceRepoPath, project.name);
- 
+
       // Update syncedAt for all merged changesets that haven't been synced yet
       const allChangesets = await changesetsRepository.findAll(project.id);
       for (const changeset of allChangesets) {
@@ -256,7 +281,7 @@ export async function projectsRoutes(server: FastifyInstance) {
           await changesetsRepository.update(changeset.id, { syncedAt: new Date() });
         }
       }
- 
+
       return reply.status(200).send({
         success: true,
         message: 'Synced relay repo to source repo',
@@ -274,13 +299,7 @@ export async function projectsRoutes(server: FastifyInstance) {
     '/api/projects/:id/workitems',
     async (request, reply) => {
       try {
-        const createWorkItemSchema = z.object({
-          type: z.enum(['issue', 'feature-request']),
-          title: z.string().min(1),
-          body: z.string().optional(),
-        });
-
-        const body = createWorkItemSchema.parse(request.body);
+        const body = CreateWorkItemDTOSchema.parse(request.body);
         const projectId = request.params.id;
 
         // Verify project exists
@@ -350,10 +369,7 @@ export async function projectsRoutes(server: FastifyInstance) {
       // Delete the project from database (cascade will handle related records)
       await projectsRepository.delete(request.params.id);
 
-      return reply.status(200).send({
-        success: true,
-        message: 'Project deleted successfully',
-      });
+      return reply.status(204).send();
     } catch (error) {
       return reply.status(500).send({
         error: true,

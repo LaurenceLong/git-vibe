@@ -37,12 +37,28 @@ export class GitService {
     return this.execCommand('git rev-parse --abbrev-ref HEAD', repoPath).trim();
   }
 
+  listBranches(repoPath: string): string[] {
+    try {
+      const output = this.execCommand('git branch --format=%(refname:short)', repoPath).trim();
+      if (!output) {
+        return [];
+      }
+      // Get local branches and remove duplicates
+      const branches = output
+        .split('\n')
+        .map((branch) => branch.trim())
+        .filter((branch) => branch.length > 0);
+      return [...new Set(branches)];
+    } catch {
+      return [];
+    }
+  }
+
   getDefaultBranch(repoPath: string): string {
     try {
-      return this.execCommand(
-        'git symbolic-ref refs/remotes/origin/HEAD | sed "s@^refs/remotes/origin/@@"',
-        repoPath
-      ).trim();
+      const output = this.execCommand('git symbolic-ref refs/remotes/origin/HEAD', repoPath).trim();
+      // Remove the "refs/remotes/origin/" prefix using JavaScript instead of sed
+      return output.replace('refs/remotes/origin/', '');
     } catch {
       return 'main';
     }
@@ -136,7 +152,7 @@ export class GitService {
   async createRelayRepo(
     sourceRepoPath: string,
     relayRepoPath: string,
-    projectName: string
+    branch?: string
   ): Promise<void> {
     // Create the relay repo directory
     await fs.mkdir(relayRepoPath, { recursive: true });
@@ -148,6 +164,12 @@ export class GitService {
     // Use recursive copy for .git directory
     await fs.cp(sourceGitDir, relayGitDir, { recursive: true, force: true });
 
+    // Use provided branch or get the default branch from source repo
+    const defaultBranch = branch || this.getDefaultBranch(sourceRepoPath);
+
+    // Checkout the default branch in the relay repo
+    this.execCommand(`git checkout ${defaultBranch}`, relayRepoPath);
+
     // Reset the working tree to restore files from the git history
     this.execCommand('git reset --hard HEAD', relayRepoPath);
     this.execCommand('git clean -fd', relayRepoPath);
@@ -157,9 +179,6 @@ export class GitService {
     // Get the default branch from source repo
     const defaultBranch = this.getDefaultBranch(sourceRepoPath);
 
-    // Fetch updates from source repo's remote
-    this.execCommand('git fetch origin', sourceRepoPath);
-
     // Switch to or create the relay branch
     const relayBranch = `relay-${projectName}`;
     try {
@@ -167,7 +186,7 @@ export class GitService {
       this.execCommand(`git checkout ${relayBranch}`, sourceRepoPath);
     } catch {
       // Branch doesn't exist, create it from default branch
-      this.execCommand(`git checkout -b ${relayBranch} origin/${defaultBranch}`, sourceRepoPath);
+      this.execCommand(`git checkout -b ${relayBranch} ${defaultBranch}`, sourceRepoPath);
     }
 
     // Copy all files from relay repo to source repo (excluding .git directory)

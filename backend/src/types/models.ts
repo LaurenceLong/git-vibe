@@ -1,108 +1,137 @@
-export type WorkItem = {
-  id: string;
-  projectId: string;
-  type: 'issue' | 'feature-request';
-  title: string;
-  body: string | null;
-  status: 'open' | 'closed';
+/**
+ * Backend Model Types
+ *
+ * This file imports shared types from the git-vibe-shared package and provides
+ * backend-specific type mappings. The backend uses Date objects internally,
+ * while the shared package uses ISO 8601 strings for API compatibility.
+ */
+
+// ============================================================================
+// Import Shared Types (with Date instead of string for dates)
+// ============================================================================
+
+import type {
+  WorkItem as SharedWorkItem,
+  Project as SharedProject,
+  TargetRepo as SharedTargetRepo,
+  ChangeSet as SharedChangeSet,
+  ReviewThread as SharedReviewThread,
+  ReviewComment as SharedReviewComment,
+  AgentRun as SharedAgentRun,
+  Import as SharedImport,
+  AgentParams as SharedAgentParams,
+  WorkItemType,
+  WorkItemStatus,
+  PRStatus,
+  WorktreeStatus,
+  ChangeSetStatus,
+  AgentRunStatus,
+  ImportStatus,
+  ImportStrategy,
+  ReviewThreadStatus,
+  ReviewThreadSeverity,
+  AgentKey,
+} from 'git-vibe-shared';
+
+// ============================================================================
+// Backend Types (with Date objects for internal use)
+// ============================================================================
+
+export type WorkItem = Omit<SharedWorkItem, 'createdAt' | 'updatedAt'> & {
   createdAt: Date;
   updatedAt: Date;
 };
 
-export type AgentParams = {
-  model?: string;
-  [key: string]: unknown;
-};
+export type AgentParams = SharedAgentParams;
 
-export type Project = {
-  id: string;
-  name: string;
-  sourceRepoPath: string;
-  sourceRepoUrl: string | null;
-  relayRepoPath: string;
-  defaultBranch: string;
-  defaultAgent: string;
-  agentParams: string | null;
+export type Project = Omit<SharedProject, 'createdAt' | 'updatedAt'> & {
   createdAt: Date;
   updatedAt: Date;
 };
 
-export type TargetRepo = {
-  id: string;
-  name: string;
-  repoPath: string;
-  defaultBranch: string;
+export type TargetRepo = Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> & {
   createdAt: Date;
   updatedAt: Date;
 };
 
-export type ChangeSet = {
-  id: string;
-  projectId: string;
-  workItemId: string | null;
-  title: string;
-  body: string | null;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  prStatus: 'open' | 'merged' | 'closed' | null;
-  baseBranch: string;
-  baseSha: string;
-  branchName: string;
-  headSha: string | null;
-  worktreePath: string;
+export type ChangeSet = Omit<SharedChangeSet, 'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt'> & {
+  createdAt: Date;
+  updatedAt: Date;
   mergedAt: Date | null;
   closedAt: Date | null;
   syncedAt: Date | null;
+};
+
+export type ReviewThread = Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> & {
   createdAt: Date;
   updatedAt: Date;
 };
 
-export type ReviewThread = {
-  id: string;
-  changesetId: string;
-  status: 'open' | 'resolved' | 'outdated';
-  severity: 'info' | 'warning' | 'error';
-  anchor: string;
+export type ReviewComment = Omit<SharedReviewComment, 'createdAt'> & {
+  createdAt: Date;
+};
+
+export type AgentRun = Omit<SharedAgentRun, 'createdAt' | 'updatedAt' | 'startedAt' | 'finishedAt'> & {
   createdAt: Date;
   updatedAt: Date;
-};
-
-export type ReviewComment = {
-  id: string;
-  threadId: string;
-  body: string;
-  createdAt: Date;
-};
-
-export type AgentRun = {
-  id: string;
-  changesetId: string;
-  agentKey: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-  inputSummary: string | null;
-  inputJson: string;
-  log: string | null;
-  logPath: string | null;
-  headShaBefore: string | null;
-  headShaAfter: string | null;
   startedAt: Date | null;
   finishedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
-export type Import = {
-  id: string;
-  changesetId: string;
-  targetRepoId: string;
-  strategy: 'patch';
-  status: 'pending' | 'running' | 'succeeded' | 'failed';
-  sourceBaseSha: string;
-  sourceHeadSha: string;
-  targetBaseSha: string | null;
-  targetResultSha: string | null;
-  log: string | null;
-  startedAt: Date | null;
-  finishedAt: Date | null;
+export type Import = Omit<SharedImport, 'createdAt' | 'updatedAt' | 'startedAt' | 'finishedAt'> & {
   createdAt: Date;
   updatedAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
 };
+
+// ============================================================================
+// Re-export Enums from shared package
+// ============================================================================
+
+export type {
+  WorkItemType,
+  WorkItemStatus,
+  PRStatus,
+  WorktreeStatus,
+  ChangeSetStatus,
+  AgentRunStatus,
+  ImportStatus,
+  ImportStrategy,
+  ReviewThreadStatus,
+  ReviewThreadSeverity,
+  AgentKey,
+};
+
+// ============================================================================
+// Type Conversion Helpers
+// ============================================================================
+
+/**
+ * Convert backend model (with Date) to shared model (with ISO string)
+ */
+export type ToShared<T extends { createdAt: Date; updatedAt: Date }> = Omit<T, 'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt' | 'startedAt' | 'finishedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+  mergedAt?: string | null;
+  closedAt?: string | null;
+  syncedAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+};
+
+/**
+ * Convert Date to ISO 8601 string
+ */
+export function toISOString(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  return date.toISOString();
+}
+
+/**
+ * Convert ISO 8601 string to Date
+ */
+export function toDate(isoString: string | null | undefined): Date | null {
+  if (!isoString) return null;
+  return new Date(isoString);
+}

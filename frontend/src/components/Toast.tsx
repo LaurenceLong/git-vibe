@@ -116,7 +116,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <ToastContainer />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </ToastContext.Provider>
   );
 }
@@ -135,9 +135,7 @@ export function useToast(): ToastContextValue {
 /**
  * ToastContainer component to display all active toasts
  */
-function ToastContainer() {
-  const { toasts, removeToast } = useToast();
-
+function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast: (id: string) => void }) {
   return (
     <div className="fixed right-4 top-4 z-50 flex flex-col gap-2">
       {toasts.map((toast) => (

@@ -19,6 +19,7 @@
     "better-sqlite3": "^11.5.0",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.2.0",
+    "git-vibe-shared": "file:../shared",
     "pino": "^9.5.0",
     "pino-pretty": "^11.2.2",
     "uuid": "^11.0.3",

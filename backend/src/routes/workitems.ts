@@ -1,29 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { CreateWorkItemDTOSchema, UpdateWorkItemDTOSchema } from 'git-vibe-shared';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { gitService } from '../services/GitService.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 
 export async function workitemsRoutes(server: FastifyInstance) {
-  const createWorkItemSchema = z.object({
-    projectId: z.string().min(1),
-    type: z.enum(['issue', 'feature-request']),
-    title: z.string().min(1),
-    body: z.string().optional(),
-  });
-
-  const updateWorkItemSchema = z.object({
-    title: z.string().min(1).optional(),
-    body: z.string().optional(),
-    status: z.enum(['open', 'closed']).optional(),
-  });
-
   // POST /api/workitems - Create new WorkItem (task definition only)
   server.post('/api/workitems', async (request, reply) => {
     try {
-      const body = createWorkItemSchema.parse(request.body);
+      const body = CreateWorkItemDTOSchema.parse(request.body);
 
       // Verify project exists
       const project = await projectsRepository.findById(body.projectId);
@@ -105,7 +93,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
   // PATCH /api/workitems/:id - Update WorkItem
   server.patch<{ Params: { id: string } }>('/api/workitems/:id', async (request, reply) => {
     try {
-      const body = updateWorkItemSchema.parse(request.body);
+      const body = UpdateWorkItemDTOSchema.parse(request.body);
 
       const workItem = await workItemsRepository.findById(request.params.id);
       if (!workItem) {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { CreateChangesetDTOSchema, RecreateWorktreeDTOSchema, RemoveWorktreeDTOSchema } from 'git-vibe-shared';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { gitService } from '../services/GitService.js';
@@ -8,16 +9,9 @@ import { STORAGE_CONFIG } from '../config/storage.js';
 import path from 'node:path';
 
 export async function changesetsRoutes(server: FastifyInstance) {
-  const createChangesetSchema = z.object({
-    projectId: z.string().uuid(),
-    title: z.string().min(1),
-    body: z.string().optional().or(z.literal('')),
-    baseBranch: z.string().min(1),
-  });
-
   server.post('/api/changesets', async (request, reply) => {
     try {
-      const body = createChangesetSchema.parse(request.body);
+      const body = CreateChangesetDTOSchema.parse(request.body);
 
       const project = await projectsRepository.findById(body.projectId);
       if (!project) {
@@ -87,29 +81,27 @@ export async function changesetsRoutes(server: FastifyInstance) {
     }
   );
 
-  server.get<{ Params: { id: string } }>('/api/changesets/:id', async (request) => {
+  server.get<{ Params: { id: string } }>('/api/changesets/:id', async (request, reply) => {
     const changeset = await changesetsRepository.findById(request.params.id);
 
     if (!changeset) {
-      return {
+      return reply.status(404).send({
         error: true,
         message: 'Changeset not found',
-        statusCode: 404,
-      };
+      });
     }
 
     return changeset;
   });
 
-  server.post<{ Params: { id: string } }>('/api/changesets/:id/refresh', async (request) => {
+  server.post<{ Params: { id: string } }>('/api/changesets/:id/refresh', async (request, reply) => {
     const changeset = await changesetsRepository.findById(request.params.id);
 
     if (!changeset) {
-      return {
+      return reply.status(404).send({
         error: true,
         message: 'Changeset not found',
-        statusCode: 404,
-      };
+      });
     }
 
     const headSha = gitService.getWorktreeHead(changeset.worktreePath);

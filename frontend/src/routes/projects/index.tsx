@@ -13,6 +13,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pagination } from '@/components/ui/Pagination';
+import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/Toast';
 
 export const Route = createFileRoute('/projects/')({
@@ -62,9 +63,23 @@ function ProjectsIndex() {
     };
   };
 
+  const [sourceRepoPath, setSourceRepoPath] = useState('');
+
+  const { data: branchesData, isLoading: isLoadingBranches } = useQuery({
+    queryKey: ['branches', sourceRepoPath],
+    queryFn: () =>
+      projectsApi.getBranchesByPath(sourceRepoPath).then((res) => res.data),
+    enabled: sourceRepoPath.length > 0,
+  });
+
+  const branches = branchesData?.data || [];
+  const defaultBranchFromRepo = branchesData?.defaultBranch;
+
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
     reset,
   } = useForm<z.infer<typeof CreateProjectSchema>>({
@@ -73,9 +88,21 @@ function ProjectsIndex() {
       name: '',
       sourceRepoPath: '',
       sourceRepoUrl: '',
-      defaultBranch: 'main',
+      defaultBranch: undefined,
     },
   });
+
+  const watchedSourceRepoPath = watch('sourceRepoPath');
+
+  React.useEffect(() => {
+    setSourceRepoPath(watchedSourceRepoPath);
+  }, [watchedSourceRepoPath]);
+
+  React.useEffect(() => {
+    if (defaultBranchFromRepo && !watch('defaultBranch')) {
+      setValue('defaultBranch', defaultBranchFromRepo);
+    }
+  }, [defaultBranchFromRepo, setValue, watch]);
 
   const createProjectMutation = useMutation({
     mutationFn: (data: z.infer<typeof CreateProjectSchema>) =>
@@ -158,13 +185,13 @@ function ProjectsIndex() {
         />
       ) : (
         <>
-          <div className="grid gap-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {projects?.map((project) => {
               const stats = getProjectStats(project.id);
               return (
                 <div
                   key={project.id}
-                  className="group relative rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50"
+                  className="group relative flex flex-col rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50 max-w-md"
                 >
                   {/* Delete button - small X at top right */}
                   <button
@@ -272,12 +299,17 @@ function ProjectsIndex() {
             {...register('sourceRepoUrl')}
           />
 
-          <Input
+          <Select
             label="Default Branch"
             id="defaultBranch"
-            placeholder="main"
             error={errors.defaultBranch?.message}
             fullWidth
+            loading={isLoadingBranches}
+            placeholder="Select a branch"
+            options={branches.map((branch: string) => ({
+              value: branch,
+              label: branch,
+            }))}
             {...register('defaultBranch')}
           />
 

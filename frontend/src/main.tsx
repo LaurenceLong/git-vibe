@@ -5,6 +5,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ToastProvider } from '@/components/Toast';
 import { routeTree } from './routeTree.gen';
+import { projectsApi } from '@/lib/api';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -32,6 +33,13 @@ declare module '@tanstack/react-router' {
     router: typeof router;
   }
 }
+
+// Prefetch models on app start to cache them in memory
+void queryClient.prefetchQuery({
+  queryKey: ['models'],
+  queryFn: () => projectsApi.getModels().then((res) => res.data.data),
+  staleTime: 30 * 60 * 1000, // Cache for 30 minutes
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

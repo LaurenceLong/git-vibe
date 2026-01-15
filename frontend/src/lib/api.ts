@@ -1,12 +1,20 @@
 import axios from 'axios';
+import type {
+  AgentModel,
+  CreateProjectDTO,
+  UpdateProjectDTO,
+  CreateChangesetDTO,
+  TriggerAgentRunDTO,
+  CreateImportDTO,
+  CreateThreadDTO,
+  AddressWithAgentDTO,
+  CreateCommentDTO,
+  CreateTargetRepoDTO,
+  CreateWorkItemDTO,
+  UpdateWorkItemDTO,
+} from 'git-vibe-shared';
 
 const API_BASE_URL = '/api';
-
-export interface AgentModel {
-  id: string;
-  name: string;
-  provider?: string;
-}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -22,25 +30,14 @@ export const projectsApi = {
   getByName: (name: string) => api.get(`/projects/name/${name}`),
   getModels: (provider?: string) =>
     api.get<{ data: AgentModel[] }>('/models', { params: { provider } }),
-  create: (data: {
-    name: string;
-    sourceRepoPath: string;
-    sourceRepoUrl?: string;
-    defaultAgent?: string;
-    agentParams?: Record<string, unknown>;
-  }) => api.post('/projects', data),
-  update: (
-    id: string,
-    data: {
-      name?: string;
-      sourceRepoUrl?: string;
-      defaultAgent?: string;
-      agentParams?: Record<string, unknown>;
-    }
-  ) => api.patch(`/projects/${id}`, data),
+  create: (data: CreateProjectDTO) => api.post('/projects', data),
+  update: (id: string, data: UpdateProjectDTO) =>
+    api.patch(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
   sync: (id: string) => api.post(`/projects/${id}/sync`),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),
+  getBranchesByPath: (repoPath: string) =>
+    api.get('/branches', { params: { repoPath } }),
   getFiles: (id: string) => api.get(`/projects/${id}/files`),
   getFileContent: (id: string, filePath: string) =>
     api.get(`/projects/${id}/files/content`, { params: { path: filePath } }),
@@ -49,14 +46,14 @@ export const projectsApi = {
 export const targetReposApi = {
   list: () => api.get('/target-repos'),
   get: (id: string) => api.get(`/target-repos/${id}`),
-  create: (data: { name: string; repoPath: string }) => api.post('/target-repos', data),
+  create: (data: CreateTargetRepoDTO) => api.post('/target-repos', data),
 };
 
 export const changesetsApi = {
   list: (projectId?: string, page?: number, limit?: number) =>
     api.get('/changesets', { params: { projectId, page, limit } }),
   get: (id: string) => api.get(`/changesets/${id}`),
-  create: (data: { projectId: string; title: string; body?: string; baseBranch: string }) =>
+  create: (data: CreateChangesetDTO) =>
     api.post('/changesets', {
       ...data,
       body: data.body || undefined,
@@ -77,15 +74,7 @@ export const diffsApi = {
 export const agentRunsApi = {
   get: (id: string) => api.get(`/agent-runs/${id}`),
   listByChangeset: (changesetId: string) => api.get(`/changesets/${changesetId}/agent-runs`),
-  trigger: (
-    changesetId: string,
-    data: {
-      agentKey: string;
-      inputSummary?: string;
-      prompt: string;
-      config: { executablePath: string; baseArgs?: string[] };
-    }
-  ) =>
+  trigger: (changesetId: string, data: TriggerAgentRunDTO) =>
     api.post(`/changesets/${changesetId}/agent-runs`, {
       ...data,
       inputSummary: data.inputSummary || undefined,
@@ -96,7 +85,7 @@ export const agentRunsApi = {
 export const importsApi = {
   list: (changesetId: string) => api.get(`/changesets/${changesetId}/imports`),
   get: (id: string) => api.get(`/imports/${id}`),
-  start: (changesetId: string, data: { targetRepoId: string }) =>
+  start: (changesetId: string, data: CreateImportDTO) =>
     api.post(`/changesets/${changesetId}/imports`, data),
 };
 
@@ -104,7 +93,7 @@ export const reviewsApi = {
   getThreads: (changesetId: string) => api.get(`/changesets/${changesetId}/reviews/threads`),
   getThread: (changesetId: string, threadId: string) =>
     api.get(`/changesets/${changesetId}/reviews/threads/${threadId}`),
-  createThread: (changesetId: string, data: { file: string; line: number; comment: string }) =>
+  createThread: (changesetId: string, data: CreateThreadDTO) =>
     api.post(`/changesets/${changesetId}/reviews/threads`, data),
   resolveThread: (changesetId: string, threadId: string) =>
     api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/resolve`),
@@ -113,13 +102,9 @@ export const reviewsApi = {
   addressWithAgent: (
     changesetId: string,
     threadId: string,
-    data: {
-      agentKey: string;
-      prompt: string;
-      inputSummary?: string;
-    }
+    data: AddressWithAgentDTO
   ) => api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/address`, data),
-  addComment: (changesetId: string, threadId: string, data: { comment: string }) =>
+  addComment: (changesetId: string, threadId: string, data: CreateCommentDTO) =>
     api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/comments`, data),
 };
 
@@ -130,27 +115,14 @@ export const workItemsApi = {
   // Get WorkItem by ID
   get: (id: string) => api.get(`/workitems/${id}`),
   // Create new WorkItem
-  create: (
-    projectId: string,
-    data: {
-      type: 'issue' | 'feature-request';
-      title: string;
-      body?: string;
-    }
-  ) =>
+  create: (projectId: string, data: CreateWorkItemDTO) =>
     api.post(`/projects/${projectId}/workitems`, {
       ...data,
       body: data.body || undefined,
     }),
   // Update WorkItem
-  update: (
-    id: string,
-    data: {
-      title?: string;
-      body?: string;
-      status?: 'open' | 'closed';
-    }
-  ) => api.patch(`/workitems/${id}`, data),
+  update: (id: string, data: UpdateWorkItemDTO) =>
+    api.patch(`/workitems/${id}`, data),
   // Delete WorkItem
   delete: (id: string) => api.delete(`/workitems/${id}`),
   // Create PR from WorkItem

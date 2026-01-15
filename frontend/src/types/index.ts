@@ -1,60 +1,61 @@
 /**
  * Shared TypeScript types for the Git Vibe frontend
- * These types align with the backend models but are adapted for frontend use
+ * These types are imported from the shared package and adapted for frontend use
  */
+
+import type {
+  WorkItem as SharedWorkItem,
+  Project as SharedProject,
+  TargetRepo as SharedTargetRepo,
+  ChangeSet as SharedChangeSet,
+  ReviewThread as SharedReviewThread,
+  ReviewComment as SharedReviewComment,
+  AgentRun as SharedAgentRun,
+  Import as SharedImport,
+} from 'git-vibe-shared';
+
+// ============================================================================
+// Re-export shared types for backward compatibility
+// ============================================================================
+
+export type {
+  WorkItemType,
+  WorkItemStatus,
+  PRStatus,
+  WorktreeStatus,
+  AgentRunStatus,
+  ImportStatus,
+  ImportStrategy,
+  ReviewThreadStatus,
+  ReviewThreadSeverity,
+  RepoFile,
+  AgentModel,
+  AgentParams,
+  AgentKey,
+} from 'git-vibe-shared';
+
+// ============================================================================
+// Model Types (with Date conversion for frontend)
+// ============================================================================
 
 /**
  * WorkItem represents an Issue or Feature Request
  * WorkItems are task definitions only - they do NOT own worktrees or branches
  * Changesets (PRs) handle workspaces and can optionally link to WorkItems
  */
-export interface WorkItem {
-  id: string;
-  projectId: string;
-  type: WorkItemType;
-  title: string;
-  body: string | null;
-  status: WorkItemStatus;
+export interface WorkItem extends Omit<SharedWorkItem, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
- * WorkItem status type
- */
-export type WorkItemStatus = 'open' | 'closed';
-
-/**
- * WorkItem type (issue or feature request)
- */
-export type WorkItemType = 'issue' | 'feature-request';
-
-/**
- * PR status type
- */
-export type PRStatus = 'open' | 'merged' | 'closed';
-
-/**
- * Worktree status type
- */
-export type WorktreeStatus = 'present' | 'missing' | 'recreating';
-
-/**
  * ChangeSet represents a set of changes in a project
  */
-export interface ChangeSet {
-  id: string;
-  projectId: string;
-  workItemId: string | null;
-  title: string;
-  body: string | null;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  prStatus: PRStatus | null;
-  baseBranch: string;
-  baseSha: string;
-  branchName: string;
-  headSha: string | null;
-  worktreePath: string;
+export interface ChangeSet
+  extends Omit<
+    SharedChangeSet,
+    'mergedAt' | 'closedAt' | 'syncedAt' | 'createdAt' | 'updatedAt'
+  > {
   mergedAt: Date | null;
   closedAt: Date | null;
   syncedAt: Date | null;
@@ -65,17 +66,8 @@ export interface ChangeSet {
 /**
  * AgentRun represents an AI agent execution on a changeset
  */
-export interface AgentRun {
-  id: string;
-  changesetId: string;
-  agentKey: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-  inputSummary: string | null;
-  inputJson: string;
-  log: string | null;
-  logPath: string | null;
-  headShaBefore: string | null;
-  headShaAfter: string | null;
+export interface AgentRun
+  extends Omit<SharedAgentRun, 'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'> {
   startedAt: Date | null;
   finishedAt: Date | null;
   createdAt: Date;
@@ -85,25 +77,8 @@ export interface AgentRun {
 /**
  * Import represents importing changes to a target repository
  */
-export interface Import {
-  id: string;
-  changesetId: string;
-  targetRepoId: string;
-  strategy: 'patch';
-  status:
-    | 'pending'
-    | 'running'
-    | 'succeeded'
-    | 'succeeded_noop'
-    | 'failed'
-    | 'failed_dirty'
-    | 'failed_conflict'
-    | 'failed_other';
-  sourceBaseSha: string;
-  sourceHeadSha: string;
-  targetBaseSha: string | null;
-  targetResultSha: string | null;
-  log: string | null;
+export interface Import
+  extends Omit<SharedImport, 'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'> {
   startedAt: Date | null;
   finishedAt: Date | null;
   createdAt: Date;
@@ -113,12 +88,8 @@ export interface Import {
 /**
  * ReviewThread represents a review thread on a changeset
  */
-export interface ReviewThread {
-  id: string;
-  changesetId: string;
-  status: 'open' | 'resolved' | 'outdated';
-  severity: 'info' | 'warning' | 'error';
-  anchor: string;
+export interface ReviewThread
+  extends Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }
@@ -126,33 +97,16 @@ export interface ReviewThread {
 /**
  * ReviewComment represents a comment within a review thread
  */
-export interface ReviewComment {
-  id: string;
-  threadId: string;
-  body: string;
+export interface ReviewComment
+  extends Omit<SharedReviewComment, 'createdAt'> {
   createdAt: Date;
-}
-
-/**
- * Agent params type for flexible agent configuration
- */
-export interface AgentParams {
-  model?: string;
-  [key: string]: unknown;
 }
 
 /**
  * Project represents a source project
  */
-export interface Project {
-  id: string;
-  name: string;
-  sourceRepoPath: string;
-  sourceRepoUrl: string | null;
-  relayRepoPath: string;
-  defaultBranch: string;
-  defaultAgent: string;
-  agentParams: string | null;
+export interface Project
+  extends Omit<SharedProject, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }
@@ -160,24 +114,15 @@ export interface Project {
 /**
  * TargetRepo represents a target repository for imports
  */
-export interface TargetRepo {
-  id: string;
-  name: string;
-  repoPath: string;
-  defaultBranch: string;
+export interface TargetRepo
+  extends Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * RepoFile represents a file or directory in a repository
- */
-export interface RepoFile {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  size?: number;
-}
+// ============================================================================
+// Frontend-Specific Types
+// ============================================================================
 
 /**
  * API response wrapper types

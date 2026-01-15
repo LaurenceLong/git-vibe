@@ -4,11 +4,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
-import { Project, AgentParams } from '@/types';
+import { Project, AgentParams, AgentKey } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { useModels } from '@/hooks/useModels';
 
 export interface SettingsTabProps {
   project: Project;
@@ -17,11 +18,10 @@ export interface SettingsTabProps {
 export function SettingsTab({ project }: SettingsTabProps) {
   const [name, setName] = useState(project.name);
   const [defaultBranch, setDefaultBranch] = useState(project.defaultBranch);
-  const [defaultAgent, setDefaultAgent] = useState(project.defaultAgent || 'opencode');
+  const [defaultAgent, setDefaultAgent] = useState<AgentKey>(project.defaultAgent || 'opencode');
   const [agentParams, setAgentParams] = useState<AgentParams>({});
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [availableModels, setAvailableModels] = useState<{ id: string; name: string; provider?: string }[]>([]);
 
   // Parse agentParams from JSON string on mount and when project changes
   useEffect(() => {
@@ -38,22 +38,11 @@ export function SettingsTab({ project }: SettingsTabProps) {
 
   const queryClient = useQueryClient();
 
-  // Fetch available models from OpenCode CLI
-  const { data: modelsData, isLoading: isLoadingModels } = useQuery({
-    queryKey: ['models'],
-    queryFn: () => projectsApi.getModels().then((res) => res.data.data),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-  });
-
-  // Update available models when data changes
-  useEffect(() => {
-    if (modelsData && Array.isArray(modelsData)) {
-      setAvailableModels(modelsData);
-    }
-  }, [modelsData]);
+  // Fetch available models from OpenCode CLI (cached in memory)
+  const { models, isLoading: isLoadingModels, refetch: refetchModels, isFetching: isFetchingModels } = useModels();
 
   const updateProjectMutation = useMutation({
-    mutationFn: (data: { name?: string; defaultBranch?: string; defaultAgent?: string; agentParams?: AgentParams }) =>
+    mutationFn: (data: { name?: string; defaultBranch?: string; defaultAgent?: AgentKey; agentParams?: AgentParams }) =>
       projectsApi.update(project.id, data),
     onSuccess: () => {
       setMessage({ type: 'success', text: 'Settings saved successfully' });
@@ -113,7 +102,7 @@ export function SettingsTab({ project }: SettingsTabProps) {
   // Build model options from fetched models
   const modelOptions: SelectOption[] = [
     { value: '', label: 'Default (use agent default)' },
-    ...availableModels.map((model) => ({
+    ...models.map((model) => ({
       value: model.id,
       label: model.name,
     })),
@@ -179,7 +168,7 @@ export function SettingsTab({ project }: SettingsTabProps) {
               id="default-agent"
               options={agentOptions}
               value={defaultAgent}
-              onChange={(e) => setDefaultAgent(e.target.value)}
+              onChange={(e) => setDefaultAgent(e.target.value as AgentKey)}
               disabled={!isEditing}
               fullWidth
             />
@@ -190,9 +179,36 @@ export function SettingsTab({ project }: SettingsTabProps) {
 
           {/* Default Model (stored in agentParams) */}
           <div className="mb-4">
-            <label htmlFor="default-model" className="mb-2 block text-sm font-medium text-gray-700">
-              Default Model
-            </label>
+            <div className="mb-2 flex items-center justify-between">
+              <label htmlFor="default-model" className="block text-sm font-medium text-gray-700">
+                Default Model
+              </label>
+              <button
+                type="button"
+                onClick={() => refetchModels()}
+                disabled={isFetchingModels}
+                className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+                title="Refresh model list"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={isFetchingModels ? 'animate-spin' : ''}
+                >
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 21h5v-5" />
+                </svg>
+              </button>
+            </div>
             {isLoadingModels ? (
               <div className="flex items-center space-x-2">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div>

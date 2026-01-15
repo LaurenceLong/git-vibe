@@ -1,21 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { TriggerAgentRunDTOSchema } from 'git-vibe-shared';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { openCodeAgentAdapter } from '../services/OpenCodeAgentAdapter.js';
 
 export async function agentRunsRoutes(server: FastifyInstance) {
-  const triggerAgentRunSchema = z.object({
-    agentKey: z.string().min(1),
-    inputSummary: z.string().optional().or(z.literal('')),
-    prompt: z.string().min(1),
-    config: z.object({
-      executablePath: z.string().min(1),
-      baseArgs: z.array(z.string()).optional(),
-    }),
-  });
-
   // PLAN: trigger agent run for a changeset
   server.post<{ Params: { id: string } }>(
     '/api/changesets/:id/agent-runs',
@@ -30,7 +21,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
           });
         }
 
-        const body = triggerAgentRunSchema.parse(request.body);
+        const body = TriggerAgentRunDTOSchema.parse(request.body);
 
         await openCodeAgentAdapter.validate(body.config);
 
@@ -107,7 +98,6 @@ export async function agentRunsRoutes(server: FastifyInstance) {
       return reply.status(404).send({
         error: true,
         message: 'Agent run not found',
-        statusCode: 404,
       });
     }
 

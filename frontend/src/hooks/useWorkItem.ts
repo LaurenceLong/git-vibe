@@ -76,7 +76,10 @@ export function useCreateWorkItem() {
   const mutation = useMutation({
     mutationFn: async (data: { projectId: string } & CreateWorkItemInput) => {
       const { projectId, ...workItemData } = data;
-      const response = await workItemsApi.create(projectId, workItemData);
+      const response = await workItemsApi.create(projectId, {
+        projectId,
+        ...workItemData,
+      });
       return response.data as WorkItem;
     },
     onSuccess: (data, variables) => {

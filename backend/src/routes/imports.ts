@@ -1,16 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { CreateImportDTOSchema } from 'git-vibe-shared';
 import { importsRepository } from '../repositories/ImportsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { targetReposRepository } from '../repositories/TargetReposRepository.js';
 import { gitService } from '../services/GitService.js';
 
 export async function importsRoutes(server: FastifyInstance) {
-  const createImportSchema = z.object({
-    targetRepoId: z.string().uuid(),
-  });
-
   server.post<{ Params: { id: string } }>('/api/changesets/:id/imports', async (request, reply) => {
     try {
       const changeset = await changesetsRepository.findById(request.params.id);
@@ -32,7 +29,7 @@ export async function importsRoutes(server: FastifyInstance) {
         });
       }
 
-      const body = createImportSchema.parse(request.body);
+      const body = CreateImportDTOSchema.parse(request.body);
 
       const targetRepo = await targetReposRepository.findById(body.targetRepoId);
       if (!targetRepo) {
