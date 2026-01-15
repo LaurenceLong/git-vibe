@@ -1,7 +1,7 @@
 /**
  * Project Header Component
  * NOTE: This component is deprecated. The header functionality has been moved to Layout.tsx
- * which now includes GitVibe logo, breadcrumb navigation, and search bar.
+ * which now includes GitVibe logo, breadcrumb navigation, search bar, and tab navigation.
  * This file is kept for backward compatibility but is no longer used.
  */
 

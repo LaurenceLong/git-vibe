@@ -13,17 +13,40 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   // Check if we're on a project detail page
-  const isProjectPage = /^\/projects\/[^/]+$/.test(location.pathname) ||
-                        /^\/projects\/[^/]+\/(code|workitems|pullrequests|actions|settings)$/.test(location.pathname);
+  const projectPageMatch = location.pathname.match(/^\/projects\/([^/]+)(\/.*)?$/);
+  const isProjectPage = !!projectPageMatch;
+  const projectName = projectPageMatch ? projectPageMatch[1] : null;
 
-  // Extract project name from path if on project page
-  const projectName = isProjectPage ? location.pathname.split('/')[2] : null;
+  // Determine active tab from current path
+  const getActiveTab = (): string => {
+    const path = location.pathname;
+    if (path.includes('/code')) return 'code';
+    if (path.includes('/workitems')) return 'workitems';
+    if (path.includes('/pullrequests')) return 'pullrequests';
+    if (path.includes('/actions')) return 'actions';
+    if (path.includes('/settings')) return 'settings';
+    return 'overview';
+  };
+
+  const activeTab = isProjectPage ? getActiveTab() : null;
+
+  const tabs = projectName
+    ? [
+        { id: 'overview', label: 'Overview', path: `/projects/${projectName}` },
+        { id: 'code', label: 'Code', path: `/projects/${projectName}/code` },
+        { id: 'workitems', label: 'Work Items', path: `/projects/${projectName}/workitems` },
+        { id: 'pullrequests', label: 'Pull Requests', path: `/projects/${projectName}/pullrequests` },
+        { id: 'actions', label: 'Actions', path: `/projects/${projectName}/actions` },
+        { id: 'settings', label: 'Settings', path: `/projects/${projectName}/settings` },
+      ]
+    : [];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <nav className="flex items-center justify-between">
+        <div className="container mx-auto px-4">
+          {/* Top header row */}
+          <div className="flex items-center justify-between py-4">
             <div className="flex items-center space-x-4">
               <Link to="/projects" className="text-2xl font-bold text-primary">
                 GitVibe
@@ -37,14 +60,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     Projects
                   </Link>
                   <span className="text-gray-400">/</span>
-                  <span className="font-medium text-gray-900">{projectName}</span>
+                  <span className="font-medium text-gray-900">{decodeURIComponent(projectName)}</span>
                 </div>
               )}
             </div>
 
             {/* Search bar */}
             {isProjectPage && (
-              <form onSubmit={handleSearch} className="flex-1 max-w-md">
+              <form onSubmit={handleSearch} className="flex-1 max-w-md ml-8">
                 <Input
                   type="text"
                   placeholder="Search or jump to..."
@@ -54,7 +77,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 />
               </form>
             )}
-          </nav>
+          </div>
+
+          {/* Tab navigation bar - directly under header */}
+          {isProjectPage && projectName && (
+            <nav className="flex space-x-6 -mb-px" role="tablist">
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <Link
+                    key={tab.id}
+                    to={tab.path}
+                    className={`flex items-center px-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      isActive
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`}
+                    role="tab"
+                    aria-selected={isActive}
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </header>
       <main className="container mx-auto px-4 py-8">{children}</main>

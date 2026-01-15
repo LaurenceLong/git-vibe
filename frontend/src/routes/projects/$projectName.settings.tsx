@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
-import { TabNavigation } from '@/components/project/TabNavigation';
 import { SettingsTab } from '@/components/project/SettingsTab';
 
 export const Route = createFileRoute('/projects/$projectName/settings')({
@@ -10,41 +9,40 @@ export const Route = createFileRoute('/projects/$projectName/settings')({
 
 /**
  * Project settings tab component
- * GitHub-style layout with header and tabs
+ * Tab navigation is now handled by Layout.tsx
  */
 function ProjectSettings() {
   const { projectName } = Route.useParams();
 
-  const { data: project } = useQuery({
+  const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', projectName],
     queryFn: () => projectsApi.getByName(projectName).then((res) => res.data),
   });
 
-  if (!project) {
-    return null;
-  }
-
-  const tabs = [
-    { id: 'overview', label: 'Overview', path: `/projects/${projectName}` },
-    { id: 'code', label: 'Code', path: `/projects/${projectName}/code` },
-    { id: 'workitems', label: 'Work Items', path: `/projects/${projectName}/workitems` },
-    { id: 'pullrequests', label: 'Pull Requests', path: `/projects/${projectName}/pullrequests` },
-    { id: 'actions', label: 'Actions', path: `/projects/${projectName}/actions` },
-    { id: 'settings', label: 'Settings', path: `/projects/${projectName}/settings` },
-  ];
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Main content area */}
-      <div className="container mx-auto px-4 py-2">
-        {/* Tab Navigation */}
-        <TabNavigation tabs={tabs} activeTab="settings" />
-
-        {/* Tab Content */}
-        <div className="min-h-[400px] rounded-lg border bg-white p-6 shadow-sm">
-          <SettingsTab project={project} />
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <p className="mt-2 text-sm text-gray-600">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center text-gray-600">
+          <p>Project not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[400px] rounded-lg border bg-white p-6 shadow-sm">
+      <SettingsTab project={project} />
     </div>
   );
 }

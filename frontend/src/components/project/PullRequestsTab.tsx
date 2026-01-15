@@ -1,6 +1,7 @@
 /**
  * Pull Requests Tab Component
  * Lists and filters Pull Requests (ChangeSets with work_item_id)
+ * Items are clickable and navigate to detail view
  */
 
 import React, { useState } from 'react';
@@ -10,6 +11,8 @@ import { Project, ChangeSet, PRStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/Pagination';
+import { PRDetail } from '@/components/pr/PRDetail';
+import { ArrowLeft } from 'lucide-react';
 
 export interface PullRequestsTabProps {
   project: Project;
@@ -18,6 +21,7 @@ export interface PullRequestsTabProps {
 export function PullRequestsTab({ project }: PullRequestsTabProps) {
   const [statusFilter, setStatusFilter] = useState<PRStatus | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedPRId, setSelectedPRId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   const { data: response, isLoading } = useQuery({
@@ -35,6 +39,30 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
     if (statusFilter !== 'all' && pr.prStatus !== statusFilter) return false;
     return true;
   });
+
+  const handlePRClick = (prId: string) => {
+    setSelectedPRId(prId);
+  };
+
+  const handleBackToList = () => {
+    setSelectedPRId(null);
+  };
+
+  // If a PR is selected, show the detail view
+  if (selectedPRId) {
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={handleBackToList}
+          className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Pull Requests</span>
+        </button>
+        <PRDetail prId={selectedPRId} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -64,11 +92,14 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
           {filteredPRs.map((pr: ChangeSet) => (
             <div
               key={pr.id}
-              className="block rounded-lg border p-4 transition-colors hover:bg-gray-50"
+              onClick={() => handlePRClick(pr.id)}
+              className="block cursor-pointer rounded-lg border p-4 transition-colors hover:bg-gray-50 hover:border-blue-300"
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-medium text-gray-900">{pr.title}</h3>
+                  <h3 className="truncate font-medium text-gray-900 hover:text-blue-600">
+                    {pr.title}
+                  </h3>
                   <div className="mt-2 flex items-center gap-2">
                     <Badge
                       variant={
@@ -88,6 +119,11 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
                   <div className="mt-1 text-sm text-gray-600">
                     Created {new Date(pr.createdAt).toLocaleDateString()}
                   </div>
+                </div>
+                <div className="ml-4 text-gray-400">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
               </div>
             </div>

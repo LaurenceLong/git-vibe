@@ -2,6 +2,7 @@
  * WorkItems Tab Component
  * Lists and filters WorkItems (Issues & Feature Requests)
  * WorkItems are task definitions only - Changesets handle workspaces
+ * Items are clickable and navigate to detail view
  */
 
 import { useState } from 'react';
@@ -14,6 +15,8 @@ import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { CreateWorkItemModal } from '@/components/workitem/CreateWorkItemModal';
 import { useCreateWorkItem } from '@/hooks/useWorkItem';
+import { WorkItemDetail } from '@/components/workitem/WorkItemDetail';
+import { ArrowLeft } from 'lucide-react';
 
 export interface WorkItemsTabProps {
   project: Project;
@@ -24,6 +27,7 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
   const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   const { data: response, isLoading } = useQuery({
@@ -46,11 +50,35 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
     setIsCreateModalOpen(false);
   };
 
+  const handleWorkItemClick = (workItemId: string) => {
+    setSelectedWorkItemId(workItemId);
+  };
+
+  const handleBackToList = () => {
+    setSelectedWorkItemId(null);
+  };
+
   const filteredWorkItems = workItems.filter((wi: WorkItem) => {
     if (statusFilter !== 'all' && wi.status !== statusFilter) return false;
     if (typeFilter !== 'all' && wi.type !== typeFilter) return false;
     return true;
   });
+
+  // If a work item is selected, show the detail view
+  if (selectedWorkItemId) {
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={handleBackToList}
+          className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Work Items</span>
+        </button>
+        <WorkItemDetail workItemId={selectedWorkItemId} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -106,11 +134,14 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
           {filteredWorkItems.map((workItem: WorkItem) => (
             <div
               key={workItem.id}
-              className="block cursor-pointer rounded-lg border p-4 transition-colors hover:bg-gray-50"
+              onClick={() => handleWorkItemClick(workItem.id)}
+              className="block cursor-pointer rounded-lg border p-4 transition-colors hover:bg-gray-50 hover:border-blue-300"
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-medium text-gray-900">{workItem.title}</h3>
+                  <h3 className="truncate font-medium text-gray-900 hover:text-blue-600">
+                    {workItem.title}
+                  </h3>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge variant={workItem.type === 'issue' ? 'info' : 'warning'}>
                       {workItem.type}
@@ -122,6 +153,11 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
                   <div className="mt-2 text-sm text-gray-600">
                     Created {new Date(workItem.createdAt).toLocaleDateString()}
                   </div>
+                </div>
+                <div className="ml-4 text-gray-400">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
               </div>
             </div>

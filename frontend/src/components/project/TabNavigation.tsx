@@ -1,6 +1,8 @@
 /**
  * Tab Navigation Component
- * GitHub-style tab navigation for project pages
+ * NOTE: This component is now deprecated.
+ * Tab navigation has been moved to Layout.tsx for GitHub-style UI.
+ * This file is kept for backward compatibility but is no longer used.
  */
 
 import React from 'react';
@@ -18,6 +20,9 @@ export interface TabNavigationProps {
   activeTab: string;
 }
 
+/**
+ * @deprecated Tab navigation is now handled by Layout.tsx
+ */
 export function TabNavigation({ tabs, activeTab }: TabNavigationProps) {
   return (
     <div className="border-b border-gray-200">
