@@ -1,7 +1,6 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { cp } from 'node:fs';
 
 export interface RepoFile {
   name: string;
@@ -85,8 +84,40 @@ export class GitService {
     this.execCommand(`git worktree add -b ${branch} ${worktreePath} ${baseRef}`, repoPath);
   }
 
+  createWorktreeFromExistingBranch(repoPath: string, worktreePath: string, branch: string): void {
+    // Create worktree from existing branch (without -b flag)
+    this.execCommand(`git worktree add ${worktreePath} ${branch}`, repoPath);
+  }
+
   removeWorktree(worktreePath: string, repoPath: string): void {
     this.execCommand(`git worktree remove ${worktreePath}`, repoPath);
+  }
+
+  deleteBranch(branchName: string, repoPath: string): void {
+    this.execCommand(`git branch -D ${branchName}`, repoPath);
+  }
+
+  listWorktrees(repoPath: string): Array<{ worktreePath: string; branch: string }> {
+    try {
+      const output = this.execCommand('git worktree list --porcelain', repoPath);
+      const worktrees: Array<{ worktreePath: string; branch: string }> = [];
+      const lines = output.split('\n');
+      let currentWorktree: { worktreePath: string; branch: string } | null = null;
+
+      for (const line of lines) {
+        if (line.startsWith('worktree ')) {
+          currentWorktree = { worktreePath: line.substring(9), branch: '' };
+        } else if (line.startsWith('branch ') && currentWorktree) {
+          currentWorktree.branch = line.substring(7);
+          worktrees.push(currentWorktree);
+          currentWorktree = null;
+        }
+      }
+
+      return worktrees;
+    } catch {
+      return [];
+    }
   }
 
   recreateWorktree(
@@ -149,6 +180,15 @@ export class GitService {
     return this.getHeadSha(repoPath);
   }
 
+  stageAllChanges(repoPath: string): void {
+    this.execCommand('git add -A', repoPath);
+  }
+
+  hasStagedChanges(repoPath: string): boolean {
+    const status = this.execCommand('git diff --cached --quiet', repoPath);
+    return status.trim().length === 0;
+  }
+
   async createRelayRepo(
     sourceRepoPath: string,
     relayRepoPath: string,
@@ -173,6 +213,13 @@ export class GitService {
     // Reset the working tree to restore files from the git history
     this.execCommand('git reset --hard HEAD', relayRepoPath);
     this.execCommand('git clean -fd', relayRepoPath);
+
+    // Remove upstream remote URL to prevent accidental pushes to the original repository
+    try {
+      this.execCommand('git remote remove origin', relayRepoPath);
+    } catch {
+      // Origin remote may not exist, continue silently
+    }
   }
 
   async syncRelayToSource(
@@ -280,6 +327,42 @@ export class GitService {
         `Failed to read file ${fullPath}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  checkoutBranch(repoPath: string, branch: string): void {
+    this.execCommand(`git checkout ${branch}`, repoPath);
+  }
+
+  mergeBranch(repoPath: string, branch: string, message: string): void {
+    this.execCommand(`git merge --no-ff ${branch} -m "${message}"`, repoPath);
+  }
+
+  mergeSquashBranch(repoPath: string, branch: string): void {
+    this.execCommand(`git merge --squash ${branch}`, repoPath);
+  }
+
+  mergeFFOnly(repoPath: string, branch: string): void {
+    this.execCommand(`git merge --ff-only ${branch}`, repoPath);
+  }
+
+  rebaseBranch(repoPath: string, branch: string): void {
+    this.execCommand(`git rebase ${branch}`, repoPath);
+  }
+
+  abortMerge(repoPath: string): void {
+    this.execCommand(`git merge --abort`, repoPath);
+  }
+
+  abortRebase(repoPath: string): void {
+    this.execCommand(`git rebase --abort`, repoPath);
+  }
+
+  getLogOneline(repoPath: string, range: string): string {
+    return this.execCommand(`git log --oneline ${range}`, repoPath).trim();
+  }
+
+  testMergeNoCommit(repoPath: string, branch: string): void {
+    this.execCommand(`git merge --no-commit --no-ff ${branch}`, repoPath);
   }
 }
 

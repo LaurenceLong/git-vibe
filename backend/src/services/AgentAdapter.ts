@@ -61,7 +61,6 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
    * Get the logs directory path for storing agent run logs
    */
   protected getLogsDir(): string {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { STORAGE_CONFIG } = require('../config/storage.js');
     return STORAGE_CONFIG.logsDir;
   }
@@ -83,17 +82,17 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
   /**
    * Validate that the agent executable is available
    */
-  abstract validate(config: { executablePath: string }): Promise<boolean>;
+  abstract validate(_config: { executablePath: string }): Promise<boolean>;
 
   /**
    * Run the agent with the given parameters
    */
-  abstract run(params: AgentRunParams): Promise<{ runId: string; sessionId?: string }>;
+  abstract run(_params: AgentRunParams): Promise<{ runId: string; sessionId?: string }>;
 
   /**
    * Correct using review comments
    */
-  abstract correctWithReviewComments(params: AgentCorrectionParams): Promise<{ runId: string }>;
+  abstract correctWithReviewComments(_params: AgentCorrectionParams): Promise<{ runId: string }>;
 
   /**
    * Get available models for this agent
@@ -167,7 +166,7 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
    */
   protected createOutputHandler(logFile: Awaited<ReturnType<typeof fs.open>>): {
     logBuffer: string;
-    append: (chunk: Buffer) => void;
+    append: (_chunk: Buffer) => void;
   } {
     let logBuffer = '';
 

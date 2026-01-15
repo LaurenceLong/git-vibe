@@ -3,7 +3,6 @@ import type {
   AgentModel,
   CreateProjectDTO,
   UpdateProjectDTO,
-  CreateChangesetDTO,
   TriggerAgentRunDTO,
   CreateImportDTO,
   CreateThreadDTO,
@@ -27,8 +26,7 @@ export const projectsApi = {
   list: (page?: number, limit?: number) => api.get('/projects', { params: { page, limit } }),
   get: (id: string) => api.get(`/projects/${id}`),
   getByName: (name: string) => api.get(`/projects/name/${name}`),
-  getModels: (agent?: string) =>
-    api.get<{ data: AgentModel[] }>('/models', { params: { agent } }),
+  getModels: (agent?: string) => api.get<{ data: AgentModel[] }>('/models', { params: { agent } }),
   refreshModels: (agent?: string) =>
     api.post<{ data: AgentModel[] }>('/models/refresh', undefined, { params: { agent } }),
   create: (data: CreateProjectDTO) => api.post('/projects', data),
@@ -48,33 +46,25 @@ export const targetReposApi = {
   create: (data: CreateTargetRepoDTO) => api.post('/target-repos', data),
 };
 
-export const changesetsApi = {
+export const pullRequestsApi = {
   list: (projectId?: string, page?: number, limit?: number) =>
-    api.get('/changesets', { params: { projectId, page, limit } }),
-  get: (id: string) => api.get(`/changesets/${id}`),
-  create: (data: CreateChangesetDTO) =>
-    api.post('/changesets', {
-      ...data,
-      body: data.body || undefined,
-    }),
-  refresh: (id: string) => api.post(`/changesets/${id}/refresh`),
-  close: (id: string) => api.post(`/changesets/${id}/close`),
-  removeWorktree: (id: string) => api.post(`/changesets/${id}/remove-worktree`),
-  delete: (id: string) => api.delete(`/changesets/${id}`),
-  // PR-specific functions
-  merge: (id: string) => api.post(`/changesets/${id}/merge`),
-  reopen: (id: string) => api.post(`/changesets/${id}/reopen`),
-};
-
-export const diffsApi = {
-  get: (changesetId: string) => api.get(`/changesets/${changesetId}/diff`),
+    api.get('/pull-requests', { params: { projectId, page, limit } }),
+  get: (id: string) => api.get(`/pull-requests/${id}`),
+  getDiff: (id: string) => api.get(`/pull-requests/${id}/diff`),
+  getCommits: (id: string) => api.get(`/pull-requests/${id}/commits`),
+  merge: (id: string, strategy?: 'merge' | 'squash' | 'rebase') =>
+    api.post(`/pull-requests/${id}/merge`, { strategy }),
+  close: (id: string) => api.post(`/pull-requests/${id}/close`),
+  updateBase: (id: string, rebase?: boolean) =>
+    api.post(`/pull-requests/${id}/update-base`, { rebase }),
+  getPatch: (id: string) => api.get(`/pull-requests/${id}/patch`),
 };
 
 export const agentRunsApi = {
   get: (id: string) => api.get(`/agent-runs/${id}`),
-  listByChangeset: (changesetId: string) => api.get(`/changesets/${changesetId}/agent-runs`),
-  trigger: (changesetId: string, data: TriggerAgentRunDTO) =>
-    api.post(`/changesets/${changesetId}/agent-runs`, {
+  listByWorkItem: (workItemId: string) => api.get(`/workitems/${workItemId}/tasks`),
+  trigger: (workItemId: string, data: TriggerAgentRunDTO) =>
+    api.post(`/workitems/${workItemId}/start`, {
       ...data,
       inputSummary: data.inputSummary || undefined,
     }),
@@ -82,49 +72,73 @@ export const agentRunsApi = {
 };
 
 export const importsApi = {
-  list: (changesetId: string) => api.get(`/changesets/${changesetId}/imports`),
+  list: (pullRequestId: string) => api.get(`/pull-requests/${pullRequestId}/imports`),
   get: (id: string) => api.get(`/imports/${id}`),
-  start: (changesetId: string, data: CreateImportDTO) =>
-    api.post(`/changesets/${changesetId}/imports`, data),
+  start: (pullRequestId: string, data: CreateImportDTO) =>
+    api.post(`/pull-requests/${pullRequestId}/imports`, data),
 };
 
 export const reviewsApi = {
-  getThreads: (changesetId: string) => api.get(`/changesets/${changesetId}/reviews/threads`),
-  getThread: (changesetId: string, threadId: string) =>
-    api.get(`/changesets/${changesetId}/reviews/threads/${threadId}`),
-  createThread: (changesetId: string, data: CreateThreadDTO) =>
-    api.post(`/changesets/${changesetId}/reviews/threads`, data),
-  resolveThread: (changesetId: string, threadId: string) =>
-    api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/resolve`),
-  unresolveThread: (changesetId: string, threadId: string) =>
-    api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/unresolve`),
-  addressWithAgent: (changesetId: string, threadId: string, data: AddressWithAgentDTO) =>
-    api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/address`, data),
-  addComment: (changesetId: string, threadId: string, data: CreateCommentDTO) =>
-    api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/comments`, data),
+  getThreads: (pullRequestId: string) => api.get(`/pull-requests/${pullRequestId}/reviews/threads`),
+  getThread: (pullRequestId: string, threadId: string) =>
+    api.get(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}`),
+  createThread: (pullRequestId: string, data: CreateThreadDTO) =>
+    api.post(`/pull-requests/${pullRequestId}/reviews/threads`, data),
+  resolveThread: (pullRequestId: string, threadId: string) =>
+    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/resolve`),
+  unresolveThread: (pullRequestId: string, threadId: string) =>
+    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/unresolve`),
+  addressWithAgent: (pullRequestId: string, threadId: string, data: AddressWithAgentDTO) =>
+    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/address`, data),
+  resumeTaskFromThread: (pullRequestId: string, threadId: string, prompt: string) =>
+    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/resume`, { prompt }),
+  addComment: (pullRequestId: string, threadId: string, data: CreateCommentDTO) =>
+    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/comments`, data),
 };
 
 export const workItemsApi = {
-  // List WorkItems (optional filter by project)
+  // List WorkItems with optional project filter and pagination
   list: (projectId?: string, page?: number, limit?: number) =>
     api.get('/workitems', { params: { projectId, page, limit } }),
-  // Get WorkItem by ID
-  get: (id: string) => api.get(`/workitems/${id}`),
   // Create new WorkItem
   create: (projectId: string, data: CreateWorkItemDTO) =>
-    api.post(`/projects/${projectId}/workitems`, {
+    api.post(`/projects/${projectId}/work-items`, {
       ...data,
       body: data.body || undefined,
     }),
+  // Initialize workspace for WorkItem
+  initWorkspace: (id: string) => api.post(`/work-items/${id}/init-workspace`),
+  // Get WorkItem by ID
+  get: (id: string) => api.get(`/workitems/${id}`),
   // Update WorkItem
   update: (id: string, data: UpdateWorkItemDTO) => api.patch(`/workitems/${id}`, data),
   // Delete WorkItem
   delete: (id: string) => api.delete(`/workitems/${id}`),
-  // Create PR from WorkItem
-  createPR: (workItemId: string) => api.post(`/workitems/${workItemId}/create-pr`),
+  // Start agent run for WorkItem
+  startAgentRun: (id: string, data: TriggerAgentRunDTO) =>
+    api.post(`/workitems/${id}/start`, {
+      ...data,
+      inputSummary: data.inputSummary || undefined,
+    }),
+  // Resume task for WorkItem
+  resume: (id: string, data: { prompt: string }) => api.post(`/work-items/${id}/resume`, data),
+  // Refresh WorkItem head SHA
+  refresh: (id: string) => api.post(`/workitems/${id}/refresh`),
   // Get PRs for WorkItem
-  getPRs: (workItemId: string) => api.get(`/workitems/${workItemId}/prs`),
-  // Worktree management
-  removeWorktree: (projectId: string, worktreePath: string) =>
-    api.post(`/projects/${projectId}/worktrees/remove`, { worktreePath }),
+  getPRs: (id: string) => api.get(`/workitems/${id}/prs`),
+  // Create PR from WorkItem
+  createPR: (id: string) => api.post(`/workitems/${id}/create-pr`),
+  // Start task for WorkItem
+  startTask: (id: string) => api.post(`/workitems/${id}/start`),
+  // Get tasks for WorkItem
+  getTasks: (id: string) => api.get(`/workitems/${id}/tasks`),
+  // Cancel task
+  cancelTask: (id: string, taskId: string) => api.post(`/workitems/${id}/tasks/${taskId}/cancel`),
+  // Restart task
+  restartTask: (id: string, taskId: string) => api.post(`/workitems/${id}/tasks/${taskId}/restart`),
+  // Get task status
+  getTaskStatus: (id: string, taskId: string) => api.get(`/workitems/${id}/tasks/${taskId}/status`),
+  // Resume task with session
+  resumeTask: (id: string, taskId: string, prompt: string) =>
+    api.post(`/workitems/${id}/tasks/${taskId}/resume`, { prompt }),
 };

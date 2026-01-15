@@ -1,26 +1,22 @@
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import eslintPluginPrettier from 'eslint-plugin-prettier';
-import eslintConfigPrettier from 'eslint-config-prettier';
+import tsParser from '@typescript-eslint/parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '*.js'] },
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default [
   {
-    extends: [js.configs.recommended, ...tseslint.configs.recommended, eslintConfigPrettier],
-    files: ['**/*.ts'],
+    ignores: ['dist/**/*', 'eslint.config.js'],
+  },
+  {
+    files: ['src/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
+      parser: tsParser,
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
     },
-    plugins: {
-      prettier: eslintPluginPrettier,
-    },
-    rules: {
-      'prettier/prettier': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
-    },
-  }
-);
+  },
+];

@@ -5,7 +5,6 @@
  * Shows worktree path, branch name, and status-specific actions
  */
 
-import React from 'react';
 import { WorktreeStatus } from '@/types';
 import { WorktreeStatusBadge } from './WorktreeStatusBadge';
 import { Button } from '@/components/ui/Button';
@@ -56,7 +55,7 @@ export function WorktreeStatusComponent({
   status,
   path,
   branchName,
-  projectId,
+  projectId: _projectId,
   createdAt,
   updatedAt,
   onRecreate,

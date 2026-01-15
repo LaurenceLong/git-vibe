@@ -15,24 +15,44 @@ export class AgentRunsRepository {
 
   async create(data: {
     id: string;
-    changesetId: string;
+    workItemId: string;
+    projectId: string;
     agentKey: string;
     inputSummary?: string;
     inputJson: string;
+    sessionId: string;
+    linkedAgentRunId?: string | null;
   }): Promise<AgentRun> {
     const db = await this.getDbInstance();
-    const [agentRun] = await db
-      .insert(agentRuns)
-      .values({
-        id: data.id,
-        changesetId: data.changesetId,
-        agentKey: data.agentKey,
-        inputSummary: data.inputSummary || null,
-        inputJson: data.inputJson,
-        status: 'queued',
-      })
-      .returning()
-      .execute();
+    const values: {
+      id: string;
+      workItemId: string;
+      projectId: string;
+      agentKey: string;
+      inputJson: string;
+      sessionId: string;
+      status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+      inputSummary?: string;
+      linkedAgentRunId?: string | null;
+    } = {
+      id: data.id,
+      workItemId: data.workItemId,
+      projectId: data.projectId,
+      agentKey: data.agentKey,
+      inputJson: data.inputJson,
+      sessionId: data.sessionId,
+      status: 'queued',
+    };
+
+    if (data.inputSummary !== undefined) {
+      values.inputSummary = data.inputSummary;
+    }
+
+    if (data.linkedAgentRunId !== undefined) {
+      values.linkedAgentRunId = data.linkedAgentRunId;
+    }
+
+    const [agentRun] = await db.insert(agentRuns).values(values).returning().execute();
 
     return agentRun as AgentRun;
   }
@@ -44,12 +64,12 @@ export class AgentRunsRepository {
     return agentRun as AgentRun | undefined;
   }
 
-  async findByChangesetId(changesetId: string): Promise<AgentRun[]> {
+  async findByWorkItemId(workItemId: string): Promise<AgentRun[]> {
     const db = await this.getDbInstance();
     const result = await db
       .select()
       .from(agentRuns)
-      .where(eq(agentRuns.changesetId, changesetId))
+      .where(eq(agentRuns.workItemId, workItemId))
       .execute();
 
     return result as AgentRun[];
@@ -57,7 +77,7 @@ export class AgentRunsRepository {
 
   async update(
     id: string,
-    data: Partial<Omit<AgentRun, 'id' | 'changesetId' | 'createdAt'>>
+    data: Partial<Omit<AgentRun, 'id' | 'workItemId' | 'createdAt'>>
   ): Promise<AgentRun | undefined> {
     const db = await this.getDbInstance();
     const [agentRun] = await db

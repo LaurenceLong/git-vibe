@@ -1,7 +1,7 @@
 /**
  * useReviewThreads Hook
  *
- * Fetches all review threads for a changeset.
+ * Fetches all review threads for a pull request.
  * Creates new thread.
  * Adds comment to thread.
  * Resolves/unresolves thread.
@@ -10,9 +10,9 @@
  *
  * @example
  * ```tsx
- * function ReviewThreadsComponent({ changesetId }: { changesetId: string }) {
+ * function ReviewThreadsComponent({ pullRequestId }: { pullRequestId: string }) {
  *   const { threads, isLoading, error, createThread, addComment, resolveThread, unresolveThread } =
- *     useReviewThreads(changesetId);
+ *     useReviewThreads(pullRequestId);
  *
  *   const handleCreateThread = async () => {
  *     await createThread({ file: 'src/app.ts', line: 10, comment: 'Fix this issue' });
@@ -39,13 +39,15 @@ import { useToast } from '../components/Toast';
 import { ReviewThread } from '../types';
 
 interface CreateThreadData {
-  file: string;
-  line: number;
-  comment: string;
+  severity: 'info' | 'warning' | 'error';
+  anchor: {
+    filePath: string;
+    lineNumber: number;
+  };
 }
 
 interface AddCommentData {
-  comment: string;
+  body: string;
 }
 
 interface AddressWithAgentData {
@@ -76,34 +78,34 @@ interface UseReviewThreadsResult {
 }
 
 /**
- * Hook to manage review threads for a changeset
+ * Hook to manage review threads for a pull request
  *
- * @param changesetId - The ID of the changeset to manage threads for
+ * @param pullRequestId - The ID of the pull request to manage threads for
  * @returns Object containing threads data, loading state, error, and thread management functions
  */
-export function useReviewThreads(changesetId: string): UseReviewThreadsResult {
+export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
-  // Fetch all threads for the changeset
+  // Fetch all threads for the pull request
   const query = useQuery({
-    queryKey: ['review-threads', changesetId],
+    queryKey: ['review-threads', pullRequestId],
     queryFn: async () => {
-      const response = await reviewsApi.getThreads(changesetId);
+      const response = await reviewsApi.getThreads(pullRequestId);
       return response.data as ReviewThread[];
     },
-    enabled: !!changesetId,
+    enabled: !!pullRequestId,
     retry: 2,
   });
 
   // Create new thread
   const createThreadMutation = useMutation({
     mutationFn: async (data: CreateThreadData) => {
-      const response = await reviewsApi.createThread(changesetId, data);
+      const response = await reviewsApi.createThread(pullRequestId, data);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['review-threads', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Review thread created successfully');
     },
     onError: (err: Error) => {
@@ -114,11 +116,11 @@ export function useReviewThreads(changesetId: string): UseReviewThreadsResult {
   // Add comment to thread
   const addCommentMutation = useMutation({
     mutationFn: async ({ threadId, data }: { threadId: string; data: AddCommentData }) => {
-      const response = await reviewsApi.addComment(changesetId, threadId, data);
+      const response = await reviewsApi.addComment(pullRequestId, threadId, data);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['review-threads', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Comment added successfully');
     },
     onError: (err: Error) => {
@@ -129,11 +131,11 @@ export function useReviewThreads(changesetId: string): UseReviewThreadsResult {
   // Resolve thread
   const resolveThreadMutation = useMutation({
     mutationFn: async (threadId: string) => {
-      const response = await reviewsApi.resolveThread(changesetId, threadId);
+      const response = await reviewsApi.resolveThread(pullRequestId, threadId);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['review-threads', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Thread resolved successfully');
     },
     onError: (err: Error) => {
@@ -144,11 +146,11 @@ export function useReviewThreads(changesetId: string): UseReviewThreadsResult {
   // Unresolve thread (re-open)
   const unresolveThreadMutation = useMutation({
     mutationFn: async (threadId: string) => {
-      const response = await reviewsApi.unresolveThread(changesetId, threadId);
+      const response = await reviewsApi.unresolveThread(pullRequestId, threadId);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['review-threads', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Thread reopened successfully');
     },
     onError: (err: Error) => {
@@ -159,12 +161,12 @@ export function useReviewThreads(changesetId: string): UseReviewThreadsResult {
   // Address thread with agent
   const addressWithAgentMutation = useMutation({
     mutationFn: async ({ threadId, data }: { threadId: string; data: AddressWithAgentData }) => {
-      const response = await reviewsApi.addressWithAgent(changesetId, threadId, data);
+      const response = await reviewsApi.addressWithAgent(pullRequestId, threadId, data);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['review-threads', changesetId] });
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
+      queryClient.invalidateQueries({ queryKey: ['agent-runs', pullRequestId] });
       success('Agent triggered successfully');
     },
     onError: (err: Error) => {

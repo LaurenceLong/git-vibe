@@ -1,15 +1,15 @@
 /**
  * useDiffView Hook
  *
- * Loads diff for a changeset (base_sha..head_sha).
- * Caches diff data with changeset ID.
- * Invalidates diff when changeset head changes.
+ * Loads diff for a pull request (base_sha..head_sha).
+ * Caches diff data with pull request ID.
+ * Invalidates diff when pull request head changes.
  * Handles empty diff (no changes).
  *
  * @example
  * ```tsx
- * function DiffViewComponent({ changesetId }: { changesetId: string }) {
- *   const { diff, isLoading, error, refetch } = useDiffView(changesetId);
+ * function DiffViewComponent({ pullRequestId }: { pullRequestId: string }) {
+ *   const { diff, isLoading, error, refetch } = useDiffView(pullRequestId);
  *
  *   if (isLoading) return <div>Loading diff...</div>;
  *   if (error) return <div>Error loading diff</div>;
@@ -39,19 +39,19 @@ interface UseDiffViewResult {
 }
 
 /**
- * Hook to load diff for a changeset
+ * Hook to load diff for a pull request
  *
- * @param changesetId - The ID of the changeset to load diff for
+ * @param pullRequestId - The ID of the pull request to load diff for
  * @returns Object containing diff data, loading state, error, and refetch function
  */
-export function useDiffView(changesetId: string): UseDiffViewResult {
+export function useDiffView(pullRequestId: string): UseDiffViewResult {
   const query = useQuery({
-    queryKey: ['diff', changesetId],
+    queryKey: ['diff', pullRequestId],
     queryFn: async () => {
-      const response = await diffsApi.get(changesetId);
+      const response = await diffsApi.get(pullRequestId);
       return response.data as string;
     },
-    enabled: !!changesetId,
+    enabled: !!pullRequestId,
     retry: 2,
   });
 

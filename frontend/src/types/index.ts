@@ -7,7 +7,7 @@ import type {
   WorkItem as SharedWorkItem,
   Project as SharedProject,
   TargetRepo as SharedTargetRepo,
-  ChangeSet as SharedChangeSet,
+  PullRequest as SharedPullRequest,
   ReviewThread as SharedReviewThread,
   ReviewComment as SharedReviewComment,
   AgentRun as SharedAgentRun,
@@ -21,8 +21,8 @@ import type {
 export type {
   WorkItemType,
   WorkItemStatus,
-  PRStatus,
-  WorktreeStatus,
+  WorkspaceStatus,
+  PullRequestStatus,
   AgentRunStatus,
   ImportStatus,
   ImportStrategy,
@@ -40,8 +40,7 @@ export type {
 
 /**
  * WorkItem represents an Issue or Feature Request
- * WorkItems are task definitions only - they do NOT own worktrees or branches
- * Changesets (PRs) handle workspaces and can optionally link to WorkItems
+ * WorkItems own workspaces (worktree + branch) for agent execution
  */
 export interface WorkItem extends Omit<SharedWorkItem, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
@@ -49,21 +48,19 @@ export interface WorkItem extends Omit<SharedWorkItem, 'createdAt' | 'updatedAt'
 }
 
 /**
- * ChangeSet represents a set of changes in a project
+ * PullRequest represents a pull request for a WorkItem
  */
-export interface ChangeSet extends Omit<
-  SharedChangeSet,
-  'mergedAt' | 'closedAt' | 'syncedAt' | 'createdAt' | 'updatedAt'
+export interface PullRequest extends Omit<
+  SharedPullRequest,
+  'mergedAt' | 'createdAt' | 'updatedAt'
 > {
   mergedAt: Date | null;
-  closedAt: Date | null;
-  syncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
- * AgentRun represents an AI agent execution on a changeset
+ * AgentRun represents an AI agent execution on a work item
  */
 export interface AgentRun extends Omit<
   SharedAgentRun,
@@ -76,7 +73,7 @@ export interface AgentRun extends Omit<
 }
 
 /**
- * Import represents importing changes to a target repository
+ * Import represents importing changes from a pull request to a target repository
  */
 export interface Import extends Omit<
   SharedImport,
@@ -89,7 +86,7 @@ export interface Import extends Omit<
 }
 
 /**
- * ReviewThread represents a review thread on a changeset
+ * ReviewThread represents a review thread on a pull request
  */
 export interface ReviewThread extends Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
@@ -122,6 +119,11 @@ export interface TargetRepo extends Omit<SharedTargetRepo, 'createdAt' | 'update
 // ============================================================================
 // Frontend-Specific Types
 // ============================================================================
+
+/**
+ * Worktree status for PR worktrees
+ */
+export type WorktreeStatus = 'present' | 'missing' | 'recreating';
 
 /**
  * API response wrapper types

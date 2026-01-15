@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AgentRun, WorktreeStatus } from '@/types';
+import { AgentRun } from '@/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { agentRunsApi } from '@/lib/api';
 import { useToast } from '@/components/Toast';
@@ -27,19 +27,26 @@ import { Bot, AlertTriangle } from 'lucide-react';
  * Props for the ChecksTab component
  */
 export interface ChecksTabProps {
-  /** The PR ID (changesetId) */
+  /** The PR ID */
   prId: string;
+  /** The WorkItem ID (for agent run operations) */
+  workItemId?: string;
   /** List of agent runs for PR */
   agentRuns: AgentRun[];
   /** Worktree status */
-  worktreeStatus?: WorktreeStatus;
+  worktreeStatus?: 'present' | 'missing' | 'recreating';
 }
 
 /**
  * ChecksTab component
  * Displays agent runs and CI-like status for a PR
  */
-export function ChecksTab({ prId, agentRuns, worktreeStatus = 'present' }: ChecksTabProps) {
+export function ChecksTab({
+  prId,
+  workItemId,
+  agentRuns,
+  worktreeStatus = 'present',
+}: ChecksTabProps) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
@@ -65,7 +72,7 @@ export function ChecksTab({ prId, agentRuns, worktreeStatus = 'present' }: Check
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', prId] });
+      queryClient.invalidateQueries({ queryKey: ['agent-runs', 'workitem', workItemId] });
       success('Agent run cancelled successfully');
     },
     onError: (err: Error) => {
@@ -81,14 +88,16 @@ export function ChecksTab({ prId, agentRuns, worktreeStatus = 'present' }: Check
       prompt: string;
       config: { executablePath: string; baseArgs?: string[] };
     }) => {
-      const response = await agentRunsApi.trigger(prId, {
+      // Use workItemId if available, otherwise fall back to prId for backward compatibility
+      const targetId = workItemId || prId;
+      const response = await agentRunsApi.trigger(targetId, {
         ...data,
         inputSummary: data.inputSummary || undefined,
       });
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', prId] });
+      queryClient.invalidateQueries({ queryKey: ['agent-runs', 'workitem', workItemId] });
       success('Agent run triggered successfully');
       setIsConfigModalOpen(false);
     },

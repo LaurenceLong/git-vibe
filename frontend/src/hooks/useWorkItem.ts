@@ -59,7 +59,8 @@ export function useWorkItems(projectId?: string): UseQueryResult<WorkItem[], Err
     queryKey: ['workitems', projectId],
     queryFn: async () => {
       const response = await workItemsApi.list(projectId);
-      return response.data as WorkItem[];
+      // Backend returns { data: WorkItem[], pagination: {...} }
+      return response.data.data as WorkItem[];
     },
   });
 }
@@ -82,7 +83,7 @@ export function useCreateWorkItem() {
       });
       return response.data as WorkItem;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate WorkItems list for project
       queryClient.invalidateQueries({ queryKey: ['workitems', variables.projectId] });
       // Invalidate all WorkItems list
@@ -223,8 +224,8 @@ export function useCreatePRFromWorkItem(workItemId: string) {
       queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
       // Invalidate WorkItems lists
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
-      // Invalidate changesets lists
-      queryClient.invalidateQueries({ queryKey: ['changesets'] });
+      // Invalidate pull-requests lists
+      queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR created successfully from WorkItem');
     },
     onError: (err: Error) => {
@@ -234,6 +235,42 @@ export function useCreatePRFromWorkItem(workItemId: string) {
 
   return {
     createPR: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}
+
+/**
+ * Hook to start a task for a WorkItem
+ *
+ * @param workItemId - The ID of WorkItem
+ * @returns Mutation object with start task function
+ */
+export function useStartWorkItemTask(workItemId: string) {
+  const queryClient = useQueryClient();
+  const { success, error: showError } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const response = await workItemsApi.startTask(workItemId);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate WorkItem query to update task status
+      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
+      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: ['workitems'] });
+      // Invalidate pull-requests lists
+      queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
+      success('Task started successfully');
+    },
+    onError: (err: Error) => {
+      showError(`Failed to start task: ${err.message}`);
+    },
+  });
+
+  return {
+    startTask: mutation.mutateAsync,
     isLoading: mutation.isPending,
     error: mutation.error as Error | null,
   };

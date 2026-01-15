@@ -8,121 +8,116 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as TargetReposIndexRouteImport } from './routes/target-repos/index'
-import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
-import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id'
-import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName'
-import { Route as ProjectsProjectNameIndexRouteImport } from './routes/projects/$projectName.index'
-import { Route as ProjectsProjectNameWorkitemsRouteImport } from './routes/projects/$projectName.workitems'
-import { Route as ProjectsProjectNameSettingsRouteImport } from './routes/projects/$projectName.settings'
-import { Route as ProjectsProjectNamePullrequestsRouteImport } from './routes/projects/$projectName.pullrequests'
-import { Route as ProjectsProjectNameCodeRouteImport } from './routes/projects/$projectName.code'
-import { Route as ProjectsProjectNameActionsRouteImport } from './routes/projects/$projectName.actions'
+import { Route as rootRouteImport } from './routes/__root';
+import { Route as IndexRouteImport } from './routes/index';
+import { Route as TargetReposIndexRouteImport } from './routes/target-repos/index';
+import { Route as ProjectsIndexRouteImport } from './routes/projects/index';
+import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id';
+import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName';
+import { Route as ProjectsProjectNameIndexRouteImport } from './routes/projects/$projectName.index';
+import { Route as ProjectsProjectNameWorkitemsRouteImport } from './routes/projects/$projectName.workitems';
+import { Route as ProjectsProjectNameSettingsRouteImport } from './routes/projects/$projectName.settings';
+import { Route as ProjectsProjectNamePullrequestsRouteImport } from './routes/projects/$projectName.pullrequests';
+import { Route as ProjectsProjectNameCodeRouteImport } from './routes/projects/$projectName.code';
+import { Route as ProjectsProjectNameActionsRouteImport } from './routes/projects/$projectName.actions';
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const TargetReposIndexRoute = TargetReposIndexRouteImport.update({
   id: '/target-repos/',
   path: '/target-repos/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const TargetReposIdRoute = TargetReposIdRouteImport.update({
   id: '/target-repos/$id',
   path: '/target-repos/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ProjectsProjectNameRoute = ProjectsProjectNameRouteImport.update({
   id: '/projects/$projectName',
   path: '/projects/$projectName',
   getParentRoute: () => rootRouteImport,
-} as any)
-const ProjectsProjectNameIndexRoute =
-  ProjectsProjectNameIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ProjectsProjectNameRoute,
-  } as any)
-const ProjectsProjectNameWorkitemsRoute =
-  ProjectsProjectNameWorkitemsRouteImport.update({
-    id: '/workitems',
-    path: '/workitems',
-    getParentRoute: () => ProjectsProjectNameRoute,
-  } as any)
-const ProjectsProjectNameSettingsRoute =
-  ProjectsProjectNameSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => ProjectsProjectNameRoute,
-  } as any)
-const ProjectsProjectNamePullrequestsRoute =
-  ProjectsProjectNamePullrequestsRouteImport.update({
-    id: '/pullrequests',
-    path: '/pullrequests',
-    getParentRoute: () => ProjectsProjectNameRoute,
-  } as any)
+} as any);
+const ProjectsProjectNameIndexRoute = ProjectsProjectNameIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProjectsProjectNameRoute,
+} as any);
+const ProjectsProjectNameWorkitemsRoute = ProjectsProjectNameWorkitemsRouteImport.update({
+  id: '/workitems',
+  path: '/workitems',
+  getParentRoute: () => ProjectsProjectNameRoute,
+} as any);
+const ProjectsProjectNameSettingsRoute = ProjectsProjectNameSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => ProjectsProjectNameRoute,
+} as any);
+const ProjectsProjectNamePullrequestsRoute = ProjectsProjectNamePullrequestsRouteImport.update({
+  id: '/pullrequests',
+  path: '/pullrequests',
+  getParentRoute: () => ProjectsProjectNameRoute,
+} as any);
 const ProjectsProjectNameCodeRoute = ProjectsProjectNameCodeRouteImport.update({
   id: '/code',
   path: '/code',
   getParentRoute: () => ProjectsProjectNameRoute,
-} as any)
-const ProjectsProjectNameActionsRoute =
-  ProjectsProjectNameActionsRouteImport.update({
-    id: '/actions',
-    path: '/actions',
-    getParentRoute: () => ProjectsProjectNameRoute,
-  } as any)
+} as any);
+const ProjectsProjectNameActionsRoute = ProjectsProjectNameActionsRouteImport.update({
+  id: '/actions',
+  path: '/actions',
+  getParentRoute: () => ProjectsProjectNameRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
-  '/target-repos/$id': typeof TargetReposIdRoute
-  '/projects': typeof ProjectsIndexRoute
-  '/target-repos': typeof TargetReposIndexRoute
-  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
-  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
-  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
-  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
-  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
-  '/projects/$projectName/': typeof ProjectsProjectNameIndexRoute
+  '/': typeof IndexRoute;
+  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren;
+  '/target-repos/$id': typeof TargetReposIdRoute;
+  '/projects': typeof ProjectsIndexRoute;
+  '/target-repos': typeof TargetReposIndexRoute;
+  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute;
+  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute;
+  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute;
+  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute;
+  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute;
+  '/projects/$projectName/': typeof ProjectsProjectNameIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/target-repos/$id': typeof TargetReposIdRoute
-  '/projects': typeof ProjectsIndexRoute
-  '/target-repos': typeof TargetReposIndexRoute
-  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
-  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
-  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
-  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
-  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
-  '/projects/$projectName': typeof ProjectsProjectNameIndexRoute
+  '/': typeof IndexRoute;
+  '/target-repos/$id': typeof TargetReposIdRoute;
+  '/projects': typeof ProjectsIndexRoute;
+  '/target-repos': typeof TargetReposIndexRoute;
+  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute;
+  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute;
+  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute;
+  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute;
+  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute;
+  '/projects/$projectName': typeof ProjectsProjectNameIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
-  '/target-repos/$id': typeof TargetReposIdRoute
-  '/projects/': typeof ProjectsIndexRoute
-  '/target-repos/': typeof TargetReposIndexRoute
-  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
-  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
-  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
-  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
-  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
-  '/projects/$projectName/': typeof ProjectsProjectNameIndexRoute
+  __root__: typeof rootRouteImport;
+  '/': typeof IndexRoute;
+  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren;
+  '/target-repos/$id': typeof TargetReposIdRoute;
+  '/projects/': typeof ProjectsIndexRoute;
+  '/target-repos/': typeof TargetReposIndexRoute;
+  '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute;
+  '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute;
+  '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute;
+  '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute;
+  '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute;
+  '/projects/$projectName/': typeof ProjectsProjectNameIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | '/'
     | '/projects/$projectName'
@@ -134,8 +129,8 @@ export interface FileRouteTypes {
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
-    | '/projects/$projectName/'
-  fileRoutesByTo: FileRoutesByTo
+    | '/projects/$projectName/';
+  fileRoutesByTo: FileRoutesByTo;
   to:
     | '/'
     | '/target-repos/$id'
@@ -146,7 +141,7 @@ export interface FileRouteTypes {
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
-    | '/projects/$projectName'
+    | '/projects/$projectName';
   id:
     | '__root__'
     | '/'
@@ -159,106 +154,106 @@ export interface FileRouteTypes {
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
-    | '/projects/$projectName/'
-  fileRoutesById: FileRoutesById
+    | '/projects/$projectName/';
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  ProjectsProjectNameRoute: typeof ProjectsProjectNameRouteWithChildren
-  TargetReposIdRoute: typeof TargetReposIdRoute
-  ProjectsIndexRoute: typeof ProjectsIndexRoute
-  TargetReposIndexRoute: typeof TargetReposIndexRoute
+  IndexRoute: typeof IndexRoute;
+  ProjectsProjectNameRoute: typeof ProjectsProjectNameRouteWithChildren;
+  TargetReposIdRoute: typeof TargetReposIdRoute;
+  ProjectsIndexRoute: typeof ProjectsIndexRoute;
+  TargetReposIndexRoute: typeof TargetReposIndexRoute;
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/';
+      path: '/';
+      fullPath: '/';
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/target-repos/': {
-      id: '/target-repos/'
-      path: '/target-repos'
-      fullPath: '/target-repos'
-      preLoaderRoute: typeof TargetReposIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/target-repos/';
+      path: '/target-repos';
+      fullPath: '/target-repos';
+      preLoaderRoute: typeof TargetReposIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/projects/': {
-      id: '/projects/'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof ProjectsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/projects/';
+      path: '/projects';
+      fullPath: '/projects';
+      preLoaderRoute: typeof ProjectsIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/target-repos/$id': {
-      id: '/target-repos/$id'
-      path: '/target-repos/$id'
-      fullPath: '/target-repos/$id'
-      preLoaderRoute: typeof TargetReposIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/target-repos/$id';
+      path: '/target-repos/$id';
+      fullPath: '/target-repos/$id';
+      preLoaderRoute: typeof TargetReposIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/projects/$projectName': {
-      id: '/projects/$projectName'
-      path: '/projects/$projectName'
-      fullPath: '/projects/$projectName'
-      preLoaderRoute: typeof ProjectsProjectNameRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/projects/$projectName';
+      path: '/projects/$projectName';
+      fullPath: '/projects/$projectName';
+      preLoaderRoute: typeof ProjectsProjectNameRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/projects/$projectName/': {
-      id: '/projects/$projectName/'
-      path: '/'
-      fullPath: '/projects/$projectName/'
-      preLoaderRoute: typeof ProjectsProjectNameIndexRouteImport
-      parentRoute: typeof ProjectsProjectNameRoute
-    }
+      id: '/projects/$projectName/';
+      path: '/';
+      fullPath: '/projects/$projectName/';
+      preLoaderRoute: typeof ProjectsProjectNameIndexRouteImport;
+      parentRoute: typeof ProjectsProjectNameRoute;
+    };
     '/projects/$projectName/workitems': {
-      id: '/projects/$projectName/workitems'
-      path: '/workitems'
-      fullPath: '/projects/$projectName/workitems'
-      preLoaderRoute: typeof ProjectsProjectNameWorkitemsRouteImport
-      parentRoute: typeof ProjectsProjectNameRoute
-    }
+      id: '/projects/$projectName/workitems';
+      path: '/workitems';
+      fullPath: '/projects/$projectName/workitems';
+      preLoaderRoute: typeof ProjectsProjectNameWorkitemsRouteImport;
+      parentRoute: typeof ProjectsProjectNameRoute;
+    };
     '/projects/$projectName/settings': {
-      id: '/projects/$projectName/settings'
-      path: '/settings'
-      fullPath: '/projects/$projectName/settings'
-      preLoaderRoute: typeof ProjectsProjectNameSettingsRouteImport
-      parentRoute: typeof ProjectsProjectNameRoute
-    }
+      id: '/projects/$projectName/settings';
+      path: '/settings';
+      fullPath: '/projects/$projectName/settings';
+      preLoaderRoute: typeof ProjectsProjectNameSettingsRouteImport;
+      parentRoute: typeof ProjectsProjectNameRoute;
+    };
     '/projects/$projectName/pullrequests': {
-      id: '/projects/$projectName/pullrequests'
-      path: '/pullrequests'
-      fullPath: '/projects/$projectName/pullrequests'
-      preLoaderRoute: typeof ProjectsProjectNamePullrequestsRouteImport
-      parentRoute: typeof ProjectsProjectNameRoute
-    }
+      id: '/projects/$projectName/pullrequests';
+      path: '/pullrequests';
+      fullPath: '/projects/$projectName/pullrequests';
+      preLoaderRoute: typeof ProjectsProjectNamePullrequestsRouteImport;
+      parentRoute: typeof ProjectsProjectNameRoute;
+    };
     '/projects/$projectName/code': {
-      id: '/projects/$projectName/code'
-      path: '/code'
-      fullPath: '/projects/$projectName/code'
-      preLoaderRoute: typeof ProjectsProjectNameCodeRouteImport
-      parentRoute: typeof ProjectsProjectNameRoute
-    }
+      id: '/projects/$projectName/code';
+      path: '/code';
+      fullPath: '/projects/$projectName/code';
+      preLoaderRoute: typeof ProjectsProjectNameCodeRouteImport;
+      parentRoute: typeof ProjectsProjectNameRoute;
+    };
     '/projects/$projectName/actions': {
-      id: '/projects/$projectName/actions'
-      path: '/actions'
-      fullPath: '/projects/$projectName/actions'
-      preLoaderRoute: typeof ProjectsProjectNameActionsRouteImport
-      parentRoute: typeof ProjectsProjectNameRoute
-    }
+      id: '/projects/$projectName/actions';
+      path: '/actions';
+      fullPath: '/projects/$projectName/actions';
+      preLoaderRoute: typeof ProjectsProjectNameActionsRouteImport;
+      parentRoute: typeof ProjectsProjectNameRoute;
+    };
   }
 }
 
 interface ProjectsProjectNameRouteChildren {
-  ProjectsProjectNameActionsRoute: typeof ProjectsProjectNameActionsRoute
-  ProjectsProjectNameCodeRoute: typeof ProjectsProjectNameCodeRoute
-  ProjectsProjectNamePullrequestsRoute: typeof ProjectsProjectNamePullrequestsRoute
-  ProjectsProjectNameSettingsRoute: typeof ProjectsProjectNameSettingsRoute
-  ProjectsProjectNameWorkitemsRoute: typeof ProjectsProjectNameWorkitemsRoute
-  ProjectsProjectNameIndexRoute: typeof ProjectsProjectNameIndexRoute
+  ProjectsProjectNameActionsRoute: typeof ProjectsProjectNameActionsRoute;
+  ProjectsProjectNameCodeRoute: typeof ProjectsProjectNameCodeRoute;
+  ProjectsProjectNamePullrequestsRoute: typeof ProjectsProjectNamePullrequestsRoute;
+  ProjectsProjectNameSettingsRoute: typeof ProjectsProjectNameSettingsRoute;
+  ProjectsProjectNameWorkitemsRoute: typeof ProjectsProjectNameWorkitemsRoute;
+  ProjectsProjectNameIndexRoute: typeof ProjectsProjectNameIndexRoute;
 }
 
 const ProjectsProjectNameRouteChildren: ProjectsProjectNameRouteChildren = {
@@ -268,10 +263,11 @@ const ProjectsProjectNameRouteChildren: ProjectsProjectNameRouteChildren = {
   ProjectsProjectNameSettingsRoute: ProjectsProjectNameSettingsRoute,
   ProjectsProjectNameWorkitemsRoute: ProjectsProjectNameWorkitemsRoute,
   ProjectsProjectNameIndexRoute: ProjectsProjectNameIndexRoute,
-}
+};
 
-const ProjectsProjectNameRouteWithChildren =
-  ProjectsProjectNameRoute._addFileChildren(ProjectsProjectNameRouteChildren)
+const ProjectsProjectNameRouteWithChildren = ProjectsProjectNameRoute._addFileChildren(
+  ProjectsProjectNameRouteChildren
+);
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -279,7 +275,7 @@ const rootRouteChildren: RootRouteChildren = {
   TargetReposIdRoute: TargetReposIdRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   TargetReposIndexRoute: TargetReposIndexRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();

@@ -140,7 +140,7 @@ export interface ImportResponse {
   message: string;
   import: {
     id: string;
-    changesetId: string;
+    pullRequestId: string;
     targetRepoId: string;
     status: string;
     sourceBaseSha: string;
@@ -162,7 +162,7 @@ export const ImportResponseSchema = z.object({
   message: z.string(),
   import: z.object({
     id: z.string(),
-    changesetId: z.string(),
+    pullRequestId: z.string(),
     targetRepoId: z.string(),
     status: z.string(),
     sourceBaseSha: z.string(),
@@ -189,7 +189,7 @@ export interface CancelAgentRunResponse {
   id: string;
   agentRun: {
     id: string;
-    changesetId: string;
+    workItemId: string;
     agentKey: string;
     status: string;
     inputSummary: string | null;
@@ -213,7 +213,7 @@ export const CancelAgentRunResponseSchema = z.object({
   id: z.string(),
   agentRun: z.object({
     id: z.string(),
-    changesetId: z.string(),
+    workItemId: z.string(),
     agentKey: z.string(),
     status: z.string(),
     inputSummary: z.string().nullable(),
@@ -250,106 +250,6 @@ export const RemoveWorktreeResponseSchema = z.object({
 });
 
 // ============================================================================
-// Refresh Changeset Response
-// ============================================================================
-
-/**
- * Response for refreshing a changeset
- */
-export interface RefreshChangesetResponse {
-  id: string;
-  projectId: string;
-  workItemId: string | null;
-  title: string;
-  body: string | null;
-  status: string;
-  prStatus: string | null;
-  baseBranch: string;
-  baseSha: string;
-  branchName: string;
-  headSha: string | null;
-  worktreePath: string;
-  mergedAt: string | null;
-  closedAt: string | null;
-  syncedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Zod schema for RefreshChangesetResponse validation
- */
-export const RefreshChangesetResponseSchema = z.object({
-  id: z.string(),
-  projectId: z.string(),
-  workItemId: z.string().nullable(),
-  title: z.string(),
-  body: z.string().nullable(),
-  status: z.string(),
-  prStatus: z.string().nullable(),
-  baseBranch: z.string(),
-  baseSha: z.string(),
-  branchName: z.string(),
-  headSha: z.string().nullable(),
-  worktreePath: z.string(),
-  mergedAt: z.string().nullable(),
-  closedAt: z.string().nullable(),
-  syncedAt: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-// ============================================================================
-// Close Changeset Response
-// ============================================================================
-
-/**
- * Response for closing a changeset
- */
-export interface CloseChangesetResponse {
-  id: string;
-  projectId: string;
-  workItemId: string | null;
-  title: string;
-  body: string | null;
-  status: string;
-  prStatus: string | null;
-  baseBranch: string;
-  baseSha: string;
-  branchName: string;
-  headSha: string | null;
-  worktreePath: string;
-  mergedAt: string | null;
-  closedAt: string | null;
-  syncedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Zod schema for CloseChangesetResponse validation
- */
-export const CloseChangesetResponseSchema = z.object({
-  id: z.string(),
-  projectId: z.string(),
-  workItemId: z.string().nullable(),
-  title: z.string(),
-  body: z.string().nullable(),
-  status: z.string(),
-  prStatus: z.string().nullable(),
-  baseBranch: z.string(),
-  baseSha: z.string(),
-  branchName: z.string(),
-  headSha: z.string().nullable(),
-  worktreePath: z.string(),
-  mergedAt: z.string().nullable(),
-  closedAt: z.string().nullable(),
-  syncedAt: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-// ============================================================================
 // Delete Project Response
 // ============================================================================
 
@@ -378,7 +278,7 @@ export const DeleteProjectResponseSchema = z.object({
  */
 export interface ResolveThreadResponse {
   id: string;
-  changesetId: string;
+  pullRequestId: string;
   status: string;
   severity: string;
   anchor: string;
@@ -391,7 +291,7 @@ export interface ResolveThreadResponse {
  */
 export const ResolveThreadResponseSchema = z.object({
   id: z.string(),
-  changesetId: z.string(),
+  pullRequestId: z.string(),
   status: z.string(),
   severity: z.string(),
   anchor: z.string(),
@@ -408,7 +308,7 @@ export const ResolveThreadResponseSchema = z.object({
  */
 export interface UnresolveThreadResponse {
   id: string;
-  changesetId: string;
+  pullRequestId: string;
   status: string;
   severity: string;
   anchor: string;
@@ -421,7 +321,7 @@ export interface UnresolveThreadResponse {
  */
 export const UnresolveThreadResponseSchema = z.object({
   id: z.string(),
-  changesetId: z.string(),
+  pullRequestId: z.string(),
   status: z.string(),
   severity: z.string(),
   anchor: z.string(),

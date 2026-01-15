@@ -5,7 +5,6 @@
  * Uses appropriate colors for different statuses
  */
 
-import React from 'react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { WorktreeStatus } from '@/types';
 

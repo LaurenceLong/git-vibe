@@ -1,66 +1,49 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
 import { TriggerAgentRunDTOSchema, CancelAgentRunResponseSchema } from 'git-vibe-shared';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
-import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
-import { openCodeAgentAdapter } from '../services/OpenCodeAgentAdapter.js';
+import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
+import { projectsRepository } from '../repositories/ProjectsRepository.js';
+import { agentService } from '../services/AgentService.js';
 
 export async function agentRunsRoutes(server: FastifyInstance) {
-  // PLAN: trigger agent run for a changeset
+  // POST /api/work-items/:id/agent-runs - Start agent run for a WorkItem
   server.post<{ Params: { id: string } }>(
-    '/api/changesets/:id/agent-runs',
+    '/api/work-items/:id/agent-runs',
     async (request, reply) => {
       try {
-        const changeset = await changesetsRepository.findById(request.params.id);
+        const workItem = await workItemsRepository.findById(request.params.id);
 
-        if (!changeset) {
+        if (!workItem) {
           return reply.status(404).send({
             error: true,
-            message: 'Changeset not found',
+            message: 'WorkItem not found',
+          });
+        }
+
+        const project = await projectsRepository.findById(workItem.projectId);
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
           });
         }
 
         const body = TriggerAgentRunDTOSchema.parse(request.body);
 
-        await openCodeAgentAdapter.validate(body.config);
+        // Build prompt
+        const prompt = body.prompt;
 
-        const runId = uuidv4();
+        // Use AgentService to start the agent run
+        // This will handle workspace initialization, locking, and agent execution
+        const result = await agentService.executeTask(
+          project.id,
+          workItem.id,
+          prompt,
+          undefined // No work item body needed for manual agent run
+        );
 
-        const agentRun = await agentRunsRepository.create({
-          id: runId,
-          changesetId: request.params.id,
-          agentKey: body.agentKey,
-          inputSummary: body.inputSummary || undefined,
-          inputJson: JSON.stringify({
-            prompt: body.prompt,
-            config: body.config,
-          }),
-        });
-
-        // mark running + startedAt immediately
-        await agentRunsRepository.update(runId, {
-          status: 'running',
-          startedAt: new Date(),
-        });
-
-        // async execution (best-effort)
-        openCodeAgentAdapter
-          .run({
-            worktreePath: changeset.worktreePath,
-            agentRunId: runId,
-            prompt: body.prompt,
-            config: body.config,
-          })
-          .catch(async (error) => {
-            await agentRunsRepository.update(runId, {
-              status: 'failed',
-              log: `Failed to start agent process: ${error instanceof Error ? error.message : String(error)}`,
-              finishedAt: new Date(),
-            });
-          });
-
-        return reply.status(201).send(agentRun);
+        return reply.status(201).send(result.agentRun);
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({
@@ -70,27 +53,32 @@ export async function agentRunsRoutes(server: FastifyInstance) {
           });
         }
 
-        throw error;
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to start agent run',
+          details: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   );
 
-  // NEW: list runs for a changeset (frontend needs this)
+  // GET /api/work-items/:id/agent-runs - List agent runs for a WorkItem
   server.get<{ Params: { id: string } }>(
-    '/api/changesets/:id/agent-runs',
+    '/api/work-items/:id/agent-runs',
     async (request, reply) => {
-      const changeset = await changesetsRepository.findById(request.params.id);
-      if (!changeset) {
+      const workItem = await workItemsRepository.findById(request.params.id);
+      if (!workItem) {
         return reply.status(404).send({
           error: true,
-          message: 'Changeset not found',
+          message: 'WorkItem not found',
         });
       }
 
-      return await agentRunsRepository.findByChangesetId(request.params.id);
+      return await agentRunsRepository.findByWorkItemId(request.params.id);
     }
   );
 
+  // GET /api/agent-runs/:id - Get agent run by ID
   server.get<{ Params: { id: string } }>('/api/agent-runs/:id', async (request, reply) => {
     const agentRun = await agentRunsRepository.findById(request.params.id);
 
@@ -104,6 +92,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
     return agentRun;
   });
 
+  // POST /api/agent-runs/:id/cancel - Cancel agent run
   server.post<{ Params: { id: string } }>('/api/agent-runs/:id/cancel', async (request, reply) => {
     const agentRun = await agentRunsRepository.findById(request.params.id);
 
@@ -114,12 +103,10 @@ export async function agentRunsRoutes(server: FastifyInstance) {
       });
     }
 
-    await openCodeAgentAdapter.cancel(request.params.id);
+    // Delegate to AgentService
+    await agentService.cancelTask(request.params.id);
 
-    const updated = await agentRunsRepository.update(request.params.id, {
-      status: 'cancelled',
-      finishedAt: new Date(),
-    });
+    const updated = await agentRunsRepository.findById(request.params.id);
 
     const response = CancelAgentRunResponseSchema.parse({
       message: 'Agent run cancelled',

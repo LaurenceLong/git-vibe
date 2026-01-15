@@ -1,0 +1,5 @@
+# Auto-generated files
+src/routeTree.gen.ts
+vite.config.d.ts
+dist
+node_modules

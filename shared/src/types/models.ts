@@ -20,19 +20,19 @@ export type WorkItemType = 'issue' | 'feature-request';
 export type WorkItemStatus = 'open' | 'closed';
 
 /**
- * PR status
+ * Workspace status
  */
-export type PRStatus = 'open' | 'merged' | 'closed';
+export type WorkspaceStatus = 'not_initialized' | 'ready' | 'error';
 
 /**
- * Worktree status
+ * PullRequest status
  */
-export type WorktreeStatus = 'present' | 'missing' | 'recreating';
+export type PullRequestStatus = 'open' | 'merged' | 'closed';
 
 /**
- * ChangeSet status
+ * Merge strategy
  */
-export type ChangeSetStatus = 'draft' | 'active' | 'completed' | 'cancelled';
+export type MergeStrategy = 'merge' | 'squash' | 'rebase';
 
 /**
  * AgentRun status
@@ -78,9 +78,9 @@ export type AgentKey = 'opencode' | 'claudcode';
 
 export const WorkItemTypeSchema = z.enum(['issue', 'feature-request']);
 export const WorkItemStatusSchema = z.enum(['open', 'closed']);
-export const PRStatusSchema = z.enum(['open', 'merged', 'closed']);
-export const WorktreeStatusSchema = z.enum(['present', 'missing', 'recreating']);
-export const ChangeSetStatusSchema = z.enum(['draft', 'active', 'completed', 'cancelled']);
+export const WorkspaceStatusSchema = z.enum(['not_initialized', 'ready', 'error']);
+export const PullRequestStatusSchema = z.enum(['open', 'merged', 'closed']);
+export const MergeStrategySchema = z.enum(['merge', 'squash', 'rebase']);
 export const AgentRunStatusSchema = z.enum([
   'queued',
   'running',
@@ -109,8 +109,7 @@ export const AgentKeySchema = z.enum(['opencode', 'claudcode']);
 
 /**
  * WorkItem represents an Issue or Feature Request
- * WorkItems are task definitions only - they do NOT own worktrees or branches
- * Changesets (PRs) handle workspaces and can optionally link to WorkItems
+ * WorkItems own workspaces (worktree + branch) for agent execution
  */
 export interface WorkItem {
   id: string;
@@ -119,6 +118,16 @@ export interface WorkItem {
   title: string;
   body: string | null;
   status: WorkItemStatus;
+  // Workspace fields
+  workspaceStatus: WorkspaceStatus;
+  worktreePath: string | null;
+  headBranch: string | null;
+  baseBranch: string | null;
+  baseSha: string | null;
+  headSha: string | null;
+  // Locking fields for serialized agent runs
+  lockOwnerRunId: string | null;
+  lockExpiresAt: string | null; // ISO 8601
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
@@ -133,6 +142,14 @@ export const WorkItemSchema = z.object({
   title: z.string(),
   body: z.string().nullable(),
   status: WorkItemStatusSchema,
+  workspaceStatus: WorkspaceStatusSchema,
+  worktreePath: z.string().nullable(),
+  headBranch: z.string().nullable(),
+  baseBranch: z.string().nullable(),
+  baseSha: z.string().nullable(),
+  headSha: z.string().nullable(),
+  lockOwnerRunId: z.string().nullable(),
+  lockExpiresAt: z.string().nullable(),
   createdAt: z.string(), // ISO 8601
   updatedAt: z.string(), // ISO 8601
 });
@@ -149,6 +166,7 @@ export interface Project {
   defaultBranch: string;
   defaultAgent: AgentKey;
   agentParams: string | null; // JSON stringified
+  maxAgentConcurrency: number; // Maximum concurrent agent tasks
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
@@ -165,6 +183,7 @@ export const ProjectSchema = z.object({
   defaultBranch: z.string(),
   defaultAgent: AgentKeySchema,
   agentParams: z.string().nullable(), // JSON stringified
+  maxAgentConcurrency: z.number(), // Maximum concurrent agent tasks
   createdAt: z.string(), // ISO 8601
   updatedAt: z.string(), // ISO 8601
 });
@@ -194,57 +213,51 @@ export const TargetRepoSchema = z.object({
 });
 
 /**
- * ChangeSet represents a set of changes in a project
+ * PullRequest represents a pull request for a WorkItem
  */
-export interface ChangeSet {
+export interface PullRequest {
   id: string;
   projectId: string;
-  workItemId: string | null;
+  workItemId: string;
   title: string;
-  body: string | null;
-  status: ChangeSetStatus;
-  prStatus: PRStatus | null;
-  baseBranch: string;
-  baseSha: string;
-  branchName: string;
-  headSha: string | null;
-  worktreePath: string;
-  mergedAt: string | null; // ISO 8601
-  closedAt: string | null; // ISO 8601
-  syncedAt: string | null; // ISO 8601
+  description: string | null;
+  status: PullRequestStatus;
+  sourceBranch: string;
+  targetBranch: string;
+  mergeStrategy: MergeStrategy;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+  mergedAt: string | null; // ISO 8601
+  mergedBy: string | null;
+  mergeCommitSha: string | null;
 }
 
 /**
- * Zod schema for ChangeSet validation
+ * Zod schema for PullRequest validation
  */
-export const ChangeSetSchema = z.object({
+export const PullRequestSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
-  workItemId: z.string().uuid().nullable(),
+  workItemId: z.string().uuid(),
   title: z.string(),
-  body: z.string().nullable(),
-  status: ChangeSetStatusSchema,
-  prStatus: PRStatusSchema.nullable(),
-  baseBranch: z.string(),
-  baseSha: z.string(),
-  branchName: z.string(),
-  headSha: z.string().nullable(),
-  worktreePath: z.string(),
-  mergedAt: z.string().nullable(),
-  closedAt: z.string().nullable(),
-  syncedAt: z.string().nullable(),
+  description: z.string().nullable(),
+  status: PullRequestStatusSchema,
+  sourceBranch: z.string(),
+  targetBranch: z.string(),
+  mergeStrategy: MergeStrategySchema,
   createdAt: z.string(), // ISO 8601
   updatedAt: z.string(), // ISO 8601
+  mergedAt: z.string().nullable(),
+  mergedBy: z.string().nullable(),
+  mergeCommitSha: z.string().nullable(),
 });
 
 /**
- * ReviewThread represents a review thread on a changeset
+ * ReviewThread represents a review thread on a pull request
  */
 export interface ReviewThread {
   id: string;
-  changesetId: string;
+  pullRequestId: string;
   status: ReviewThreadStatus;
   severity: ReviewThreadSeverity;
   anchor: string; // JSON stringified anchor object
@@ -257,7 +270,7 @@ export interface ReviewThread {
  */
 export const ReviewThreadSchema = z.object({
   id: z.string().uuid(),
-  changesetId: z.string().uuid(),
+  pullRequestId: z.string().uuid(),
   status: ReviewThreadStatusSchema,
   severity: ReviewThreadSeveritySchema,
   anchor: z.string(), // JSON stringified
@@ -286,19 +299,24 @@ export const ReviewCommentSchema = z.object({
 });
 
 /**
- * AgentRun represents an AI agent execution on a changeset
+ * AgentRun represents an AI agent execution on a work item
  */
 export interface AgentRun {
   id: string;
-  changesetId: string;
+  projectId: string;
+  workItemId: string;
   agentKey: AgentKey;
   status: AgentRunStatus;
   inputSummary: string | null;
   inputJson: string; // JSON stringified
+  sessionId: string; // Agent session ID for resuming (required)
+  linkedAgentRunId: string | null; // ID of the original agent run if this is a resumed task
+  resumeCount: number | null; // Number of times this task has been resumed
   log: string | null;
   logPath: string | null;
   headShaBefore: string | null;
   headShaAfter: string | null;
+  commitSha: string | null; // The auto-commit SHA if created
   startedAt: string | null; // ISO 8601
   finishedAt: string | null; // ISO 8601
   createdAt: string; // ISO 8601
@@ -310,15 +328,20 @@ export interface AgentRun {
  */
 export const AgentRunSchema = z.object({
   id: z.string().uuid(),
-  changesetId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  workItemId: z.string().uuid(),
   agentKey: AgentKeySchema,
   status: AgentRunStatusSchema,
   inputSummary: z.string().nullable(),
   inputJson: z.string(), // JSON stringified
+  sessionId: z.string(), // Agent session ID for resuming (required)
+  linkedAgentRunId: z.string().uuid().nullable(), // ID of the original agent run if this is a resumed task
+  resumeCount: z.number().nullable(), // Number of times this task has been resumed
   log: z.string().nullable(),
   logPath: z.string().nullable(),
   headShaBefore: z.string().nullable(),
   headShaAfter: z.string().nullable(),
+  commitSha: z.string().nullable(), // The auto-commit SHA if created
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
   createdAt: z.string(), // ISO 8601
@@ -330,7 +353,7 @@ export const AgentRunSchema = z.object({
  */
 export interface Import {
   id: string;
-  changesetId: string;
+  pullRequestId: string;
   targetRepoId: string;
   strategy: ImportStrategy;
   status: ImportStatus;
@@ -350,7 +373,7 @@ export interface Import {
  */
 export const ImportSchema = z.object({
   id: z.string().uuid(),
-  changesetId: z.string().uuid(),
+  pullRequestId: z.string().uuid(),
   targetRepoId: z.string().uuid(),
   strategy: ImportStrategySchema,
   status: ImportStatusSchema,

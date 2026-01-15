@@ -11,11 +11,8 @@ import {
   BranchesResponseSchema,
   SyncResponseSchema,
   DeleteProjectResponseSchema,
-  AgentKeySchema,
-  AgentParamsSchema,
 } from 'git-vibe-shared';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
-import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { gitService } from '../services/GitService.js';
 import { modelsCache } from '../services/ModelsCache.js';
@@ -160,7 +157,7 @@ export async function projectsRoutes(server: FastifyInstance) {
   server.get<{ Querystring: { agent?: string } }>('/api/models', async (request, reply) => {
     try {
       const { agent = 'opencode' } = request.query;
-      
+
       // Validate agent parameter
       if (agent !== 'opencode' && agent !== 'claudcode') {
         return reply.status(400).send({
@@ -171,7 +168,7 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       // Initialize cache for the agent if not already initialized
       await modelsCache.initialize(agent as 'opencode' | 'claudcode');
-      
+
       // Get models from cache
       const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
       const response = ModelsResponseSchema.parse({ data: models });
@@ -185,31 +182,34 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.post<{ Querystring: { agent?: string } }>('/api/models/refresh', async (request, reply) => {
-    try {
-      const { agent = 'opencode' } = request.query;
-      
-      // Validate agent parameter
-      if (agent !== 'opencode' && agent !== 'claudcode') {
-        return reply.status(400).send({
+  server.post<{ Querystring: { agent?: string } }>(
+    '/api/models/refresh',
+    async (request, reply) => {
+      try {
+        const { agent = 'opencode' } = request.query;
+
+        // Validate agent parameter
+        if (agent !== 'opencode' && agent !== 'claudcode') {
+          return reply.status(400).send({
+            error: true,
+            message: 'Invalid agent parameter. Must be "opencode" or "claudcode"',
+          });
+        }
+
+        // Force refresh the models cache for the specific agent
+        await modelsCache.refresh(agent as 'opencode' | 'claudcode');
+        const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
+        const response = ModelsResponseSchema.parse({ data: models });
+        return reply.status(200).send(response);
+      } catch (error) {
+        return reply.status(500).send({
           error: true,
-          message: 'Invalid agent parameter. Must be "opencode" or "claudcode"',
+          message: 'Failed to refresh models',
+          details: error instanceof Error ? error.message : String(error),
         });
       }
-
-      // Force refresh the models cache for the specific agent
-      await modelsCache.refresh(agent as 'opencode' | 'claudcode');
-      const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
-      const response = ModelsResponseSchema.parse({ data: models });
-      return reply.status(200).send(response);
-    } catch (error) {
-      return reply.status(500).send({
-        error: true,
-        message: 'Failed to refresh models',
-        details: error instanceof Error ? error.message : String(error),
-      });
     }
-  });
+  );
 
   server.get<{ Querystring: { repoPath?: string } }>('/api/branches', async (request, reply) => {
     try {
@@ -321,13 +321,9 @@ export async function projectsRoutes(server: FastifyInstance) {
         project.name
       );
 
-      // Update syncedAt for all merged changesets that haven't been synced yet
-      const allChangesets = await changesetsRepository.findAll(project.id);
-      for (const changeset of allChangesets) {
-        if (changeset.prStatus === 'merged' && !changeset.syncedAt) {
-          await changesetsRepository.update(changeset.id, { syncedAt: new Date() });
-        }
-      }
+      // Note: PRs don't need syncedAt tracking like changesets did
+      // The sync operation updates the relay repo, and PRs reference branches
+      // which are automatically updated when the relay repo is synced
 
       const response = SyncResponseSchema.parse({
         success: true,

@@ -14,15 +14,17 @@ import { Bot } from 'lucide-react';
  * Props for the AgentRunsTab component
  */
 export interface AgentRunsTabProps {
-  /** The changeset ID */
-  changesetId: string;
-  /** List of agent runs for the changeset */
+  /** The WorkItem ID */
+  workItemId: string;
+  /** List of agent runs for the WorkItem */
   agentRuns: AgentRun[];
+  /** Worktree status */
+  worktreeStatus?: 'present' | 'missing' | 'recreating';
 }
 
 /**
  * AgentRunsTab component
- * Displays agent runs for a changeset
+ * Displays agent runs for a WorkItem
  *
  * Features:
  * - List all agent runs with status color coding
@@ -32,7 +34,11 @@ export interface AgentRunsTabProps {
  * - Cancel queued/running runs
  * - Show completed run details (SHAs, duration, status)
  */
-export function AgentRunsTab({ changesetId, agentRuns }: AgentRunsTabProps) {
+export function AgentRunsTab({
+  workItemId,
+  agentRuns,
+  worktreeStatus = 'present',
+}: AgentRunsTabProps) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
@@ -58,7 +64,7 @@ export function AgentRunsTab({ changesetId, agentRuns }: AgentRunsTabProps) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['agent-runs', 'workitem', workItemId] });
       success('Agent run cancelled successfully');
     },
     onError: (err: Error) => {
@@ -74,14 +80,14 @@ export function AgentRunsTab({ changesetId, agentRuns }: AgentRunsTabProps) {
       prompt: string;
       config: { executablePath: string; baseArgs?: string[] };
     }) => {
-      const response = await agentRunsApi.trigger(changesetId, {
+      const response = await agentRunsApi.trigger(workItemId, {
         ...data,
         inputSummary: data.inputSummary || undefined,
       });
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', changesetId] });
+      queryClient.invalidateQueries({ queryKey: ['agent-runs', 'workitem', workItemId] });
       success('Agent run triggered successfully');
       setIsConfigModalOpen(false);
     },
@@ -155,13 +161,37 @@ export function AgentRunsTab({ changesetId, agentRuns }: AgentRunsTabProps) {
     return `${Math.floor(duration / 60)}m ${duration % 60}s`;
   };
 
+  // Check if worktree is present
+  const isWorktreePresent = worktreeStatus === 'present';
+
   return (
     <div className="space-y-6">
+      {/* Worktree Warning */}
+      {!isWorktreePresent && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+          <div className="flex items-start space-x-3">
+            <Bot className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-600" />
+            <div>
+              <h3 className="font-medium text-yellow-900">Worktree Not Available</h3>
+              <p className="mt-1 text-sm text-yellow-800">
+                The worktree for this WorkItem is not available. Please recreate worktree before
+                running agents.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="rounded-lg border bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">Agent Runs</h2>
-          <Button variant="primary" size="sm" onClick={handleOpenConfigModal}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleOpenConfigModal}
+            disabled={!isWorktreePresent}
+          >
             Trigger Agent Run
           </Button>
         </div>
@@ -259,7 +289,7 @@ export function AgentRunsTab({ changesetId, agentRuns }: AgentRunsTabProps) {
                       {/* No logs message for running runs */}
                       {!run.log && (run.status === 'queued' || run.status === 'running') && (
                         <div className="text-sm italic text-gray-500">
-                          Logs will appear as the agent runs...
+                          Logs will appear as agent runs...
                         </div>
                       )}
                     </div>
@@ -274,7 +304,12 @@ export function AgentRunsTab({ changesetId, agentRuns }: AgentRunsTabProps) {
             title="No agent runs found"
             description="Agent runs will appear here when agents are executed"
             action={
-              <Button variant="primary" size="sm" onClick={handleOpenConfigModal}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenConfigModal}
+                disabled={!isWorktreePresent}
+              >
                 Trigger Agent Run
               </Button>
             }

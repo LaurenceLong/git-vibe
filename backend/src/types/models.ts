@@ -14,7 +14,7 @@ import type {
   WorkItem as SharedWorkItem,
   Project as SharedProject,
   TargetRepo as SharedTargetRepo,
-  ChangeSet as SharedChangeSet,
+  PullRequest as SharedPullRequest,
   ReviewThread as SharedReviewThread,
   ReviewComment as SharedReviewComment,
   AgentRun as SharedAgentRun,
@@ -22,9 +22,8 @@ import type {
   AgentParams as SharedAgentParams,
   WorkItemType,
   WorkItemStatus,
-  PRStatus,
-  WorktreeStatus,
-  ChangeSetStatus,
+  WorkspaceStatus,
+  PullRequestStatus,
   AgentRunStatus,
   ImportStatus,
   ImportStrategy,
@@ -54,15 +53,10 @@ export type TargetRepo = Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> & {
   updatedAt: Date;
 };
 
-export type ChangeSet = Omit<
-  SharedChangeSet,
-  'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt'
-> & {
+export type PullRequest = Omit<SharedPullRequest, 'createdAt' | 'updatedAt' | 'mergedAt'> & {
   createdAt: Date;
   updatedAt: Date;
   mergedAt: Date | null;
-  closedAt: Date | null;
-  syncedAt: Date | null;
 };
 
 export type ReviewThread = Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> & {
@@ -98,9 +92,8 @@ export type Import = Omit<SharedImport, 'createdAt' | 'updatedAt' | 'startedAt' 
 export type {
   WorkItemType,
   WorkItemStatus,
-  PRStatus,
-  WorktreeStatus,
-  ChangeSetStatus,
+  WorkspaceStatus,
+  PullRequestStatus,
   AgentRunStatus,
   ImportStatus,
   ImportStrategy,

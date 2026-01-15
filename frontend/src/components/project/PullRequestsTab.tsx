@@ -1,13 +1,13 @@
 /**
  * Pull Requests Tab Component
- * Lists and filters Pull Requests (ChangeSets with work_item_id)
+ * Lists and filters Pull Requests
  * Items are clickable and navigate to detail view
  */
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { changesetsApi } from '@/lib/api';
-import { Project, ChangeSet, PRStatus } from '@/types';
+import { pullRequestsApi } from '@/lib/api';
+import { Project, PullRequest, PullRequestStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/Pagination';
@@ -16,28 +16,31 @@ import { ArrowLeft } from 'lucide-react';
 
 export interface PullRequestsTabProps {
   project: Project;
+  initialStatus?: PullRequestStatus | 'all';
+  initialPrId?: string | null;
 }
 
-export function PullRequestsTab({ project }: PullRequestsTabProps) {
-  const [statusFilter, setStatusFilter] = useState<PRStatus | 'all'>('all');
+export function PullRequestsTab({
+  project,
+  initialStatus = 'all',
+  initialPrId = null,
+}: PullRequestsTabProps) {
+  const [statusFilter, setStatusFilter] = useState<PullRequestStatus | 'all'>(initialStatus);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedPRId, setSelectedPRId] = useState<string | null>(null);
+  const [selectedPRId, setSelectedPRId] = useState<string | null>(initialPrId);
   const itemsPerPage = 10;
 
   const { data: response, isLoading } = useQuery({
-    queryKey: ['changesets', project.id, currentPage, itemsPerPage],
+    queryKey: ['pull-requests', project.id, currentPage, itemsPerPage],
     queryFn: () =>
-      changesetsApi.list(project.id, currentPage, itemsPerPage).then((res) => res.data),
+      pullRequestsApi.list(project.id, currentPage, itemsPerPage).then((res) => res.data),
   });
 
-  const changesets = response?.data || [];
+  const pullRequests = response?.data || [];
   const pagination = response?.pagination;
 
-  // Filter changesets that have a PR status (i.e., are Pull Requests)
-  const pullRequests = changesets.filter((cs: ChangeSet) => cs.prStatus !== null);
-
-  const filteredPRs = pullRequests.filter((pr: ChangeSet) => {
-    if (statusFilter !== 'all' && pr.prStatus !== statusFilter) return false;
+  const filteredPRs = pullRequests.filter((pr: PullRequest) => {
+    if (statusFilter !== 'all' && pr.status !== statusFilter) return false;
     return true;
   });
 
@@ -72,7 +75,7 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
         {/* Status Filter */}
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as PRStatus | 'all')}
+          onChange={(e) => setStatusFilter(e.target.value as PullRequestStatus | 'all')}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">All Statuses</option>
@@ -90,7 +93,7 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
         </div>
       ) : filteredPRs.length > 0 ? (
         <div className="space-y-3">
-          {filteredPRs.map((pr: ChangeSet) => (
+          {filteredPRs.map((pr: PullRequest) => (
             <div
               key={pr.id}
               onClick={() => handlePRClick(pr.id)}
@@ -104,18 +107,18 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
                   <div className="mt-2 flex items-center gap-2">
                     <Badge
                       variant={
-                        pr.prStatus === 'open'
+                        pr.status === 'open'
                           ? 'success'
-                          : pr.prStatus === 'merged'
+                          : pr.status === 'merged'
                             ? 'info'
                             : 'neutral'
                       }
                     >
-                      {pr.prStatus}
+                      {pr.status}
                     </Badge>
                   </div>
                   <div className="mt-2 text-sm text-gray-600">
-                    {pr.branchName} → {pr.baseBranch}
+                    {pr.sourceBranch} → {pr.targetBranch}
                   </div>
                   <div className="mt-1 text-sm text-gray-600">
                     Created {new Date(pr.createdAt).toLocaleDateString()}

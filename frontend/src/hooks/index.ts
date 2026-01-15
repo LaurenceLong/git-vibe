@@ -5,7 +5,7 @@
  */
 
 export { useAgentRunPolling } from './useAgentRunPolling';
-export { useChangeSetRefresh } from './useChangeSetRefresh';
+export { useWorkItemRefresh } from './useWorkItemRefresh';
 export { useDiffView } from './useDiffView';
 export { useReviewThreads } from './useReviewThreads';
 export { useImportJob } from './useImportJob';
@@ -21,4 +21,4 @@ export {
   useCloseWorkItem,
   useCreatePRFromWorkItem,
 } from './useWorkItem';
-export { usePR, useMergePR, useClosePR, useReopenPR } from './usePR';
+export { usePR, useMergePR, useClosePR } from './usePR';

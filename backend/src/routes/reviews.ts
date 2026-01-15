@@ -11,18 +11,29 @@ import {
 import { reviewThreadsRepository } from '../repositories/ReviewThreadsRepository.js';
 import { reviewCommentsRepository } from '../repositories/ReviewCommentsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
-import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
+import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
+import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
+import { agentService } from '../services/AgentService.js';
 
 export async function reviewRoutes(server: FastifyInstance) {
+  // POST /api/pull-requests/:id/reviews/threads - Create review thread
   server.post<{ Params: { id: string } }>(
-    '/api/changesets/:id/reviews/threads',
+    '/api/pull-requests/:id/reviews/threads',
     async (request, reply) => {
       try {
         const body = CreateThreadDTOSchema.parse(request.body);
 
+        const pr = await pullRequestsRepository.findById(request.params.id);
+        if (!pr) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Pull request not found',
+          });
+        }
+
         const thread = await reviewThreadsRepository.create({
           id: uuidv4(),
-          changesetId: request.params.id,
+          pullRequestId: request.params.id,
           severity: body.severity,
           anchor: JSON.stringify(body.anchor),
           status: 'open',
@@ -43,16 +54,21 @@ export async function reviewRoutes(server: FastifyInstance) {
     }
   );
 
-  server.get<{ Params: { id: string } }>('/api/changesets/:id/reviews/threads', async (request) => {
-    return await reviewThreadsRepository.findByChangesetId(request.params.id);
-  });
+  // GET /api/pull-requests/:id/reviews/threads - List review threads
+  server.get<{ Params: { id: string } }>(
+    '/api/pull-requests/:id/reviews/threads',
+    async (request) => {
+      return await reviewThreadsRepository.findByPullRequestId(request.params.id);
+    }
+  );
 
+  // GET /api/pull-requests/:id/reviews/threads/:threadId - Get review thread
   server.get<{ Params: { id: string; threadId: string } }>(
-    '/api/changesets/:id/reviews/threads/:threadId',
+    '/api/pull-requests/:id/reviews/threads/:threadId',
     async (request, reply) => {
       const thread = await reviewThreadsRepository.findById(request.params.threadId);
 
-      if (!thread || thread.changesetId !== request.params.id) {
+      if (!thread || thread.pullRequestId !== request.params.id) {
         return reply.status(404).send({
           error: true,
           message: 'Thread not found',
@@ -64,12 +80,13 @@ export async function reviewRoutes(server: FastifyInstance) {
     }
   );
 
+  // POST /api/pull-requests/:id/reviews/threads/:threadId/resolve - Resolve thread
   server.post<{ Params: { id: string; threadId: string } }>(
-    '/api/changesets/:id/reviews/threads/:threadId/resolve',
+    '/api/pull-requests/:id/reviews/threads/:threadId/resolve',
     async (request, reply) => {
       const thread = await reviewThreadsRepository.findById(request.params.threadId);
 
-      if (!thread || thread.changesetId !== request.params.id) {
+      if (!thread || thread.pullRequestId !== request.params.id) {
         return reply.status(404).send({
           error: true,
           message: 'Thread not found',
@@ -84,12 +101,13 @@ export async function reviewRoutes(server: FastifyInstance) {
     }
   );
 
+  // POST /api/pull-requests/:id/reviews/threads/:threadId/unresolve - Unresolve thread
   server.post<{ Params: { id: string; threadId: string } }>(
-    '/api/changesets/:id/reviews/threads/:threadId/unresolve',
+    '/api/pull-requests/:id/reviews/threads/:threadId/unresolve',
     async (request, reply) => {
       const thread = await reviewThreadsRepository.findById(request.params.threadId);
 
-      if (!thread || thread.changesetId !== request.params.id) {
+      if (!thread || thread.pullRequestId !== request.params.id) {
         return reply.status(404).send({
           error: true,
           message: 'Thread not found',
@@ -104,15 +122,16 @@ export async function reviewRoutes(server: FastifyInstance) {
     }
   );
 
+  // POST /api/pull-requests/:id/reviews/threads/:threadId/address - Address with agent
   server.post<{ Params: { id: string; threadId: string } }>(
-    '/api/changesets/:id/reviews/threads/:threadId/address',
+    '/api/pull-requests/:id/reviews/threads/:threadId/address',
     async (request, reply) => {
       try {
         const body = AddressWithAgentDTOSchema.parse(request.body);
 
         const thread = await reviewThreadsRepository.findById(request.params.threadId);
 
-        if (!thread || thread.changesetId !== request.params.id) {
+        if (!thread || thread.pullRequestId !== request.params.id) {
           return reply.status(404).send({
             error: true,
             message: 'Thread not found',
@@ -120,28 +139,28 @@ export async function reviewRoutes(server: FastifyInstance) {
           });
         }
 
-        // Get the changeset to verify it exists and has a worktree
-        const changeset = await changesetsRepository.findById(request.params.id);
-        if (!changeset) {
+        // Get the PR to find the associated WorkItem
+        const pr = await pullRequestsRepository.findById(request.params.id);
+        if (!pr) {
           return reply.status(404).send({
             error: true,
-            message: 'Changeset not found',
+            message: 'Pull request not found',
             statusCode: 404,
           });
         }
 
-        // Create agent run for the changeset
-        const agentRun = await agentRunsRepository.create({
-          id: uuidv4(),
-          changesetId: request.params.id,
-          agentKey: body.agentKey,
-          inputSummary: body.inputSummary,
-          inputJson: JSON.stringify({
-            prompt: body.prompt,
-            threadId: request.params.threadId,
-            threadAnchor: thread.anchor,
-          }),
-        });
+        // Get the WorkItem
+        const workItem = await workItemsRepository.findById(pr.workItemId);
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+            statusCode: 404,
+          });
+        }
+
+        // Create agent run for the WorkItem to address the review thread
+        const agentRun = await agentService.correctWithReviewComments(pr.id, body.prompt);
 
         return reply.status(201).send(agentRun);
       } catch (error) {
@@ -158,15 +177,16 @@ export async function reviewRoutes(server: FastifyInstance) {
     }
   );
 
+  // POST /api/pull-requests/:id/reviews/threads/:threadId/comments - Add comment
   server.post<{ Params: { id: string; threadId: string } }>(
-    '/api/changesets/:id/reviews/threads/:threadId/comments',
+    '/api/pull-requests/:id/reviews/threads/:threadId/comments',
     async (request, reply) => {
       try {
         const body = CreateCommentDTOSchema.parse(request.body);
 
         const thread = await reviewThreadsRepository.findById(request.params.threadId);
 
-        if (!thread || thread.changesetId !== request.params.id) {
+        if (!thread || thread.pullRequestId !== request.params.id) {
           return reply.status(404).send({
             error: true,
             message: 'Thread not found',
@@ -191,6 +211,71 @@ export async function reviewRoutes(server: FastifyInstance) {
         }
 
         throw error;
+      }
+    }
+  );
+
+  // POST /api/pull-requests/:id/reviews/threads/:threadId/resume - Resume task from review thread
+  server.post<{ Params: { id: string; threadId: string }; Body: { prompt: string } }>(
+    '/api/pull-requests/:id/reviews/threads/:threadId/resume',
+    async (request, reply) => {
+      try {
+        const { prompt } = request.body;
+        if (!prompt) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Prompt is required',
+          });
+        }
+
+        const thread = await reviewThreadsRepository.findById(request.params.threadId);
+        if (!thread || thread.pullRequestId !== request.params.id) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Thread not found',
+          });
+        }
+
+        // Get the PR to find the associated WorkItem
+        const pr = await pullRequestsRepository.findById(request.params.id);
+        if (!pr) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Pull request not found',
+          });
+        }
+
+        // Get the WorkItem
+        const workItem = await workItemsRepository.findById(pr.workItemId);
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        // Find the most recent agent run for this WorkItem that has a sessionId
+        const allAgentRuns = await agentRunsRepository.findByWorkItemId(workItem.id);
+        const latestRunWithSession = allAgentRuns
+          .filter((run) => run.sessionId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+        if (!latestRunWithSession) {
+          return reply.status(400).send({
+            error: true,
+            message: 'No previous task with session found. Cannot resume.',
+          });
+        }
+
+        // Resume the task using the same session
+        const newAgentRun = await agentService.resumeTask(latestRunWithSession.id, prompt);
+
+        return reply.status(201).send(newAgentRun);
+      } catch (error) {
+        return reply.status(400).send({
+          error: true,
+          message: error instanceof Error ? error.message : 'Failed to resume task',
+        });
       }
     }
   );

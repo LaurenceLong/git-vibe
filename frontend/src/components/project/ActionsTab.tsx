@@ -10,7 +10,7 @@ export interface ActionsTabProps {
   project: Project;
 }
 
-export function ActionsTab({ project }: ActionsTabProps) {
+export function ActionsTab({ project: _project }: ActionsTabProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

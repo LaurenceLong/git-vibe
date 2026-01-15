@@ -4,7 +4,6 @@
 
 import { z } from 'zod';
 import {
-  CreateChangesetDTOSchema,
   TriggerAgentRunDTOSchema,
   CreateImportDTOSchema,
   UpdateWorkItemDTOSchema,
@@ -17,7 +16,6 @@ import {
 // ============================================================================
 
 export {
-  CreateChangesetDTOSchema,
   TriggerAgentRunDTOSchema,
   CreateImportDTOSchema,
   UpdateWorkItemDTOSchema,
@@ -30,11 +28,22 @@ export {
 // ============================================================================
 
 /**
- * Schema for creating a new changeset (with custom error messages)
+ * Schema for creating a new pull request (with custom error messages)
  */
-export const CreateChangeSetSchema = CreateChangesetDTOSchema;
+export const CreatePullRequestSchema = z.object({
+  workItemId: z.string().min(1, 'Work Item ID is required'),
+  title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
+  description: z.string().max(5000, 'Description must be less than 5000 characters').optional(),
+  sourceBranch: z.string().min(1, 'Source branch is required'),
+  targetBranch: z.string().min(1, 'Target branch is required'),
+  mergeStrategy: z
+    .enum(['merge', 'squash', 'rebase'], {
+      required_error: 'Merge strategy is required',
+    })
+    .default('merge'),
+});
 
-export type CreateChangeSetInput = z.infer<typeof CreateChangeSetSchema>;
+export type CreatePullRequestInput = z.infer<typeof CreatePullRequestSchema>;
 
 /**
  * Schema for creating a new project (with custom error messages)

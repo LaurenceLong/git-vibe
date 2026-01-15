@@ -1,6 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { targetReposApi, importsApi } from '@/lib/api';
+import { targetReposApi } from '@/lib/api';
+
+interface ImportRecord {
+  id: string;
+  status: string;
+  finishedAt?: string;
+  targetResultSha?: string;
+}
 
 export const Route = createFileRoute('/target-repos/$id')({
   component: TargetRepoDetail,
@@ -110,7 +117,7 @@ function TargetRepoDetail() {
           </div>
         ) : imports && imports.length > 0 ? (
           <div className="space-y-3">
-            {imports.map((importRecord: any) => (
+            {imports.map((importRecord: ImportRecord) => (
               <div key={importRecord.id} className="rounded-md border p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">

@@ -5,13 +5,21 @@
  * WorkItems are task definitions only - Changesets handle workspaces
  */
 
-import { useState } from 'react';
-import { useWorkItem, useCloseWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItem';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  useWorkItem,
+  useCloseWorkItem,
+  useDeleteWorkItem,
+  useStartWorkItemTask,
+} from '@/hooks/useWorkItem';
 import { ControlledTabs, Tab, TabPanel } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Calendar } from 'lucide-react';
+import { AlertCircle, Calendar, ListTodo, Play } from 'lucide-react';
+import { TaskManagementTab } from './TaskManagementTab';
+import { PRStatusTab } from './PRStatusTab';
+import { workItemsApi } from '@/lib/api';
 
 export interface WorkItemDetailProps {
   workItemId: string;
@@ -23,10 +31,27 @@ export interface WorkItemDetailProps {
  * @param workItemId - The ID of WorkItem to display
  */
 export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
-  const [activeTab, setActiveTab] = useState('discussion');
+  const [tasks, setTasks] = useState<Array<{ id: string; status: string }>>([]);
   const { data: workItem, isLoading, error } = useWorkItem(workItemId);
   const { closeWorkItem, isLoading: isClosing } = useCloseWorkItem(workItemId);
   const { deleteWorkItem, isLoading: isDeleting } = useDeleteWorkItem(workItemId);
+  const { startTask, isLoading: isStarting } = useStartWorkItemTask(workItemId);
+
+  // Fetch tasks to check if any are running
+  const fetchTasks = useCallback(async () => {
+    try {
+      const response = await workItemsApi.getTasks(workItemId);
+      setTasks(response.data);
+    } catch (err) {
+      console.error('Failed to fetch tasks:', err);
+    }
+  }, [workItemId]);
+
+  // Initial fetch and refresh when workItem changes
+
+  useEffect(() => {
+    fetchTasks();
+  }, [workItemId, fetchTasks]);
 
   const handleClose = async () => {
     if (window.confirm('Are you sure you want to close this WorkItem?')) {
@@ -41,6 +66,15 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
       await deleteWorkItem();
     }
   };
+
+  const handleStart = async () => {
+    await startTask();
+    // Refresh tasks after starting
+    await fetchTasks();
+  };
+
+  // Check if there's a running task
+  const hasRunningTask = tasks.some((task) => task.status === 'running');
 
   // Loading state
   if (isLoading) {
@@ -116,6 +150,12 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
             <h1 className="text-2xl font-semibold text-gray-900">{workItem.title}</h1>
           </div>
           <div className="flex items-center space-x-2">
+            {workItem.status !== 'closed' && !hasRunningTask && (
+              <Button variant="primary" size="sm" onClick={handleStart} loading={isStarting}>
+                <Play className="mr-1 h-3 w-3" />
+                Start
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -156,10 +196,16 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
       </div>
 
       {/* Tabs */}
-      <ControlledTabs defaultValue="discussion">
+      <ControlledTabs defaultValue="tasks">
         <div className="rounded-lg border bg-white shadow-sm">
           <div className="border-b border-gray-200 px-6">
             <div className="flex space-x-8" role="tablist">
+              <Tab value="tasks">
+                <span className="flex items-center space-x-1">
+                  <ListTodo className="h-4 w-4" />
+                  <span>Tasks</span>
+                </span>
+              </Tab>
               <Tab value="discussion">Discussion</Tab>
               <Tab value="agent-config">Agent Config</Tab>
               <Tab value="pr-status">PR Status</Tab>
@@ -167,6 +213,9 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
           </div>
 
           <div className="p-6">
+            <TabPanel value="tasks">
+              <TaskManagementTab workItemId={workItemId} />
+            </TabPanel>
             <TabPanel value="discussion">
               <div className="py-12 text-center">
                 <p className="text-sm text-gray-600">Discussion tab - Coming soon</p>
@@ -178,9 +227,7 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
               </div>
             </TabPanel>
             <TabPanel value="pr-status">
-              <div className="py-12 text-center">
-                <p className="text-sm text-gray-600">PR Status tab - Coming soon</p>
-              </div>
+              <PRStatusTab workItemId={workItemId} />
             </TabPanel>
           </div>
         </div>

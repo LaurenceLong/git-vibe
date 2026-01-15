@@ -46,46 +46,41 @@ export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
   }
 
   async getModels(): Promise<AgentModel[]> {
-    try {
-      // Claude Code doesn't have a direct models list command
-      // Models are specified via --model flag with aliases or full names
-      // Common models: claude-sonnet-4-5-20250929, claude-opus-4-5-20250929, claude-haiku-4-5-20250929
-      return [
-        {
-          id: 'claude-sonnet-4-5-20250929',
-          name: 'Claude Sonnet 4.5',
-          provider: 'anthropic',
-        },
-        {
-          id: 'claude-opus-4-5-20250929',
-          name: 'Claude Opus 4.5',
-          provider: 'anthropic',
-        },
-        {
-          id: 'claude-haiku-4-5-20250929',
-          name: 'Claude Haiku 4.5',
-          provider: 'anthropic',
-        },
-        {
-          id: 'sonnet',
-          name: 'Sonnet (latest)',
-          provider: 'anthropic',
-        },
-        {
-          id: 'opus',
-          name: 'Opus (latest)',
-          provider: 'anthropic',
-        },
-        {
-          id: 'haiku',
-          name: 'Haiku (latest)',
-          provider: 'anthropic',
-        },
-      ];
-    } catch (error) {
-      console.error('Failed to fetch Claude Code models:', error);
-      return [];
-    }
+    // Claude Code doesn't have a direct models list command
+    // Models are specified via --model flag with aliases or full names
+    // Common models: claude-sonnet-4-5-20250929, claude-opus-4-5-20250929, claude-haiku-4-5-20250929
+    return [
+      {
+        id: 'claude-sonnet-4-5-20250929',
+        name: 'Claude Sonnet 4.5',
+        provider: 'anthropic',
+      },
+      {
+        id: 'claude-opus-4-5-20250929',
+        name: 'Claude Opus 4.5',
+        provider: 'anthropic',
+      },
+      {
+        id: 'claude-haiku-4-5-20250929',
+        name: 'Claude Haiku 4.5',
+        provider: 'anthropic',
+      },
+      {
+        id: 'sonnet',
+        name: 'Sonnet (latest)',
+        provider: 'anthropic',
+      },
+      {
+        id: 'opus',
+        name: 'Opus (latest)',
+        provider: 'anthropic',
+      },
+      {
+        id: 'haiku',
+        name: 'Haiku (latest)',
+        provider: 'anthropic',
+      },
+    ];
   }
 
   async run(params: ClaudeCodeAgentRunParams): Promise<{ runId: string; sessionId?: string }> {

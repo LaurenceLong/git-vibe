@@ -2,9 +2,14 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
 import { PullRequestsTab } from '@/components/project/PullRequestsTab';
+import { PRStatus } from '@/types';
 
 export const Route = createFileRoute('/projects/$projectName/pullrequests')({
   component: ProjectPullRequests,
+  validateSearch: (search: Record<string, unknown>) => ({
+    status: (search.status as PRStatus | 'all') || 'all',
+    prId: (search.prId as string) || null,
+  }),
 });
 
 /**
@@ -13,6 +18,7 @@ export const Route = createFileRoute('/projects/$projectName/pullrequests')({
  */
 function ProjectPullRequests() {
   const { projectName } = Route.useParams();
+  const search = Route.useSearch();
 
   const {
     data: project,
@@ -46,7 +52,7 @@ function ProjectPullRequests() {
 
   return (
     <div className="min-h-[400px] rounded-lg border bg-white p-6 shadow-sm">
-      <PullRequestsTab project={project} />
+      <PullRequestsTab project={project} initialStatus={search.status} initialPrId={search.prId} />
     </div>
   );
 }

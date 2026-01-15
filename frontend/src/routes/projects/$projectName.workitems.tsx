@@ -2,9 +2,15 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
 import { WorkItemsTab } from '@/components/project/WorkItemsTab';
+import { WorkItemStatus, WorkItemType } from '@/types';
 
 export const Route = createFileRoute('/projects/$projectName/workitems')({
   component: ProjectWorkItems,
+  validateSearch: (search: Record<string, unknown>) => ({
+    status: (search.status as WorkItemStatus | 'all') || 'all',
+    type: (search.type as WorkItemType | 'all') || 'all',
+    workItemId: (search.workItemId as string) || null,
+  }),
 });
 
 /**
@@ -13,6 +19,7 @@ export const Route = createFileRoute('/projects/$projectName/workitems')({
  */
 function ProjectWorkItems() {
   const { projectName } = Route.useParams();
+  const search = Route.useSearch();
 
   const {
     data: project,
@@ -46,7 +53,12 @@ function ProjectWorkItems() {
 
   return (
     <div className="min-h-[400px] rounded-lg border bg-white p-6 shadow-sm">
-      <WorkItemsTab project={project} />
+      <WorkItemsTab
+        project={project}
+        initialStatus={search.status}
+        initialType={search.type}
+        initialWorkItemId={search.workItemId}
+      />
     </div>
   );
 }

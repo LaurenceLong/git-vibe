@@ -61,30 +61,6 @@ export const UpdateProjectDTOSchema = z.object({
 });
 
 // ============================================================================
-// ChangeSet Request DTOs
-// ============================================================================
-
-/**
- * DTO for creating a new changeset
- */
-export interface CreateChangesetDTO {
-  projectId: string;
-  title: string;
-  body?: string;
-  baseBranch: string;
-}
-
-/**
- * Zod schema for CreateChangesetDTO validation
- */
-export const CreateChangesetDTOSchema = z.object({
-  projectId: z.string().uuid(),
-  title: z.string().min(1),
-  body: z.string().optional().or(z.literal('')),
-  baseBranch: z.string().min(1),
-});
-
-// ============================================================================
 // AgentRun Request DTOs
 // ============================================================================
 

@@ -5,7 +5,6 @@
  * This file is kept for backward compatibility but is no longer used.
  */
 
-import React from 'react';
 import { Project } from '@/types';
 
 export interface ProjectHeaderProps {
@@ -15,7 +14,7 @@ export interface ProjectHeaderProps {
 /**
  * @deprecated This component is no longer used. Header functionality moved to Layout.tsx
  */
-export function ProjectHeader({ project }: ProjectHeaderProps) {
+export function ProjectHeader({ project: _project }: ProjectHeaderProps) {
   // This component is deprecated and should not be used
   return null;
 }

@@ -1,6 +1,4 @@
 import Database from 'better-sqlite3';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { STORAGE_CONFIG } from '../src/config/storage.js';
 import { ensureStorageDirectories } from '../src/utils/storage.js';
 import fs from 'node:fs/promises';
@@ -10,7 +8,6 @@ async function main() {
   await ensureStorageDirectories();
 
   const sqlite = new Database(STORAGE_CONFIG.dbPath);
-  const db = drizzle(sqlite);
 
   const migrationDir = path.join(process.cwd(), 'drizzle');
   const migrationFiles = await fs.readdir(migrationDir);

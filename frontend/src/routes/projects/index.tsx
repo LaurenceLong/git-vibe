@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { FolderOpen, X, GitPullRequest, Folder as FolderIcon } from 'lucide-react';
-import { projectsApi, workItemsApi, changesetsApi } from '@/lib/api';
+import { projectsApi, workItemsApi, pullRequestsApi } from '@/lib/api';
 import { CreateProjectSchema } from '@/lib/validation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/Toast';
+import type { WorkItem, PullRequest, Project } from '@/types';
 
 export const Route = createFileRoute('/projects/')({
   component: ProjectsIndex,
@@ -49,19 +50,21 @@ function ProjectsIndex() {
     queryFn: () => workItemsApi.list().then((res) => res.data.data),
   });
 
-  const { data: allChangesets } = useQuery({
-    queryKey: ['all-changesets'],
-    queryFn: () => changesetsApi.list().then((res) => res.data.data),
+  const { data: allPullRequestsResponse } = useQuery({
+    queryKey: ['all-pull-requests'],
+    queryFn: () => pullRequestsApi.list().then((res) => res.data),
   });
 
   const getProjectStats = (projectId: string) => {
-    const workItems = allWorkItems?.filter((wi: any) => wi.projectId === projectId) || [];
-    const changesets = allChangesets?.filter((cs: any) => cs.projectId === projectId) || [];
+    const workItems = allWorkItems?.filter((wi: WorkItem) => wi.projectId === projectId) || [];
+
+    const pullRequests =
+      allPullRequestsResponse?.data?.filter((pr: PullRequest) => pr.projectId === projectId) || [];
     return {
       workItems: workItems.length,
-      openWorkItems: workItems.filter((wi: any) => wi.status === 'open').length,
-      pullRequests: changesets.filter((cs: any) => cs.prStatus).length,
-      openPullRequests: changesets.filter((cs: any) => cs.prStatus === 'open').length,
+      openWorkItems: workItems.filter((wi: WorkItem) => wi.status === 'open').length,
+      pullRequests: pullRequests.length,
+      openPullRequests: pullRequests.filter((pr: PullRequest) => pr.status === 'open').length,
     };
   };
 
@@ -187,7 +190,7 @@ function ProjectsIndex() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {projects?.map((project) => {
+            {projects?.map((project: Project) => {
               const stats = getProjectStats(project.id);
               return (
                 <div
@@ -207,7 +210,11 @@ function ProjectsIndex() {
                     <X className="h-4 w-4" />
                   </button>
 
-                  <Link to={`/projects/${project.name}`} className="block">
+                  <Link
+                    to="/projects/$projectName"
+                    params={{ projectName: project.name }}
+                    className="block"
+                  >
                     <div className="pr-6">
                       <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
                       <p className="mt-1 text-sm text-gray-600">{project.sourceRepoPath}</p>

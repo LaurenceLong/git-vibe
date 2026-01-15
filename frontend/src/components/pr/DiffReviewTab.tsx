@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChangeSet, ReviewThread, WorktreeStatus } from '@/types';
+import { PullRequest } from '@/types';
 import { useDiffView } from '@/hooks/useDiffView';
 import { useReviewThreads } from '@/hooks/useReviewThreads';
 import { DiffViewer } from '@/components/diff/DiffViewer';
@@ -11,19 +11,21 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileCode, MessageSquare, Filter, AlertTriangle } from 'lucide-react';
+import { CreateThreadInput } from '@/lib/validation';
 
 /**
  * Props for the DiffReviewTab component
  */
 export interface DiffReviewTabProps {
-  changeset: ChangeSet;
-  diff?: string;
-  worktreeStatus?: WorktreeStatus;
+  /** The PR data */
+  pr: PullRequest;
+  /** Worktree status */
+  worktreeStatus?: 'present' | 'missing' | 'recreating';
 }
 
 /**
  * DiffReviewTab component
- * Displays diff and review functionality for a changeset
+ * Displays diff and review functionality for a PR
  *
  * Features:
  * - Load and display diff using useDiffView hook
@@ -33,13 +35,13 @@ export interface DiffReviewTabProps {
  * - Add comments to threads
  * - Resolve/unresolve threads
  */
-export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffReviewTabProps) {
+export function DiffReviewTab({ pr, worktreeStatus = 'present' }: DiffReviewTabProps) {
   const [isThreadModalOpen, setIsThreadModalOpen] = useState(false);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'resolved' | 'outdated'>('all');
 
   // Load diff
-  const { diff, isLoading: isLoadingDiff, error: diffError } = useDiffView(changeset.id);
+  const { diff, isLoading: isLoadingDiff, error: diffError } = useDiffView(pr.id);
 
   // Load and manage review threads
   const {
@@ -52,7 +54,7 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
     unresolveThread,
     addressWithAgent,
     isAddressingWithAgent,
-  } = useReviewThreads(changeset.id);
+  } = useReviewThreads(pr.id);
 
   // Check if worktree is present
   const worktreePresent = worktreeStatus === 'present';
@@ -84,7 +86,7 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
     setIsThreadModalOpen(false);
   };
 
-  const handleCreateThread = async (data: { file: string; line: number; comment: string }) => {
+  const handleCreateThread = async (data: CreateThreadInput) => {
     await createThread(data);
     handleCloseThreadModal();
   };
@@ -175,7 +177,7 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
           <EmptyState
             icon={FileCode}
             title="No diff available yet"
-            description="Changeset must have a head commit to show diff"
+            description="PR must have a head commit to show diff"
           />
         )}
       </div>
@@ -188,8 +190,8 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
             <div>
               <h3 className="font-medium text-yellow-900">Worktree Not Available</h3>
               <p className="mt-1 text-sm text-yellow-800">
-                The worktree for this changeset is not available. Please recreate the worktree to
-                view diff and manage review threads.
+                The worktree for this PR is not available. Please recreate the worktree to view diff
+                and manage review threads.
               </p>
             </div>
           </div>
@@ -294,7 +296,7 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
                     {/* Thread Actions */}
                     <ThreadActions
                       status={thread.status}
-                      worktreePresent={isWorktreePresent}
+                      worktreePresent={worktreePresent}
                       isAddressingWithAgent={isAddressingWithAgent}
                       onResolve={() => resolveThread(thread.id)}
                       onUnresolve={() => unresolveThread(thread.id)}
@@ -329,7 +331,7 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
             description={
               statusFilter === 'all'
                 ? "Click 'Create Thread' to start a review discussion"
-                : `Change filter to see all threads`
+                : 'Change filter to see all threads'
             }
             action={
               statusFilter === 'all' && (

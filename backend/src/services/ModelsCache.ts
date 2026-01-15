@@ -1,6 +1,6 @@
 import type { AgentModel } from './AgentAdapter.js';
 
-export type AgentKey = 'opencode' | 'claudcode';
+export type AgentKey = 'opencode' | 'claudecode';
 
 /**
  * In-memory cache for agent models
@@ -30,7 +30,7 @@ class ModelsCache {
         if (agent === 'opencode') {
           const { openCodeAgentAdapter } = await import('./OpenCodeAgentAdapter.js');
           adapter = openCodeAgentAdapter;
-        } else if (agent === 'claudcode') {
+        } else if (agent === 'claudecode') {
           const { claudeCodeAgentAdapter } = await import('./ClaudeCodeAgentAdapter.js');
           adapter = claudeCodeAgentAdapter;
         } else {

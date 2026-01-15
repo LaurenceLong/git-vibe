@@ -7,14 +7,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { workItemsApi, changesetsApi, projectsApi } from '@/lib/api';
+import { Link } from '@tanstack/react-router';
+import { workItemsApi, projectsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/Button';
 import {
   Folder,
-  GitBranch,
   GitPullRequest,
   CheckCircle,
   AlertCircle,
@@ -36,16 +36,21 @@ export function OverviewTab({ project }: OverviewTabProps) {
     queryFn: () => workItemsApi.list(project.id).then((res) => res.data.data),
   });
 
-  const { data: changesets, isLoading: isLoadingChangesets } = useQuery({
-    queryKey: ['changesets', project.id],
-    queryFn: () => changesetsApi.list(project.id).then((res) => res.data.data),
+  // Note: PR listing API not yet implemented - using placeholder
+  const { data: pullRequests } = useQuery({
+    queryKey: ['pull-requests', project.id],
+    queryFn: async () => {
+      // Placeholder: Return empty array for now
+      // TODO: Implement actual API call when backend is ready
+      return [];
+    },
   });
 
   const syncMutation = useMutation({
     mutationFn: () => projectsApi.sync(project.id),
     onSuccess: () => {
       setIsSyncing(false);
-      queryClient.invalidateQueries({ queryKey: ['changesets', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['pull-requests', project.id] });
     },
     onError: () => {
       setIsSyncing(false);
@@ -65,25 +70,30 @@ export function OverviewTab({ project }: OverviewTabProps) {
 
   // Work Items Statistics
   const totalWorkItems = workItems?.length || 0;
-  const openWorkItems = workItems?.filter((wi: any) => wi.status === 'open').length || 0;
-  const closedWorkItems = workItems?.filter((wi: any) => wi.status === 'closed').length || 0;
-  const issueCount = workItems?.filter((wi: any) => wi.type === 'issue').length || 0;
+  const openWorkItems =
+    workItems?.filter((wi: { status: string }) => wi.status === 'open').length || 0;
+  const closedWorkItems =
+    workItems?.filter((wi: { status: string }) => wi.status === 'closed').length || 0;
+  const issueCount = workItems?.filter((wi: { type: string }) => wi.type === 'issue').length || 0;
   const featureRequestCount =
-    workItems?.filter((wi: any) => wi.type === 'feature-request').length || 0;
+    workItems?.filter((wi: { type: string }) => wi.type === 'feature-request').length || 0;
 
   // Pull Requests Statistics
-  const totalPRs = changesets?.filter((cs: any) => cs.prStatus).length || 0;
-  const openPRs = changesets?.filter((cs: any) => cs.prStatus === 'open').length || 0;
-  const mergedPRs = changesets?.filter((cs: any) => cs.prStatus === 'merged').length || 0;
-  const closedPRs = changesets?.filter((cs: any) => cs.prStatus === 'closed').length || 0;
-  const draftPRs = changesets?.filter((cs: any) => cs.status === 'draft').length || 0;
+  const totalPRs = pullRequests?.length || 0;
+  const openPRs =
+    pullRequests?.filter((pr: { status: string }) => pr.status === 'open').length || 0;
+  const mergedPRs =
+    pullRequests?.filter((pr: { status: string }) => pr.status === 'merged').length || 0;
+  const closedPRs =
+    pullRequests?.filter((pr: { status: string }) => pr.status === 'closed').length || 0;
+  const draftPRs = 0;
 
   // Pending Sync Statistics (merged PRs that haven't been synced to source repo yet)
-  const pendingSyncTotal =
-    changesets?.filter((cs: any) => cs.prStatus === 'merged' && !cs.syncedAt).length || 0;
+  // Note: This feature is not yet implemented in PR-centric model
+  const pendingSyncTotal = 0;
 
   const recentWorkItems = workItems?.slice(0, 5) || [];
-  const recentPRs = changesets?.filter((cs: any) => cs.prStatus).slice(0, 5) || [];
+  const recentPRs = pullRequests?.slice(0, 5) || [];
 
   return (
     <div className="space-y-8">
@@ -98,35 +108,60 @@ export function OverviewTab({ project }: OverviewTabProps) {
             Work Items
           </h3>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-            <div className="rounded-lg border bg-gray-50 p-3">
+            <Link
+              to="/projects/$projectName/workitems"
+              params={{ projectName: project.name }}
+              search={{ status: 'all', type: 'all', workItemId: null }}
+              className="rounded-lg border bg-gray-50 p-3 transition-colors hover:bg-gray-100 hover:shadow-md"
+            >
               <div className="flex items-center gap-2">
                 <FileCode className="h-4 w-4 text-gray-500" />
                 <div className="text-xl font-bold text-gray-900">{totalWorkItems}</div>
               </div>
               <div className="mt-1 text-xs text-gray-600">Total</div>
-            </div>
-            <div className="rounded-lg border bg-blue-50 p-3">
+            </Link>
+            <Link
+              to="/projects/$projectName/workitems"
+              params={{ projectName: project.name }}
+              search={{ status: 'open', type: 'all', workItemId: null }}
+              className={`rounded-lg border bg-blue-50 p-3 transition-colors hover:bg-blue-100 hover:shadow-md ${openWorkItems > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-blue-500" />
                 <div className="text-xl font-bold text-blue-600">{openWorkItems}</div>
               </div>
               <div className="mt-1 text-xs text-gray-600">Open</div>
-            </div>
-            <div className="rounded-lg border bg-green-50 p-3">
+            </Link>
+            <Link
+              to="/projects/$projectName/workitems"
+              params={{ projectName: project.name }}
+              search={{ status: 'closed', type: 'all', workItemId: null }}
+              className={`rounded-lg border bg-green-50 p-3 transition-colors hover:bg-green-100 hover:shadow-md ${closedWorkItems > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 <div className="text-xl font-bold text-green-600">{closedWorkItems}</div>
               </div>
               <div className="mt-1 text-xs text-gray-600">Closed</div>
-            </div>
-            <div className="rounded-lg border bg-purple-50 p-3">
+            </Link>
+            <Link
+              to="/projects/$projectName/workitems"
+              params={{ projectName: project.name }}
+              search={{ status: 'all', type: 'issue', workItemId: null }}
+              className={`rounded-lg border bg-purple-50 p-3 transition-colors hover:bg-purple-100 hover:shadow-md ${issueCount > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
               <div className="text-xl font-bold text-purple-600">{issueCount}</div>
               <div className="mt-1 text-xs text-gray-600">Issues</div>
-            </div>
-            <div className="rounded-lg border bg-orange-50 p-3">
+            </Link>
+            <Link
+              to="/projects/$projectName/workitems"
+              params={{ projectName: project.name }}
+              search={{ status: 'all', type: 'feature-request', workItemId: null }}
+              className={`rounded-lg border bg-orange-50 p-3 transition-colors hover:bg-orange-100 hover:shadow-md ${featureRequestCount > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
               <div className="text-xl font-bold text-orange-600">{featureRequestCount}</div>
               <div className="mt-1 text-xs text-gray-600">Features</div>
-            </div>
+            </Link>
           </div>
         </div>
 
@@ -137,22 +172,42 @@ export function OverviewTab({ project }: OverviewTabProps) {
             Pull Requests
           </h3>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-            <div className="rounded-lg border bg-gray-50 p-3">
+            <Link
+              to="/projects/$projectName/pullrequests"
+              params={{ projectName: project.name }}
+              search={{ status: 'all', prId: null }}
+              className="rounded-lg border bg-gray-50 p-3 transition-colors hover:bg-gray-100 hover:shadow-md"
+            >
               <div className="text-xl font-bold text-gray-900">{totalPRs}</div>
               <div className="mt-1 text-xs text-gray-600">Total</div>
-            </div>
-            <div className="rounded-lg border bg-green-50 p-3">
-              <div className="text-xl font-bold text-green-600">{openPRs}</div>
+            </Link>
+            <Link
+              to="/projects/$projectName/pullrequests"
+              params={{ projectName: project.name }}
+              search={{ status: 'open', prId: null }}
+              className={`rounded-lg border bg-blue-50 p-3 transition-colors hover:bg-blue-100 hover:shadow-md ${openPRs > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+              <div className="text-xl font-bold text-blue-600">{openPRs}</div>
               <div className="mt-1 text-xs text-gray-600">Open</div>
-            </div>
-            <div className="rounded-lg border bg-purple-50 p-3">
+            </Link>
+            <Link
+              to="/projects/$projectName/pullrequests"
+              params={{ projectName: project.name }}
+              search={{ status: 'merged', prId: null }}
+              className={`rounded-lg border bg-purple-50 p-3 transition-colors hover:bg-purple-100 hover:shadow-md ${mergedPRs > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
               <div className="text-xl font-bold text-purple-600">{mergedPRs}</div>
               <div className="mt-1 text-xs text-gray-600">Merged</div>
-            </div>
-            <div className="rounded-lg border bg-gray-100 p-3">
-              <div className="text-xl font-bold text-gray-600">{closedPRs}</div>
+            </Link>
+            <Link
+              to="/projects/$projectName/pullrequests"
+              params={{ projectName: project.name }}
+              search={{ status: 'closed', prId: null }}
+              className={`rounded-lg border bg-green-50 p-3 transition-colors hover:bg-green-100 hover:shadow-md ${closedPRs > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+              <div className="text-xl font-bold text-green-600">{closedPRs}</div>
               <div className="mt-1 text-xs text-gray-600">Closed</div>
-            </div>
+            </Link>
             <div className="rounded-lg border bg-yellow-50 p-3">
               <div className="text-xl font-bold text-yellow-600">{draftPRs}</div>
               <div className="mt-1 text-xs text-gray-600">Draft</div>
@@ -204,29 +259,42 @@ export function OverviewTab({ project }: OverviewTabProps) {
           </div>
         ) : recentWorkItems.length > 0 ? (
           <div className="space-y-3">
-            {recentWorkItems.map((workItem: any) => (
-              <div
-                key={workItem.id}
-                className="block rounded-md border p-4 transition-colors hover:bg-gray-50"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">{workItem.title}</h3>
-                    <div className="mt-2 flex items-center space-x-2">
-                      <Badge variant={workItem.type === 'issue' ? 'info' : 'warning'}>
-                        {workItem.type}
-                      </Badge>
-                      <Badge variant={workItem.status === 'open' ? 'success' : 'neutral'}>
-                        {workItem.status}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      Created {new Date(workItem.createdAt).toLocaleDateString()}
+            {recentWorkItems.map(
+              (workItem: {
+                id: string;
+                title: string;
+                type: string;
+                status: string;
+                createdAt: string;
+              }) => (
+                <Link
+                  key={workItem.id}
+                  to="/projects/$projectName/workitems"
+                  params={{ projectName: project.name }}
+                  search={{ status: 'all', type: 'all', workItemId: workItem.id }}
+                  className="block rounded-md border p-4 transition-colors hover:border-blue-300 hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-900 hover:text-blue-600">
+                        {workItem.title}
+                      </h3>
+                      <div className="mt-2 flex items-center space-x-2">
+                        <Badge variant={workItem.type === 'issue' ? 'info' : 'warning'}>
+                          {workItem.type}
+                        </Badge>
+                        <Badge variant={workItem.status === 'open' ? 'success' : 'neutral'}>
+                          {workItem.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-sm text-gray-600">
+                        Created {new Date(workItem.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                </Link>
+              )
+            )}
           </div>
         ) : (
           <EmptyState
@@ -241,44 +309,51 @@ export function OverviewTab({ project }: OverviewTabProps) {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Recent Pull Requests</h2>
         </div>
-        {isLoadingChangesets ? (
-          <div className="py-8 text-center">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-sm text-gray-600">Loading pull requests...</p>
-          </div>
-        ) : recentPRs.length > 0 ? (
+        {recentPRs.length > 0 ? (
           <div className="space-y-3">
-            {recentPRs.map((pr: any) => (
-              <div
-                key={pr.id}
-                className="block rounded-md border p-4 transition-colors hover:bg-gray-50"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">{pr.title}</h3>
-                    <div className="mt-2 flex items-center space-x-2">
-                      <Badge
-                        variant={
-                          pr.prStatus === 'open'
-                            ? 'success'
-                            : pr.prStatus === 'merged'
-                              ? 'info'
-                              : 'neutral'
-                        }
-                      >
-                        {pr.prStatus}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      {pr.branchName} → {pr.baseBranch}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-600">
-                      Created {new Date(pr.createdAt).toLocaleDateString()}
+            {recentPRs.map(
+              (pr: {
+                id: string;
+                title: string;
+                prStatus: string;
+                branchName: string;
+                baseBranch: string;
+                createdAt: string;
+              }) => (
+                <Link
+                  key={pr.id}
+                  to="/projects/$projectName/pullrequests"
+                  params={{ projectName: project.name }}
+                  search={{ status: 'all', prId: pr.id }}
+                  className="block rounded-md border p-4 transition-colors hover:border-blue-300 hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-900 hover:text-blue-600">{pr.title}</h3>
+                      <div className="mt-2 flex items-center space-x-2">
+                        <Badge
+                          variant={
+                            pr.prStatus === 'open'
+                              ? 'success'
+                              : pr.prStatus === 'merged'
+                                ? 'info'
+                                : 'neutral'
+                          }
+                        >
+                          {pr.prStatus}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-sm text-gray-600">
+                        {pr.branchName} → {pr.baseBranch}
+                      </div>
+                      <div className="mt-1 text-sm text-gray-600">
+                        Created {new Date(pr.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                </Link>
+              )
+            )}
           </div>
         ) : (
           <EmptyState

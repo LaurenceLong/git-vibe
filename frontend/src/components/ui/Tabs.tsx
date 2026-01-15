@@ -23,6 +23,9 @@ export interface TabProps {
   children: ReactNode;
   disabled?: boolean;
   className?: string;
+  onClick?: () => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLButtonElement>) => void;
+  'aria-selected'?: boolean;
 }
 
 export interface TabPanelsProps {
@@ -63,10 +66,14 @@ export function Tabs({
     <div className={className}>
       {Children.map(children, (child) => {
         if (isValidElement(child)) {
-          return cloneElement(child as any, {
-            activeValue,
-            onValueChange: handleValueChange,
-          });
+          return cloneElement(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            child as any,
+            {
+              activeValue,
+              onValueChange: handleValueChange,
+            }
+          );
         }
         return child;
       })}
@@ -92,14 +99,24 @@ export function TabList({ children, className = '' }: TabListProps) {
 /**
  * Tab button component
  */
-export function Tab({ value, children, disabled = false, className = '' }: TabProps) {
+export function Tab({
+  value,
+  children,
+  disabled = false,
+  className = '',
+  onClick,
+  onKeyDown,
+  'aria-selected': ariaSelected = false,
+}: TabProps) {
   return (
     <button
       type="button"
       role="tab"
-      aria-selected="false"
+      aria-selected={ariaSelected}
       aria-disabled={disabled}
       disabled={disabled}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
       className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${className} `}
       data-tab-value={value}
     >
@@ -158,7 +175,7 @@ export function ControlledTabs({
     const tabsCount = tabs.length;
 
     switch (event.key) {
-      case 'ArrowLeft':
+      case 'ArrowLeft': {
         event.preventDefault();
         const prevIndex = currentIndex === 0 ? tabsCount - 1 : currentIndex - 1;
         const prevTab = tabs[prevIndex].props as TabProps;
@@ -169,7 +186,8 @@ export function ControlledTabs({
             ?.focus();
         }
         break;
-      case 'ArrowRight':
+      }
+      case 'ArrowRight': {
         event.preventDefault();
         const nextIndex = currentIndex === tabsCount - 1 ? 0 : currentIndex + 1;
         const nextTab = tabs[nextIndex].props as TabProps;
@@ -178,20 +196,23 @@ export function ControlledTabs({
           (event.target as HTMLButtonElement).nextElementSibling?.querySelector('button')?.focus();
         }
         break;
-      case 'Home':
+      }
+      case 'Home': {
         event.preventDefault();
         const firstTab = tabs[0].props as TabProps;
         if (!firstTab.disabled) {
           setActiveValue(firstTab.value);
         }
         break;
-      case 'End':
+      }
+      case 'End': {
         event.preventDefault();
         const lastTab = tabs[tabsCount - 1].props as TabProps;
         if (!lastTab.disabled) {
           setActiveValue(lastTab.value);
         }
         break;
+      }
     }
   };
 

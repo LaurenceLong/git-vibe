@@ -55,6 +55,7 @@ export function useAgentRunPolling(agentRunId: string): UseAgentRunPollingResult
     },
     refetchInterval: (data) => {
       // Only poll if status is queued or running
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const status = (data as any)?.status;
       if (status === 'queued' || status === 'running') {
         return 2000; // Poll every 2 seconds
@@ -76,10 +77,11 @@ export function useAgentRunPolling(agentRunId: string): UseAgentRunPollingResult
     queryClient.invalidateQueries({ queryKey: ['agent-run', agentRunId] });
   };
 
-  // Auto-refresh changeset data after successful run completion
+  // Auto-refresh WorkItem data after successful run completion
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = query.data as any;
-  if (data?.status === 'succeeded' && data?.changesetId && data?.headShaAfter) {
-    queryClient.invalidateQueries({ queryKey: ['changeset', data.changesetId] });
+  if (data?.status === 'succeeded' && data?.workItemId && data?.headShaAfter) {
+    queryClient.invalidateQueries({ queryKey: ['workitem', data.workItemId] });
   }
 
   return {

@@ -1,14 +1,14 @@
 /**
- * useChangeSetRefresh Hook
+ * useWorkItemRefresh Hook
  *
- * Refreshes changeset head_sha.
+ * Refreshes WorkItem head_sha.
  * Shows toast notification on success/error.
- * Invalidates changeset query after successful refresh.
+ * Invalidates WorkItem query after successful refresh.
  *
  * @example
  * ```tsx
- * function ChangeSetComponent({ changesetId }: { changesetId: string }) {
- *   const { refreshHead, isLoading, error } = useChangeSetRefresh(changesetId);
+ * function WorkItemComponent({ workItemId }: { workItemId: string }) {
+ *   const { refreshHead, isLoading, error } = useWorkItemRefresh(workItemId);
  *
  *   return (
  *     <button onClick={refreshHead} disabled={isLoading}>
@@ -20,11 +20,11 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { changesetsApi } from '../lib/api';
+import { workItemsApi } from '../lib/api';
 import { useToast } from '../components/Toast';
 
-interface UseChangeSetRefreshResult {
-  /** Function to refresh the changeset head */
+interface UseWorkItemRefreshResult {
+  /** Function to refresh the WorkItem head */
   refreshHead: () => Promise<void>;
   /** Whether the refresh operation is in progress */
   isLoading: boolean;
@@ -33,27 +33,27 @@ interface UseChangeSetRefreshResult {
 }
 
 /**
- * Hook to refresh changeset head_sha
+ * Hook to refresh WorkItem head_sha
  *
- * @param changesetId - The ID of the changeset to refresh
+ * @param workItemId - The ID of the WorkItem to refresh
  * @returns Object containing refresh function, loading state, and error
  */
-export function useChangeSetRefresh(changesetId: string): UseChangeSetRefreshResult {
+export function useWorkItemRefresh(workItemId: string): UseWorkItemRefreshResult {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const response = await changesetsApi.refresh(changesetId);
+      const response = await workItemsApi.refresh(workItemId);
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate changeset query to fetch updated data
-      queryClient.invalidateQueries({ queryKey: ['changeset', changesetId] });
-      success('Changeset head refreshed successfully');
+      // Invalidate WorkItem query to fetch updated data
+      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
+      success('WorkItem head refreshed successfully');
     },
     onError: (err: Error) => {
-      showError(`Failed to refresh changeset head: ${err.message}`);
+      showError(`Failed to refresh WorkItem head: ${err.message}`);
     },
   });
 

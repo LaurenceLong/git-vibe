@@ -2,8 +2,7 @@ import { createServer } from './middleware/setup.js';
 import { getDb } from './db/client.js';
 import { projectsRoutes } from './routes/projects.js';
 import { targetReposRoutes } from './routes/targetRepos.js';
-import { changesetsRoutes } from './routes/changesets.js';
-import { diffsRoutes } from './routes/diffs.js';
+import { pullRequestsRoutes } from './routes/pullRequests.js';
 import { agentRunsRoutes } from './routes/agentRuns.js';
 import { importsRoutes } from './routes/imports.js';
 import { reviewRoutes } from './routes/reviews.js';
@@ -22,17 +21,18 @@ async function start() {
 
   // Initialize models cache in the background
   // This runs asynchronously and doesn't block server startup
-  void modelsCache.initialize();
+  // Initialize cache for both available agents
+  void modelsCache.initialize('opencode');
+  void modelsCache.initialize('claudecode');
 
-  server.get('/health', async (request, reply) => {
+  server.get('/health', async () => {
     await getDb();
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
   await server.register(projectsRoutes);
   await server.register(targetReposRoutes);
-  await server.register(changesetsRoutes);
-  await server.register(diffsRoutes);
+  await server.register(pullRequestsRoutes);
   await server.register(agentRunsRoutes);
   await server.register(importsRoutes);
   await server.register(reviewRoutes);

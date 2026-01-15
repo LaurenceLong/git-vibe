@@ -1,17 +1,38 @@
 # GitVibe
 
-A local-first web application that orchestrates multiple AI coding agents to work on code changes in isolated Git worktrees, with review capabilities and deterministic patch-based imports.
+A local-first web application that orchestrates multiple AI coding agents to work on code changes in isolated Git worktrees, with PR-first workflow, review capabilities, and deterministic patch-based imports.
 
 ## Features
 
 - **Project Management**: Register and manage source Git repositories
 - **Target Repos**: Configure destination repositories for imports
-- **ChangeSets**: Create isolated worktree workspaces for code changes
-- **Agent Integration**: Trigger OpenCode CLI agents to modify code
+- **WorkItems**: Create work items that own persistent worktree workspaces for code changes
+- **Pull Requests**: First-class PR model with merge gates, conflict detection, and review
+- **Agent Integration**: Trigger OpenCode CLI agents to modify code in serialized runs
+- **Workspace Locking**: Ensures only one agent run per WorkItem at a time
+- **Auto-Commit**: Backend automatically commits changes after each agent run
 - **Diff Viewing**: View code changes with inline diff
-- **Review System**: Add review threads and comments to changes
+- **Review System**: Add review threads and comments to PRs
 - **Patch Import**: Import changes to target repositories using patch files
 - **Full Audit Trail**: Track all agent runs and imports
+
+## Architecture
+
+GitVibe uses a **PR-centric and WorkItem-workspace-centric** model:
+
+- **One WorkItem = one workspace**: Each WorkItem owns a persistent git worktree and branch
+- **1:1 PR to WorkItem**: Each WorkItem has exactly one Pull Request (enforced by unique constraint)
+- **PR-first UX**: Users work through Pull Request views with diffs, commits, checks, and merge controls
+- **Serialized agent runs**: Workspace locking prevents concurrent agent runs on the same WorkItem
+- **Backend auto-commit**: Agents edit files freely, backend commits changes after each run
+
+### Core Principles
+
+1. **Workspaces are owned by WorkItems**, not by PRs
+2. **PRs control review and merge** - they are the gatekeepers for code changes
+3. **Agent runs are serialized** - only one run per WorkItem at a time
+4. **Auto-commit after runs** - produces clean commit history and stable PR diffs
+5. **sessionId is required** - enables resume functionality with conversation continuity
 
 ## Tech Stack
 
@@ -103,50 +124,89 @@ Navigate to **Target Repos** and add a destination repository:
 - Name: My Target Repo
 - Repo Path: `/path/to/target/repo`
 
-### 3. Create a ChangeSet
+### 3. Create a WorkItem
 
-Navigate to **Changesets** and create a new changeset:
+Navigate to **WorkItems** and create a new work item:
 
 - Select a project
 - Title: Feature description
 - Body: Detailed description (optional)
-- Base Branch: Branch to create worktree from
+- Type: Task type (e.g., feature, bugfix)
 
-This creates an isolated Git worktree for agent work.
+This creates a WorkItem that will own a persistent workspace.
 
-### 4. Trigger an Agent Run
+### 4. Initialize Workspace
 
-In the Changeset detail view, trigger an agent:
+The workspace is automatically initialized on the first agent run, or you can explicitly initialize it:
+
+- WorkItem creates a git worktree on a dedicated branch
+- Branch name format: `wi/<work_item_id>`
+- Worktree path: `<data_dir>/worktrees/<project_id>/<work_item_id>/`
+
+### 5. Open a Pull Request
+
+Navigate to the WorkItem and open a PR:
+
+- Base branch: The branch to merge into (e.g., `main`)
+- The PR is automatically created with 1:1 relationship to the WorkItem
+- PR tracks base SHA, head SHA, and merge status
+
+### 6. Trigger Agent Runs
+
+In the WorkItem detail view, trigger agent runs:
 
 - Agent Key: `opencode`
 - Prompt: Your task description
 - Config: OpenCode executable path and arguments
 
-The agent will run in the changeset workspace and make code changes.
+**Workspace Locking**: Only one agent run can be active per WorkItem at a time. If a run is in progress, new runs will be rejected with a 409 Conflict error.
 
-### 5. Review Changes
+**Auto-Commit**: After each agent run completes successfully, the backend automatically stages and commits any changes made by the agent. This produces a clean commit history and stable PR diffs.
 
-View the diff of changes made by agents. Add review threads with comments if needed.
+### 7. Review Pull Request
 
-### 6. Import to Target Repo
+View the PR to review changes:
 
-When satisfied with changes, import to your target repository:
+- **Overview**: PR details, status, and mergeability
+- **Diff**: Code changes between base and head
+- **Commits**: Commit history for the PR
+- **Checks**: Agent run history and status
+- **Reviews**: Review threads and comments
+
+### 8. Merge PR
+
+When satisfied with changes, merge the PR:
+
+- Check mergeability (no conflicts, no running agent runs)
+- Choose merge strategy: merge, squash, or rebase
+- Merge into base branch
+
+**Merge Gates**:
+- PR must be in `open` status
+- No agent runs can be running for the WorkItem
+- Workspace lock must be free
+- No merge conflicts
+
+### 9. Import to Target Repo
+
+Optionally import changes to your target repository:
 
 - Select target repo
 - Click Import
 
 GitVibe will:
 
-1. Generate a patch from changeset diff
+1. Generate a patch from PR diff
 2. Apply patch to target repo
-3. Create a commit with changeset metadata
+3. Create a commit with PR metadata
 4. Record import in history
 
-### 7. Clean Up
+### 10. Clean Up
 
-When done, delete the changeset to:
+When done, delete the WorkItem to:
 
 - Remove the worktree
+- Delete the PR
 - Delete all associated records
 
 ## Project Structure
@@ -156,7 +216,7 @@ git-vibe/
 ├── backend/           # Fastify API + SQLite + Git integration
 │   ├── src/
 │   │   ├── routes/      # API route handlers
-│   │   ├── services/    # GitService, AgentAdapter
+│   │   ├── services/    # GitService, PRService, WorkspaceService, AgentAdapter
 │   │   ├── repositories/ # Database access layer
 │   │   ├── models/      # Drizzle schema
 │   │   ├── middleware/   # Fastify middleware
@@ -167,7 +227,6 @@ git-vibe/
 ├── frontend/          # React + Vite application
 │   ├── src/
 │   │   ├── components/ # UI components
-│   │   ├── pages/      # Route pages
 │   │   ├── routes/     # TanStack Router config
 │   │   ├── lib/        # API client
 │   │   └── main.tsx
@@ -190,37 +249,46 @@ git-vibe/
 - `POST /api/target-repos` - Create a target repo
 - `GET /api/target-repos/:id` - Get target repo details
 
-### Changesets
+### WorkItems
 
-- `GET /api/changesets` - List changesets
-- `POST /api/changesets` - Create a changeset
-- `GET /api/changesets/:id` - Get changeset details
-- `POST /api/changesets/:id/refresh` - Refresh head SHA from worktree
-- `DELETE /api/changesets/:id` - Delete changeset and worktree
+- `GET /api/work-items` - List work items
+- `POST /api/projects/:projectId/work-items` - Create a work item
+- `GET /api/work-items/:id` - Get work item details
+- `POST /api/work-items/:id/init-workspace` - Initialize workspace (optional)
+- `POST /api/work-items/:id/agent-runs` - Start agent run
+- `POST /api/work-items/:id/resume` - Resume task with same session_id
 
-### Diff
+### Pull Requests
 
-- `GET /api/diffs/changesets/:id` - Get diff for changeset
+- `GET /api/pull-requests/:id` - Get PR details
+- `GET /api/pull-requests/:id/diff` - Get PR diff
+- `GET /api/pull-requests/:id/commits` - Get PR commits
+- `POST /api/pull-requests/:id/merge` - Merge PR
+- `POST /api/pull-requests/:id/close` - Close PR without merge
+- `GET /api/pull-requests/:id/patch` - Export patch (optional)
 
 ### Agent Runs
 
-- `POST /api/changesets/:id/agent-runs` - Trigger agent run
 - `GET /api/agent-runs/:id` - Get run status and logs
-- `POST /api/agent-runs/:id/cancel` - Cancel running agent
+- `POST /api/agent-runs/:id/cancel` - Cancel running agent (optional)
+- `GET /api/work-items/:id/agent-runs` - List runs for work item
 
 ### Imports
 
-- `POST /api/changesets/:id/imports` - Start patch import
+- `POST /api/pull-requests/:id/imports` - Start patch import
 - `GET /api/imports/:id` - Get import status
-- `GET /api/changesets/:id/imports` - List imports for changeset
+- `GET /api/pull-requests/:id/imports` - List imports for PR
 
 ### Reviews
 
-- `GET /api/changesets/:id/reviews/threads` - List review threads
-- `POST /api/changesets/:id/reviews/threads` - Create thread
-- `GET /api/changesets/:id/reviews/threads/:threadId` - Get thread details
-- `POST /api/changesets/:id/reviews/threads/:threadId/resolve` - Resolve thread
-- `POST /api/changesets/:id/reviews/threads/:threadId/comments` - Add comment
+- `GET /api/pull-requests/:id/reviews/threads` - List review threads
+- `POST /api/pull-requests/:id/reviews/threads` - Create thread
+- `GET /api/pull-requests/:id/reviews/threads/:threadId` - Get thread details
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/resolve` - Resolve thread
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/unresolve` - Unresolve thread
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/comments` - Add comment
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/address` - Address with agent
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/resume` - Resume from thread
 
 ## Storage
 
@@ -237,8 +305,23 @@ git-vibe/
 │   └── db.sqlite       # SQLite database
 ├── logs/               # Agent run logs
 ├── patches/            # Patch files (if cached)
-└── worktrees/          # Git worktrees for changesets
+└── worktrees/          # Git worktrees for WorkItems
+    └── <project_id>/
+        └── <work_item_id>/  # WorkItem workspace
 ```
+
+## Workspace Locking Mechanism
+
+GitVibe implements workspace locking at the WorkItem level to ensure serialized agent runs:
+
+- **Lock Fields**: `lock_owner_run_id` and `lock_expires_at` on WorkItem table
+- **Acquisition**: Before starting an agent run, the system acquires a lock on the WorkItem
+- **TTL**: Locks have a time-to-live (TTL) for crash recovery
+- **Heartbeat**: Lock TTL is renewed periodically while the agent is running
+- **Release**: Lock is released in a finally block on success/failure/cancel
+- **Conflict**: If a lock is already held and not expired, new runs are rejected with 409 Conflict
+
+This prevents concurrent agent runs from corrupting the workspace state.
 
 ## License
 

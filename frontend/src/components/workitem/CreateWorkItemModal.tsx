@@ -13,7 +13,6 @@
  * - Handle errors with user-friendly messages
  */
 
-import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CreateWorkItemSchema } from '@/lib/validation';
@@ -65,7 +64,11 @@ export function CreateWorkItemModal({
     },
   });
 
-  const handleFormSubmit = async (data: any) => {
+  const handleFormSubmit = async (data: {
+    type: 'issue' | 'feature-request';
+    title: string;
+    body?: string;
+  }) => {
     await onSubmit(data);
     reset();
   };

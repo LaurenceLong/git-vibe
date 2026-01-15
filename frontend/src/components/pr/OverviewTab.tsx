@@ -7,15 +7,14 @@
  * - Display PR status badge (open/merged/closed)
  * - Add merge/close action buttons
  * - Show merge metadata (merged by, merged at, merged SHA)
- * - Show close metadata (closed by, closed at)
  * - Display worktree status banner
  * - Show linked WorkItem if exists
  * - Display PR statistics (files changed, additions, deletions)
  * - Show recent activity
  */
 
-import { ChangeSet } from '@/types';
-import { useMergePR, useClosePR, useReopenPR } from '@/hooks/usePR';
+import { PullRequest } from '@/types';
+import { useMergePR, useClosePR } from '@/hooks/usePR';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { GitMerge, X as GitClose, GitBranch, Clock, FileText, User } from 'lucide-react';
@@ -24,8 +23,8 @@ import { GitMerge, X as GitClose, GitBranch, Clock, FileText, User } from 'lucid
  * Props for the OverviewTab component
  */
 export interface OverviewTabProps {
-  /** The PR (ChangeSet) data */
-  pr: ChangeSet;
+  /** The PR data */
+  pr: PullRequest;
   /** Worktree status */
   worktreeStatus?: 'present' | 'missing' | 'recreating';
 }
@@ -37,12 +36,11 @@ export interface OverviewTabProps {
  * @param worktreeStatus - The worktree status
  */
 export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps) {
-  const mergePR = useMergePR(pr.id);
-  const closePR = useClosePR(pr.id);
-  const reopenPR = useReopenPR(pr.id);
+  const { mergePR, isLoading: isMerging } = useMergePR(pr.id);
+  const { closePR, isLoading: isClosing } = useClosePR(pr.id);
 
-  // Get PR status from prStatus field (PR-specific status)
-  const prStatus = pr.prStatus || 'open';
+  // Get PR status
+  const prStatus = pr.status;
 
   // Check if actions should be disabled (worktree missing)
   const actionsDisabled = worktreeStatus === 'missing' || worktreeStatus === 'recreating';
@@ -65,7 +63,7 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
   const handleMerge = async () => {
     if (window.confirm('Are you sure you want to merge this PR?')) {
       try {
-        await mergePR();
+        await mergePR(pr.mergeStrategy);
       } catch (error) {
         console.error('Failed to merge PR:', error);
       }
@@ -79,17 +77,6 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
         await closePR();
       } catch (error) {
         console.error('Failed to close PR:', error);
-      }
-    }
-  };
-
-  // Handle reopen action
-  const handleReopen = async () => {
-    if (window.confirm('Are you sure you want to reopen this PR?')) {
-      try {
-        await reopenPR();
-      } catch (error) {
-        console.error('Failed to reopen PR:', error);
       }
     }
   };
@@ -110,7 +97,7 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
                   variant="primary"
                   size="sm"
                   onClick={handleMerge}
-                  loading={mergePR.isLoading}
+                  loading={isMerging}
                   disabled={actionsDisabled}
                   title={actionsDisabled ? 'Worktree is missing' : 'Merge PR'}
                 >
@@ -121,7 +108,7 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
                   variant="danger"
                   size="sm"
                   onClick={handleClose}
-                  loading={closePR.isLoading}
+                  loading={isClosing}
                   disabled={actionsDisabled}
                   title={actionsDisabled ? 'Worktree is missing' : 'Close PR'}
                 >
@@ -130,25 +117,13 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
                 </Button>
               </>
             )}
-            {prStatus === 'closed' && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleReopen}
-                loading={reopenPR.isLoading}
-                disabled={actionsDisabled}
-                title={actionsDisabled ? 'Worktree is missing' : 'Reopen PR'}
-              >
-                Reopen
-              </Button>
-            )}
           </div>
         </div>
 
         {/* PR Description */}
-        {pr.body && (
+        {pr.description && (
           <div className="mb-4">
-            <p className="whitespace-pre-wrap text-gray-700">{pr.body}</p>
+            <p className="whitespace-pre-wrap text-gray-700">{pr.description}</p>
           </div>
         )}
 
@@ -160,7 +135,7 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <GitBranch className="h-4 w-4" />
               <span>
-                {pr.branchName} → {pr.baseBranch}
+                {pr.sourceBranch} → {pr.targetBranch}
               </span>
             </div>
           </div>
@@ -185,34 +160,27 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
             </div>
           )}
 
-          {/* Closed Information */}
-          {prStatus === 'closed' && pr.closedAt && (
-            <div>
-              <h3 className="mb-2 text-sm font-medium text-gray-700">Closed</h3>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <GitClose className="h-4 w-4" />
-                <span>{new Date(pr.closedAt).toLocaleString()}</span>
-              </div>
-            </div>
-          )}
+          {/* Merge Strategy */}
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-gray-700">Merge Strategy</h3>
+            <span className="text-sm capitalize text-gray-600">{pr.mergeStrategy}</span>
+          </div>
 
-          {/* Base SHA */}
-          {pr.baseSha && (
+          {/* Merge Commit SHA */}
+          {pr.mergeCommitSha && (
             <div>
-              <h3 className="mb-2 text-sm font-medium text-gray-700">Base SHA</h3>
+              <h3 className="mb-2 text-sm font-medium text-gray-700">Merge Commit SHA</h3>
               <code className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">
-                {pr.baseSha.slice(0, 8)}
+                {pr.mergeCommitSha.slice(0, 8)}
               </code>
             </div>
           )}
 
-          {/* Head SHA */}
-          {pr.headSha && (
+          {/* Merged By */}
+          {pr.mergedBy && (
             <div>
-              <h3 className="mb-2 text-sm font-medium text-gray-700">Head SHA</h3>
-              <code className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">
-                {pr.headSha.slice(0, 8)}
-              </code>
+              <h3 className="mb-2 text-sm font-medium text-gray-700">Merged By</h3>
+              <span className="text-sm text-gray-600">{pr.mergedBy}</span>
             </div>
           )}
         </div>
@@ -232,12 +200,9 @@ export function OverviewTab({ pr, worktreeStatus = 'present' }: OverviewTabProps
             >
               {worktreeStatus}
             </StatusBadge>
-            {pr.worktreePath && (
-              <span className="text-sm text-gray-600">
-                at{' '}
-                <code className="rounded bg-gray-200 px-1 py-0.5 text-xs">{pr.worktreePath}</code>
-              </span>
-            )}
+            <span className="text-sm text-gray-600">
+              Worktree is managed by the associated WorkItem
+            </span>
           </div>
         </div>
       </div>

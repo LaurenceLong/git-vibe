@@ -3,14 +3,7 @@
  * Provides non-intrusive notifications for user feedback
  */
 
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode,
-  useCallback,
-} from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from 'react';
 
 /**
  * Toast variant types
@@ -56,6 +49,10 @@ const DEFAULT_DURATION = 5000;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
+
   const addToast = useCallback(
     (message: string, variant: ToastVariant, duration = DEFAULT_DURATION) => {
       const id = Math.random().toString(36).substring(2, 9);
@@ -68,12 +65,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }, duration);
       }
     },
-    []
+    [removeToast]
   );
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
 
   const success = useCallback(
     (message: string, duration?: number) => {
@@ -124,6 +117,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 /**
  * Hook to use toast notifications
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast(): ToastContextValue {
   const context = useContext(ToastContext);
   if (!context) {

@@ -4,13 +4,13 @@
  * Polls import job status while in 'running' state.
  * Stops polling when status changes to 'succeeded', 'succeeded_noop', or any failed state.
  * Shows toast notification on job completion.
- * Auto-refreshes changeset data after successful import.
+ * Auto-refreshes pull request data after successful import.
  *
  * @example
  * ```tsx
- * function ImportJobComponent({ importJobId }: { importJobId: string }) {
+ * function ImportJobComponent({ importJobId, pullRequestId }: { importJobId: string; pullRequestId: string }) {
  *   const { importJob, isLoading, error, isPolling, startImport, stopPolling } =
- *     useImportJob(importJobId, changesetId);
+ *     useImportJob(importJobId, pullRequestId);
  *
  *   return (
  *     <div>
@@ -47,12 +47,12 @@ interface UseImportJobResult {
  * Hook to poll import job status
  *
  * @param importJobId - The ID of the import job to poll (optional, only for polling)
- * @param changesetId - The ID of the changeset (required for starting imports)
+ * @param pullRequestId - The ID of the pull request (required for starting imports)
  * @returns Object containing import job data, loading state, error, polling status, start and stop functions
  */
 export function useImportJob(
   importJobId: string | undefined,
-  changesetId: string
+  pullRequestId: string
 ): UseImportJobResult {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
@@ -68,6 +68,7 @@ export function useImportJob(
     enabled: !!importJobId,
     refetchInterval: (data) => {
       // Only poll if status is pending or running
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const status = (data as any)?.status;
       if (status === 'pending' || status === 'running') {
         return 2000; // Poll every 2 seconds
@@ -81,13 +82,13 @@ export function useImportJob(
   // Start import job
   const startImportMutation = useMutation({
     mutationFn: async (targetRepoId: string) => {
-      const response = await importsApi.start(changesetId, { targetRepoId });
+      const response = await importsApi.start(pullRequestId, { targetRepoId });
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate changeset query to fetch updated data
-      queryClient.invalidateQueries({ queryKey: ['changeset', changesetId] });
-      queryClient.invalidateQueries({ queryKey: ['imports', changesetId] });
+      // Invalidate pull request query to fetch updated data
+      queryClient.invalidateQueries({ queryKey: ['pull-request', pullRequestId] });
+      queryClient.invalidateQueries({ queryKey: ['imports', pullRequestId] });
       success('Import job started successfully');
     },
     onError: (err: Error) => {
@@ -98,14 +99,14 @@ export function useImportJob(
   // Show toast notification on job completion
   if (query.data?.status === 'succeeded') {
     success('Import completed successfully');
-    // Auto-refresh changeset data after successful import
-    queryClient.invalidateQueries({ queryKey: ['changeset', changesetId] });
+    // Auto-refresh pull request data after successful import
+    queryClient.invalidateQueries({ queryKey: ['pull-request', pullRequestId] });
   } else if (query.data?.status === 'failed') {
     showError('Import job failed');
   } else if (query.data?.status === 'succeeded_noop') {
     success('Import completed (no changes needed)');
-    // Auto-refresh changeset data after successful import
-    queryClient.invalidateQueries({ queryKey: ['changeset', changesetId] });
+    // Auto-refresh pull request data after successful import
+    queryClient.invalidateQueries({ queryKey: ['pull-request', pullRequestId] });
   }
 
   const stopPolling = () => {
@@ -125,6 +126,7 @@ export function useImportJob(
     error: query.error as Error | null,
     isPolling:
       query.isFetching &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((query.data as any)?.status === 'pending' || (query.data as any)?.status === 'running'),
     startImport: (targetRepoId: string) => startImportMutation.mutateAsync(targetRepoId),
     stopPolling,

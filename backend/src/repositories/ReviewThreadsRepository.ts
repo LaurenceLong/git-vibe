@@ -15,7 +15,7 @@ export class ReviewThreadsRepository {
 
   async create(data: {
     id: string;
-    changesetId: string;
+    pullRequestId: string;
     severity: ReviewThread['severity'];
     anchor: string;
     status?: ReviewThread['status'];
@@ -25,7 +25,7 @@ export class ReviewThreadsRepository {
       .insert(reviewThreads)
       .values({
         id: data.id,
-        changesetId: data.changesetId,
+        pullRequestId: data.pullRequestId,
         severity: data.severity,
         anchor: data.anchor,
         status: data.status || 'open',
@@ -36,12 +36,12 @@ export class ReviewThreadsRepository {
     return thread as ReviewThread;
   }
 
-  async findByChangesetId(changesetId: string): Promise<ReviewThread[]> {
+  async findByPullRequestId(pullRequestId: string): Promise<ReviewThread[]> {
     const db = await this.getDbInstance();
     const result = await db
       .select()
       .from(reviewThreads)
-      .where(eq(reviewThreads.changesetId, changesetId))
+      .where(eq(reviewThreads.pullRequestId, pullRequestId))
       .execute();
 
     return result as ReviewThread[];

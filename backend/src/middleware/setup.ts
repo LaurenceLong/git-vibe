@@ -20,11 +20,11 @@ export async function createServer() {
     credentials: true,
   });
 
-  server.setErrorHandler((error, request, reply) => {
+  server.setErrorHandler((error, _request, reply) => {
     server.log.error(error);
 
-    const statusCode = (error as any).statusCode || 500;
-    const message = (error as any).message || 'Internal Server Error';
+    const statusCode = (error as { statusCode?: number }).statusCode || 500;
+    const message = (error as { message?: string }).message || 'Internal Server Error';
 
     reply.status(statusCode).send({
       error: true,
@@ -33,7 +33,7 @@ export async function createServer() {
     });
   });
 
-  server.setNotFoundHandler((request, reply) => {
+  server.setNotFoundHandler((_request, reply) => {
     reply.status(404).send({
       error: true,
       message: 'Not Found',

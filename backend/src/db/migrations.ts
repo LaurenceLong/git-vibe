@@ -72,7 +72,7 @@ export async function runMigrations() {
     const requiredTables = [
       'projects',
       'work_items',
-      'changesets',
+      'pull_requests',
       'review_threads',
       'review_comments',
       'agent_runs',

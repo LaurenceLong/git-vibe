@@ -1,17 +1,16 @@
 /**
  * useWorktreeManagement Hook
  *
- * Manages worktree operations for both changesets and workitems.
+ * Manages worktree operations for WorkItems.
  * Provides recreate and remove functionality with toast notifications.
  * Invalidates appropriate queries after successful operations.
  * Handles worktree missing state.
  *
  * @example
  * ```tsx
- * function WorktreeComponent({ changesetId }: { changesetId: string }) {
+ * function WorktreeComponent({ workItemId }: { workItemId: string }) {
  *   const { removeWorktree, recreateWorktree, isLoading, error } = useWorktreeManagement({
- *     type: 'changeset',
- *     id: changesetId,
+ *     id: workItemId,
  *     projectId: 'project-123',
  *     worktreePath: '/path/to/worktree',
  *     branchName: 'feature-branch',
@@ -40,15 +39,11 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { changesetsApi, workItemsApi } from '../lib/api';
+import { workItemsApi } from '../lib/api';
 import { useToast } from '../components/Toast';
 
-export type WorktreeManagementType = 'changeset' | 'workitem';
-
 export interface UseWorktreeManagementOptions {
-  /** Type of entity (changeset or workitem) */
-  type: WorktreeManagementType;
-  /** The ID of the entity */
+  /** The ID of the WorkItem */
   id: string;
   /** The project ID */
   projectId: string;
@@ -74,7 +69,7 @@ export interface UseWorktreeManagementResult {
 }
 
 /**
- * Hook to manage worktree operations for a changeset or workitem
+ * Hook to manage worktree operations for a WorkItem
  *
  * @param options - Configuration options for worktree management
  * @returns Object containing worktree management functions and state
@@ -82,7 +77,7 @@ export interface UseWorktreeManagementResult {
 export function useWorktreeManagement(
   options: UseWorktreeManagementOptions
 ): UseWorktreeManagementResult {
-  const { type, id, projectId, worktreePath, branchName } = options;
+  const { id, worktreePath } = options;
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
@@ -93,21 +88,13 @@ export function useWorktreeManagement(
         throw new Error('Worktree path is required to remove worktree');
       }
 
-      let response;
-      if (type === 'changeset') {
-        response = await changesetsApi.removeWorktree(id);
-      } else {
-        response = await workItemsApi.removeWorktree(projectId, worktreePath);
-      }
+      // Close the WorkItem to trigger worktree cleanup
+      const response = await workItemsApi.update(id, { status: 'closed' });
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate appropriate queries
-      if (type === 'changeset') {
-        queryClient.invalidateQueries({ queryKey: ['changeset', id] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['workitem', id] });
-      }
+      // Invalidate WorkItem query
+      queryClient.invalidateQueries({ queryKey: ['workitem', id] });
       success('Worktree removed successfully');
     },
     onError: (err: Error) => {
@@ -127,23 +114,14 @@ export function useWorktreeManagement(
         throw new Error('Worktree path is required to recreate worktree');
       }
 
-      let response;
-      if (type === 'changeset') {
-        // For changesets, recreation is not currently supported
-        throw new Error('Worktree recreation is not supported for changesets');
-      } else {
-        response = await workItemsApi.removeWorktree(projectId, worktreePath);
-      }
+      // Close the WorkItem to trigger worktree cleanup
+      const response = await workItemsApi.update(id, { status: 'closed' });
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate appropriate queries
-      if (type === 'changeset') {
-        queryClient.invalidateQueries({ queryKey: ['changeset', id] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['workitem', id] });
-      }
-      success('Worktree removed successfully');
+      // Invalidate WorkItem query
+      queryClient.invalidateQueries({ queryKey: ['workitem', id] });
+      success('Worktree removed successfully. The workspace will be reinitialized on next task.');
     },
     onError: (err: Error) => {
       showError(`Failed to recreate worktree: ${err.message}`);

@@ -107,7 +107,7 @@ export function ConversationTab({ prId }: ConversationTabProps) {
         </div>
       ) : comments && comments.length > 0 ? (
         <div className="space-y-4">
-          {comments.map((comment: any) => (
+          {comments.map((comment: { id: string; body: string; createdAt: string | Date }) => (
             <div key={comment.id} className="rounded-lg border bg-white p-4 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center space-x-2">

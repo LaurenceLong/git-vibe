@@ -42,12 +42,7 @@ export function SettingsTab({ project }: SettingsTabProps) {
   const queryClient = useQueryClient();
 
   // Fetch available models from the selected agent (cached in memory)
-  const {
-    models,
-    isLoading: isLoadingModels,
-    refetch: refetchModels,
-    isFetching: isFetchingModels,
-  } = useModels(defaultAgent);
+  const { models, isLoading: isLoadingModels, refetch: refetchModels } = useModels(defaultAgent);
 
   const updateProjectMutation = useMutation({
     mutationFn: (data: {
@@ -112,7 +107,7 @@ export function SettingsTab({ project }: SettingsTabProps) {
       await projectsApi.refreshModels(defaultAgent);
       await refetchModels();
       success('Models refreshed successfully');
-    } catch (err) {
+    } catch {
       showError('Failed to refresh models');
     } finally {
       setIsRefreshingModels(false);

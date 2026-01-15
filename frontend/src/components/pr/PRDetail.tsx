@@ -11,13 +11,12 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { changesetsApi, diffsApi, agentRunsApi, importsApi } from '@/lib/api';
+import { pullRequestsApi, importsApi } from '@/lib/api';
+import { useWorkItem } from '@/hooks/useWorkItem';
 import { ControlledTabs } from '@/components/ui/Tabs';
 import { OverviewTab } from '@/components/pr/OverviewTab';
 import { ConversationTab } from '@/components/pr/ConversationTab';
-import { DiffReviewTab } from '@/components/changesets/DiffReviewTab';
 import { ChecksTab } from '@/components/pr/ChecksTab';
-import { ImportsTab } from '@/components/changesets/ImportsTab';
 import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
 import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
 
@@ -28,7 +27,7 @@ import { Tab, TabPanel } from '@/components/ui/Tabs';
  * Props for the PRDetail component
  */
 export interface PRDetailProps {
-  /** The PR ID (changesetId) */
+  /** The PR ID */
   prId: string;
 }
 
@@ -45,42 +44,30 @@ export function PRDetail({ prId }: PRDetailProps) {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['changeset', prId],
-    queryFn: () => changesetsApi.get(prId).then((res) => res.data),
+    queryKey: ['pull-request', prId],
+    queryFn: () => pullRequestsApi.get(prId).then((res) => res.data),
   });
 
-  // Worktree management
+  // Fetch associated WorkItem for worktree management
+  const { data: workItem } = useWorkItem(pr?.workItemId || '');
+
+  // Worktree management (using WorkItem's workspace)
   const worktreeManagement = useWorktreeManagement({
-    type: 'changeset',
-    id: prId,
-    projectId: pr?.projectId || '',
-    worktreePath: pr?.worktreePath || null,
-    branchName: pr?.branchName || '',
+    id: workItem?.id || '',
+    projectId: workItem?.projectId || '',
+    worktreePath: workItem?.worktreePath || null,
+    branchName: workItem?.headBranch || '',
   });
 
   // Fetch diff
-  const { data: diff } = useQuery({
-    queryKey: ['diff', prId, pr?.headSha],
-    queryFn: () => diffsApi.get(prId).then((res) => res.data),
-    enabled: !!pr && !!pr.headSha,
+  useQuery({
+    queryKey: ['diff', prId, workItem?.headSha],
+    queryFn: () => pullRequestsApi.getDiff(prId).then((res) => res.data),
+    enabled: !!pr && !!workItem?.headSha,
   });
 
-  // Fetch agent runs
-  const { data: agentRuns } = useQuery({
-    queryKey: ['agent-runs', prId],
-    queryFn: () => agentRunsApi.listByChangeset(prId).then((res) => res.data),
-    enabled: !!pr,
-    refetchInterval: (data) => {
-      // Only poll if there are any runs with status 'queued' or 'running'
-      if (!data) return false;
-      const hasActiveRuns =
-        data?.some((run: any) => run.status === 'queued' || run.status === 'running') ?? false;
-      return hasActiveRuns ? 1500 : false;
-    },
-  });
-
-  // Fetch imports
-  const { data: imports } = useQuery({
+  // Fetch imports (now associated with PR)
+  useQuery({
     queryKey: ['imports', prId],
     queryFn: () => importsApi.list(prId).then((res) => res.data),
     enabled: !!pr,
@@ -123,13 +110,13 @@ export function PRDetail({ prId }: PRDetailProps) {
     );
   }
 
-  // Get PR status from prStatus field
-  const prStatus = pr.prStatus || 'open';
+  // Get PR status
+  const prStatus = pr.status;
 
   // Determine worktree status
   const getWorktreeStatus = (): 'present' | 'missing' | 'recreating' => {
     if (worktreeManagement.isRecreating) return 'recreating';
-    return pr?.worktreePath ? 'present' : 'missing';
+    return workItem?.worktreePath ? 'present' : 'missing';
   };
 
   return (
@@ -139,7 +126,7 @@ export function PRDetail({ prId }: PRDetailProps) {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{pr.title}</h1>
-            {pr.body && <p className="mt-2 text-gray-600">{pr.body}</p>}
+            {pr.description && <p className="mt-2 text-gray-600">{pr.description}</p>}
           </div>
         </div>
 
@@ -152,18 +139,18 @@ export function PRDetail({ prId }: PRDetailProps) {
           <div>
             <span className="font-medium text-gray-700">Branch:</span>{' '}
             <span className="text-gray-900">
-              {pr.branchName} → {pr.baseBranch}
+              {pr.sourceBranch} → {pr.targetBranch}
             </span>
           </div>
           <div>
             <span className="font-medium text-gray-700">Created:</span>{' '}
             <span className="text-gray-900">{new Date(pr.createdAt).toLocaleString()}</span>
           </div>
-          {pr.headSha && (
+          {workItem?.headSha && (
             <div>
               <span className="font-medium text-gray-700">Head SHA:</span>{' '}
               <code className="rounded bg-gray-100 px-1 py-0.5 text-xs text-gray-700">
-                {pr.headSha.slice(0, 8)}
+                {workItem.headSha.slice(0, 8)}
               </code>
             </div>
           )}
@@ -173,22 +160,16 @@ export function PRDetail({ prId }: PRDetailProps) {
               <span className="text-gray-900">{new Date(pr.mergedAt).toLocaleString()}</span>
             </div>
           )}
-          {pr.closedAt && (
-            <div>
-              <span className="font-medium text-gray-700">Closed:</span>{' '}
-              <span className="text-gray-900">{new Date(pr.closedAt).toLocaleString()}</span>
-            </div>
-          )}
         </div>
 
         {/* Worktree Status */}
         <WorktreeStatusComponent
           status={getWorktreeStatus()}
-          path={pr?.worktreePath || null}
-          branchName={pr?.branchName || ''}
-          projectId={pr?.projectId || ''}
-          createdAt={pr?.createdAt}
-          updatedAt={pr?.updatedAt}
+          path={workItem?.worktreePath || null}
+          branchName={workItem?.headBranch || ''}
+          projectId={workItem?.projectId || ''}
+          createdAt={workItem?.createdAt}
+          updatedAt={workItem?.updatedAt}
           onRecreate={worktreeManagement.recreateWorktree}
           onRemove={worktreeManagement.removeWorktree}
           isRecreating={worktreeManagement.isRecreating}
@@ -201,7 +182,6 @@ export function PRDetail({ prId }: PRDetailProps) {
       <ControlledTabs defaultValue="overview">
         <Tab value="overview">Overview</Tab>
         <Tab value="conversation">Conversation</Tab>
-        <Tab value="files-changed">Files Changed</Tab>
         <Tab value="checks">Checks</Tab>
         <Tab value="imports">Imports</Tab>
 
@@ -213,16 +193,17 @@ export function PRDetail({ prId }: PRDetailProps) {
           <ConversationTab prId={prId} />
         </TabPanel>
 
-        <TabPanel value="files-changed">
-          <DiffReviewTab changeset={pr} diff={diff} worktreeStatus={getWorktreeStatus()} />
-        </TabPanel>
-
         <TabPanel value="checks">
-          <ChecksTab prId={prId} agentRuns={agentRuns || []} worktreeStatus={getWorktreeStatus()} />
+          <ChecksTab prId={prId} agentRuns={[]} worktreeStatus={getWorktreeStatus()} />
         </TabPanel>
 
         <TabPanel value="imports">
-          <ImportsTab changesetId={prId} imports={imports || []} />
+          <div className="rounded-lg border bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900">Imports</h2>
+            <p className="text-sm text-gray-600">
+              Imports functionality will be implemented in a future update.
+            </p>
+          </div>
         </TabPanel>
       </ControlledTabs>
     </div>

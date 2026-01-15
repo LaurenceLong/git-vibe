@@ -20,14 +20,22 @@ import { ArrowLeft } from 'lucide-react';
 
 export interface WorkItemsTabProps {
   project: Project;
+  initialStatus?: WorkItemStatus | 'all';
+  initialType?: WorkItemType | 'all';
+  initialWorkItemId?: string | null;
 }
 
-export function WorkItemsTab({ project }: WorkItemsTabProps) {
-  const [statusFilter, setStatusFilter] = useState<WorkItemStatus | 'all'>('all');
-  const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>('all');
+export function WorkItemsTab({
+  project,
+  initialStatus = 'all',
+  initialType = 'all',
+  initialWorkItemId = null,
+}: WorkItemsTabProps) {
+  const [statusFilter, setStatusFilter] = useState<WorkItemStatus | 'all'>(initialStatus);
+  const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>(initialType);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(initialWorkItemId);
   const itemsPerPage = 10;
 
   const { data: response, isLoading } = useQuery({

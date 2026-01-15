@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { STORAGE_CONFIG } from '../config/storage.js';
 
 export async function ensureStorageDirectories(): Promise<void> {
