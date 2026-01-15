@@ -47,10 +47,7 @@ export function AgentConfigTab({ workItemId, worktreeStatus = 'present' }: Agent
 
   // Fetch agent runs for this WorkItem
   // Note: This endpoint doesn't exist yet, we'll use a placeholder
-  const {
-    data: agentRuns,
-    isLoading,
-  } = useQuery({
+  const { data: agentRuns, isLoading } = useQuery({
     queryKey: ['agent-runs', workItemId],
     queryFn: async () => {
       // Placeholder: Return empty array for now

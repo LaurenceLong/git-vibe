@@ -54,7 +54,10 @@ export type TargetRepo = Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> & {
   updatedAt: Date;
 };
 
-export type ChangeSet = Omit<SharedChangeSet, 'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt'> & {
+export type ChangeSet = Omit<
+  SharedChangeSet,
+  'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt'
+> & {
   createdAt: Date;
   updatedAt: Date;
   mergedAt: Date | null;
@@ -71,7 +74,10 @@ export type ReviewComment = Omit<SharedReviewComment, 'createdAt'> & {
   createdAt: Date;
 };
 
-export type AgentRun = Omit<SharedAgentRun, 'createdAt' | 'updatedAt' | 'startedAt' | 'finishedAt'> & {
+export type AgentRun = Omit<
+  SharedAgentRun,
+  'createdAt' | 'updatedAt' | 'startedAt' | 'finishedAt'
+> & {
   createdAt: Date;
   updatedAt: Date;
   startedAt: Date | null;
@@ -110,7 +116,10 @@ export type {
 /**
  * Convert backend model (with Date) to shared model (with ISO string)
  */
-export type ToShared<T extends { createdAt: Date; updatedAt: Date }> = Omit<T, 'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt' | 'startedAt' | 'finishedAt'> & {
+export type ToShared<T extends { createdAt: Date; updatedAt: Date }> = Omit<
+  T,
+  'createdAt' | 'updatedAt' | 'mergedAt' | 'closedAt' | 'syncedAt' | 'startedAt' | 'finishedAt'
+> & {
   createdAt: string;
   updatedAt: string;
   mergedAt?: string | null;

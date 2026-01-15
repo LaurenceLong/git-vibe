@@ -35,7 +35,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         { id: 'overview', label: 'Overview', path: `/projects/${projectName}` },
         { id: 'code', label: 'Code', path: `/projects/${projectName}/code` },
         { id: 'workitems', label: 'Work Items', path: `/projects/${projectName}/workitems` },
-        { id: 'pullrequests', label: 'Pull Requests', path: `/projects/${projectName}/pullrequests` },
+        {
+          id: 'pullrequests',
+          label: 'Pull Requests',
+          path: `/projects/${projectName}/pullrequests`,
+        },
         { id: 'actions', label: 'Actions', path: `/projects/${projectName}/actions` },
         { id: 'settings', label: 'Settings', path: `/projects/${projectName}/settings` },
       ]
@@ -53,21 +57,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
               {isProjectPage && projectName && (
                 <div className="flex items-center space-x-2 text-sm">
-                  <Link
-                    to="/projects"
-                    className="font-medium text-gray-900 hover:text-blue-600"
-                  >
+                  <Link to="/projects" className="font-medium text-gray-900 hover:text-blue-600">
                     Projects
                   </Link>
                   <span className="text-gray-400">/</span>
-                  <span className="font-medium text-gray-900">{decodeURIComponent(projectName)}</span>
+                  <span className="font-medium text-gray-900">
+                    {decodeURIComponent(projectName)}
+                  </span>
                 </div>
               )}
             </div>
 
             {/* Search bar */}
             {isProjectPage && (
-              <form onSubmit={handleSearch} className="flex-1 max-w-md ml-8">
+              <form onSubmit={handleSearch} className="ml-8 max-w-md flex-1">
                 <Input
                   type="text"
                   placeholder="Search or jump to..."
@@ -81,14 +84,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Tab navigation bar - directly under header */}
           {isProjectPage && projectName && (
-            <nav className="flex space-x-6 -mb-px" role="tablist">
+            <nav className="-mb-px flex space-x-6" role="tablist">
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
                   <Link
                     key={tab.id}
                     to={tab.path}
-                    className={`flex items-center px-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    className={`flex items-center border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
                       isActive
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'

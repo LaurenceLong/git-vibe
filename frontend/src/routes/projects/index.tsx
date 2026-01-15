@@ -29,7 +29,9 @@ function ProjectsIndex() {
   const { success, error: showError } = useToast();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = React.useState(false);
-  const [projectToDelete, setProjectToDelete] = React.useState<{ id: string; name: string } | null>(null);
+  const [projectToDelete, setProjectToDelete] = React.useState<{ id: string; name: string } | null>(
+    null
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -67,8 +69,7 @@ function ProjectsIndex() {
 
   const { data: branchesData, isLoading: isLoadingBranches } = useQuery({
     queryKey: ['branches', sourceRepoPath],
-    queryFn: () =>
-      projectsApi.getBranchesByPath(sourceRepoPath).then((res) => res.data),
+    queryFn: () => projectsApi.getBranchesByPath(sourceRepoPath).then((res) => res.data),
     enabled: sourceRepoPath.length > 0,
   });
 
@@ -185,13 +186,13 @@ function ProjectsIndex() {
         />
       ) : (
         <>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {projects?.map((project) => {
               const stats = getProjectStats(project.id);
               return (
                 <div
                   key={project.id}
-                  className="group relative flex flex-col rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50 max-w-md"
+                  className="group relative flex max-w-md flex-col rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50"
                 >
                   {/* Delete button - small X at top right */}
                   <button
@@ -200,20 +201,17 @@ function ProjectsIndex() {
                       handleDeleteClick({ id: project.id, name: project.name });
                     }}
                     disabled={deleteProjectMutation.isPending}
-                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 disabled:opacity-50"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 disabled:opacity-50 group-hover:opacity-100"
                     title="Delete project"
                   >
                     <X className="h-4 w-4" />
                   </button>
 
-                  <Link
-                    to={`/projects/${project.name}`}
-                    className="block"
-                  >
+                  <Link to={`/projects/${project.name}`} className="block">
                     <div className="pr-6">
                       <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
                       <p className="mt-1 text-sm text-gray-600">{project.sourceRepoPath}</p>
-                      
+
                       {/* Project Statistics Short Info */}
                       <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-600">
                         <div className="flex items-center gap-1.5">
@@ -330,18 +328,15 @@ function ProjectsIndex() {
       </Modal>
 
       {/* Delete Project Confirmation Modal */}
-      <Modal
-        isOpen={deleteModalOpen}
-        onClose={handleDeleteCancel}
-        title="Delete Project"
-        size="md"
-      >
+      <Modal isOpen={deleteModalOpen} onClose={handleDeleteCancel} title="Delete Project" size="md">
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Are you sure you want to delete <span className="font-semibold text-gray-900">{projectToDelete?.name}</span>?
+            Are you sure you want to delete{' '}
+            <span className="font-semibold text-gray-900">{projectToDelete?.name}</span>?
           </p>
           <p className="text-sm text-red-600">
-            This action cannot be undone. All associated data including work items, pull requests, and storage files will be permanently deleted.
+            This action cannot be undone. All associated data including work items, pull requests,
+            and storage files will be permanently deleted.
           </p>
           <div className="flex justify-end gap-3 border-t pt-4">
             <Button

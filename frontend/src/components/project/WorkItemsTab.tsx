@@ -70,7 +70,7 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
       <div className="space-y-4">
         <button
           onClick={handleBackToList}
-          className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+          className="flex items-center space-x-2 text-sm text-blue-600 transition-colors hover:text-blue-800"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Work Items</span>
@@ -135,7 +135,7 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
             <div
               key={workItem.id}
               onClick={() => handleWorkItemClick(workItem.id)}
-              className="block cursor-pointer rounded-lg border p-4 transition-colors hover:bg-gray-50 hover:border-blue-300"
+              className="block cursor-pointer rounded-lg border p-4 transition-colors hover:border-blue-300 hover:bg-gray-50"
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
@@ -156,7 +156,12 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
                 </div>
                 <div className="ml-4 text-gray-400">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 </div>
               </div>

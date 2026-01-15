@@ -51,11 +51,10 @@ export interface WorkItem extends Omit<SharedWorkItem, 'createdAt' | 'updatedAt'
 /**
  * ChangeSet represents a set of changes in a project
  */
-export interface ChangeSet
-  extends Omit<
-    SharedChangeSet,
-    'mergedAt' | 'closedAt' | 'syncedAt' | 'createdAt' | 'updatedAt'
-  > {
+export interface ChangeSet extends Omit<
+  SharedChangeSet,
+  'mergedAt' | 'closedAt' | 'syncedAt' | 'createdAt' | 'updatedAt'
+> {
   mergedAt: Date | null;
   closedAt: Date | null;
   syncedAt: Date | null;
@@ -66,8 +65,10 @@ export interface ChangeSet
 /**
  * AgentRun represents an AI agent execution on a changeset
  */
-export interface AgentRun
-  extends Omit<SharedAgentRun, 'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'> {
+export interface AgentRun extends Omit<
+  SharedAgentRun,
+  'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'
+> {
   startedAt: Date | null;
   finishedAt: Date | null;
   createdAt: Date;
@@ -77,8 +78,10 @@ export interface AgentRun
 /**
  * Import represents importing changes to a target repository
  */
-export interface Import
-  extends Omit<SharedImport, 'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'> {
+export interface Import extends Omit<
+  SharedImport,
+  'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'
+> {
   startedAt: Date | null;
   finishedAt: Date | null;
   createdAt: Date;
@@ -88,8 +91,7 @@ export interface Import
 /**
  * ReviewThread represents a review thread on a changeset
  */
-export interface ReviewThread
-  extends Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> {
+export interface ReviewThread extends Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }
@@ -97,16 +99,14 @@ export interface ReviewThread
 /**
  * ReviewComment represents a comment within a review thread
  */
-export interface ReviewComment
-  extends Omit<SharedReviewComment, 'createdAt'> {
+export interface ReviewComment extends Omit<SharedReviewComment, 'createdAt'> {
   createdAt: Date;
 }
 
 /**
  * Project represents a source project
  */
-export interface Project
-  extends Omit<SharedProject, 'createdAt' | 'updatedAt'> {
+export interface Project extends Omit<SharedProject, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }
@@ -114,8 +114,7 @@ export interface Project
 /**
  * TargetRepo represents a target repository for imports
  */
-export interface TargetRepo
-  extends Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> {
+export interface TargetRepo extends Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> {
   createdAt: Date;
   updatedAt: Date;
 }

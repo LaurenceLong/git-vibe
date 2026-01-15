@@ -11,11 +11,7 @@
 // Common Types
 // ============================================================================
 
-export type {
-  ErrorResponse,
-  SuccessResponse,
-  PaginatedResponse,
-} from './types/common.js';
+export type { ErrorResponse, SuccessResponse, PaginatedResponse } from './types/common.js';
 
 export {
   ErrorResponseSchema,

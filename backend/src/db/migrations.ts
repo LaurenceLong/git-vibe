@@ -41,7 +41,7 @@ export async function runMigrations() {
     // Fallback: raw .sql files without Drizzle meta journal.
     // Execute each migration as a whole script (no naive splitting),
     // and fail fast on any error so the server doesn't start with a broken schema.
-    
+
     // Create migrations tracking table if it doesn't exist
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS _migrations (
@@ -61,24 +61,32 @@ export async function runMigrations() {
     }
 
     // Get already executed migrations
-    const executedMigrations = sqlite
-      .prepare('SELECT filename FROM _migrations')
-      .all() as { filename: string }[];
+    const executedMigrations = sqlite.prepare('SELECT filename FROM _migrations').all() as {
+      filename: string;
+    }[];
     const executedSet = new Set(executedMigrations.map((m) => m.filename));
 
     // Clean up any old migration entries from previous incomplete runs
     // Since this project hasn't been released, we can safely reset migration tracking
     // if the schema is incomplete
-    const requiredTables = ['projects', 'work_items', 'changesets', 'review_threads',
-                            'review_comments', 'agent_runs', 'imports', 'target_repos'];
+    const requiredTables = [
+      'projects',
+      'work_items',
+      'changesets',
+      'review_threads',
+      'review_comments',
+      'agent_runs',
+      'imports',
+      'target_repos',
+    ];
     const existingTables = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as { name: string }[];
-    const existingTableNames = new Set(existingTables.map(t => t.name));
-    
+    const existingTableNames = new Set(existingTables.map((t) => t.name));
+
     // Check if all required tables exist
-    const allTablesExist = requiredTables.every(table => existingTableNames.has(table));
-    
+    const allTablesExist = requiredTables.every((table) => existingTableNames.has(table));
+
     // If we have migration records but tables are missing, reset the migration tracking
     if (executedSet.size > 0 && !allTablesExist) {
       console.log('Detected incomplete schema, resetting migration tracking');
@@ -97,7 +105,7 @@ export async function runMigrations() {
 
       console.log(`Running migration (raw sql): ${file}`);
       sqlite.exec(sql);
-      
+
       // Record this migration as executed
       sqlite.prepare('INSERT INTO _migrations (filename) VALUES (?)').run(file);
       console.log(`Completed migration: ${file}`);

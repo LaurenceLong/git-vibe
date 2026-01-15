@@ -79,6 +79,7 @@ def main() -> int:
         print(f"\nDone (dry-run). scanned_dirs={scanned_dirs}, would_remove={removed}")
     else:
         print(f"\nDone. scanned_dirs={scanned_dirs}, removed={removed}")
+        os.system(f"npx prettier {root} --write")
 
     return 0
 

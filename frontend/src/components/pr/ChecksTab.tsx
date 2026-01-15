@@ -175,8 +175,8 @@ export function ChecksTab({ prId, agentRuns, worktreeStatus = 'present' }: Check
             <div>
               <h3 className="font-medium text-yellow-900">Worktree Not Available</h3>
               <p className="mt-1 text-sm text-yellow-800">
-                The worktree for this PR is not available. Please recreate worktree before
-                running agents.
+                The worktree for this PR is not available. Please recreate worktree before running
+                agents.
               </p>
             </div>
           </div>

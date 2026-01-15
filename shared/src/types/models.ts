@@ -81,7 +81,13 @@ export const WorkItemStatusSchema = z.enum(['open', 'closed']);
 export const PRStatusSchema = z.enum(['open', 'merged', 'closed']);
 export const WorktreeStatusSchema = z.enum(['present', 'missing', 'recreating']);
 export const ChangeSetStatusSchema = z.enum(['draft', 'active', 'completed', 'cancelled']);
-export const AgentRunStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']);
+export const AgentRunStatusSchema = z.enum([
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+]);
 export const ImportStatusSchema = z.enum([
   'pending',
   'running',

@@ -124,7 +124,8 @@ export function useImportJob(
     isLoading: query.isLoading,
     error: query.error as Error | null,
     isPolling:
-      query.isFetching && ((query.data as any)?.status === 'pending' || (query.data as any)?.status === 'running'),
+      query.isFetching &&
+      ((query.data as any)?.status === 'pending' || (query.data as any)?.status === 'running'),
     startImport: (targetRepoId: string) => startImportMutation.mutateAsync(targetRepoId),
     stopPolling,
   };

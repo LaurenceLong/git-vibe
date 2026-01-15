@@ -86,8 +86,7 @@ export function useAgentRunPolling(agentRunId: string): UseAgentRunPollingResult
     agentRun: query.data,
     isLoading: query.isLoading,
     error: query.error as Error | null,
-    isPolling:
-      query.isFetching && (data?.status === 'queued' || data?.status === 'running'),
+    isPolling: query.isFetching && (data?.status === 'queued' || data?.status === 'running'),
     stopPolling,
   };
 }

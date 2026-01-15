@@ -12,7 +12,16 @@ import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/Button';
-import { Folder, GitBranch, GitPullRequest, CheckCircle, AlertCircle, Clock, FileCode, RefreshCw } from 'lucide-react';
+import {
+  Folder,
+  GitBranch,
+  GitPullRequest,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  FileCode,
+  RefreshCw,
+} from 'lucide-react';
 
 export interface OverviewTabProps {
   project: Project;
@@ -44,7 +53,11 @@ export function OverviewTab({ project }: OverviewTabProps) {
   });
 
   const handleSync = async () => {
-    if (window.confirm('Sync all merged PRs to source repo? This will copy all changes from the relay repo to the source repo.')) {
+    if (
+      window.confirm(
+        'Sync all merged PRs to source repo? This will copy all changes from the relay repo to the source repo.'
+      )
+    ) {
       setIsSyncing(true);
       syncMutation.mutate();
     }
@@ -55,7 +68,8 @@ export function OverviewTab({ project }: OverviewTabProps) {
   const openWorkItems = workItems?.filter((wi: any) => wi.status === 'open').length || 0;
   const closedWorkItems = workItems?.filter((wi: any) => wi.status === 'closed').length || 0;
   const issueCount = workItems?.filter((wi: any) => wi.type === 'issue').length || 0;
-  const featureRequestCount = workItems?.filter((wi: any) => wi.type === 'feature-request').length || 0;
+  const featureRequestCount =
+    workItems?.filter((wi: any) => wi.type === 'feature-request').length || 0;
 
   // Pull Requests Statistics
   const totalPRs = changesets?.filter((cs: any) => cs.prStatus).length || 0;
@@ -65,7 +79,8 @@ export function OverviewTab({ project }: OverviewTabProps) {
   const draftPRs = changesets?.filter((cs: any) => cs.status === 'draft').length || 0;
 
   // Pending Sync Statistics (merged PRs that haven't been synced to source repo yet)
-  const pendingSyncTotal = changesets?.filter((cs: any) => cs.prStatus === 'merged' && !cs.syncedAt).length || 0;
+  const pendingSyncTotal =
+    changesets?.filter((cs: any) => cs.prStatus === 'merged' && !cs.syncedAt).length || 0;
 
   const recentWorkItems = workItems?.slice(0, 5) || [];
   const recentPRs = changesets?.filter((cs: any) => cs.prStatus).slice(0, 5) || [];
@@ -75,7 +90,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
       {/* Project Statistics - Enhanced */}
       <div>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Project Statistics</h2>
-        
+
         {/* Work Items Stats */}
         <div className="mb-6">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -165,7 +180,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
               </Button>
             )}
           </h3>
-          <div className="rounded-lg border bg-amber-50 p-3 max-w-xs">
+          <div className="max-w-xs rounded-lg border bg-amber-50 p-3">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-amber-600" />
               <div className="text-2xl font-bold text-amber-600">{pendingSyncTotal}</div>
@@ -308,11 +323,15 @@ export function OverviewTab({ project }: OverviewTabProps) {
               <h3 className="font-medium text-gray-900">Timeline</h3>
               <div>
                 <span className="text-gray-600">Created:</span>
-                <div className="mt-1 text-gray-900">{new Date(project.createdAt).toLocaleString()}</div>
+                <div className="mt-1 text-gray-900">
+                  {new Date(project.createdAt).toLocaleString()}
+                </div>
               </div>
               <div>
                 <span className="text-gray-600">Last Updated:</span>
-                <div className="mt-1 text-gray-900">{new Date(project.updatedAt).toLocaleString()}</div>
+                <div className="mt-1 text-gray-900">
+                  {new Date(project.updatedAt).toLocaleString()}
+                </div>
               </div>
               <div>
                 <span className="text-gray-600">Project ID:</span>

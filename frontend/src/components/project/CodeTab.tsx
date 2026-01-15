@@ -65,7 +65,15 @@ function buildFileTree(files: RepoFile[]): FileTreeNode[] {
   return tree;
 }
 
-function FileTreeItem({ node, level = 0, onFileClick }: { node: FileTreeNode; level?: number; onFileClick: (file: RepoFile) => void }) {
+function FileTreeItem({
+  node,
+  level = 0,
+  onFileClick,
+}: {
+  node: FileTreeNode;
+  level?: number;
+  onFileClick: (file: RepoFile) => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleClick = () => {
@@ -95,7 +103,12 @@ function FileTreeItem({ node, level = 0, onFileClick }: { node: FileTreeNode; le
     }
     return (
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
       </svg>
     );
   };
@@ -108,13 +121,22 @@ function FileTreeItem({ node, level = 0, onFileClick }: { node: FileTreeNode; le
         onClick={handleClick}
       >
         <span className="text-gray-500">{getIcon()}</span>
-        <span className={`text-sm ${node.type === 'directory' ? 'font-medium' : ''}`}>{node.name}</span>
-        {node.size !== undefined && <span className="text-xs text-gray-400">{formatFileSize(node.size)}</span>}
+        <span className={`text-sm ${node.type === 'directory' ? 'font-medium' : ''}`}>
+          {node.name}
+        </span>
+        {node.size !== undefined && (
+          <span className="text-xs text-gray-400">{formatFileSize(node.size)}</span>
+        )}
       </div>
       {node.type === 'directory' && isExpanded && node.children && (
         <div>
           {node.children.map((child) => (
-            <FileTreeItem key={child.path} node={child} level={level + 1} onFileClick={onFileClick} />
+            <FileTreeItem
+              key={child.path}
+              node={child}
+              level={level + 1}
+              onFileClick={onFileClick}
+            />
           ))}
         </div>
       )}
@@ -131,7 +153,11 @@ function formatFileSize(bytes: number): string {
 export function CodeTab({ project }: CodeTabProps) {
   const [selectedFile, setSelectedFile] = useState<RepoFile | null>(null);
 
-  const { data: filesData, isLoading, error } = useQuery({
+  const {
+    data: filesData,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['project-files', project.id],
     queryFn: () => projectsApi.getFiles(project.id).then((res) => res.data.data),
   });
@@ -139,7 +165,9 @@ export function CodeTab({ project }: CodeTabProps) {
   const { data: fileContentData, isLoading: isContentLoading } = useQuery({
     queryKey: ['file-content', project.id, selectedFile?.path],
     queryFn: () =>
-      projectsApi.getFileContent(project.id, selectedFile!.path).then((res) => res.data.data.content),
+      projectsApi
+        .getFileContent(project.id, selectedFile!.path)
+        .then((res) => res.data.data.content),
     enabled: !!selectedFile,
   });
 
@@ -147,7 +175,7 @@ export function CodeTab({ project }: CodeTabProps) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <div className="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600 mx-auto" />
+          <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600" />
           <p className="text-sm text-gray-500">Loading repository files...</p>
         </div>
       </div>
@@ -211,17 +239,19 @@ export function CodeTab({ project }: CodeTabProps) {
               {isContentLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center">
-                    <div className="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600 mx-auto" />
+                    <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600" />
                     <p className="text-sm text-gray-500">Loading file content...</p>
                   </div>
                 </div>
               ) : selectedFile && fileContentData ? (
-                <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
+                <pre className="whitespace-pre-wrap font-mono text-sm text-gray-800">
                   {fileContentData}
                 </pre>
               ) : (
                 <div className="flex items-center justify-center py-12">
-                  <p className="text-sm text-gray-500">Select a file from the tree to view its content</p>
+                  <p className="text-sm text-gray-500">
+                    Select a file from the tree to view its content
+                  </p>
                 </div>
               )}
             </div>

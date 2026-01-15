@@ -161,7 +161,10 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
       // Get base branch SHA from relay repo
       const baseBranch = project.defaultBranch;
-      const baseSha = gitService.getRefSha(project.relayRepoPath || project.sourceRepoPath, baseBranch);
+      const baseSha = gitService.getRefSha(
+        project.relayRepoPath || project.sourceRepoPath,
+        baseBranch
+      );
 
       // Generate branch name and worktree path
       const branchName = `pr/${uuidv4()}`;

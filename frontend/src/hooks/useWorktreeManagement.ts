@@ -79,7 +79,9 @@ export interface UseWorktreeManagementResult {
  * @param options - Configuration options for worktree management
  * @returns Object containing worktree management functions and state
  */
-export function useWorktreeManagement(options: UseWorktreeManagementOptions): UseWorktreeManagementResult {
+export function useWorktreeManagement(
+  options: UseWorktreeManagementOptions
+): UseWorktreeManagementResult {
   const { type, id, projectId, worktreePath, branchName } = options;
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();

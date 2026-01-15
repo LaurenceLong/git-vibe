@@ -14,7 +14,11 @@ export const Route = createFileRoute('/projects/$projectName/code')({
 function ProjectCode() {
   const { projectName } = Route.useParams();
 
-  const { data: project, isLoading, error } = useQuery({
+  const {
+    data: project,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['project', projectName],
     queryFn: () => projectsApi.getByName(projectName).then((res) => res.data),
   });

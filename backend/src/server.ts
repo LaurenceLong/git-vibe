@@ -9,6 +9,7 @@ import { importsRoutes } from './routes/imports.js';
 import { reviewRoutes } from './routes/reviews.js';
 import { workitemsRoutes } from './routes/workitems.js';
 import { runMigrations } from './db/migrations.js';
+import { modelsCache } from './services/ModelsCache.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -18,6 +19,10 @@ async function start() {
 
   // Run database migrations on startup
   await runMigrations();
+
+  // Initialize models cache in the background
+  // This runs asynchronously and doesn't block server startup
+  void modelsCache.initialize();
 
   server.get('/health', async (request, reply) => {
     await getDb();

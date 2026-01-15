@@ -1,15 +1,15 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
-import { OverviewTab } from '@/components/project/OverviewTab';
 
 export const Route = createFileRoute('/projects/$projectName')({
   component: ProjectDetail,
 });
 
 /**
- * Project detail page component - Overview tab
- * Tab navigation is now handled by Layout.tsx
+ * Project detail page component - Parent route for all project tabs
+ * Tab navigation is handled by Layout.tsx
+ * Child routes are rendered via <Outlet />
  */
 function ProjectDetail() {
   const { projectName } = Route.useParams();
@@ -57,9 +57,5 @@ function ProjectDetail() {
     );
   }
 
-  return (
-    <div className="min-h-[400px] rounded-lg border bg-white p-6 shadow-sm">
-      <OverviewTab project={project} />
-    </div>
-  );
+  return <Outlet />;
 }

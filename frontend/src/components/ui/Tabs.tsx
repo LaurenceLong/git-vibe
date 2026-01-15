@@ -3,14 +3,7 @@
  * A tabbed interface with keyboard navigation support
  */
 
-import {
-  useState,
-  ReactNode,
-  KeyboardEvent,
-  Children,
-  cloneElement,
-  isValidElement,
-} from 'react';
+import { useState, ReactNode, KeyboardEvent, Children, cloneElement, isValidElement } from 'react';
 
 export interface TabsProps {
   defaultValue?: string;

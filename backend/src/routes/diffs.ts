@@ -25,7 +25,11 @@ export async function diffsRoutes(server: FastifyInstance) {
 
     try {
       const diff = gitService.getDiff(changeset.baseSha, changeset.headSha, changeset.worktreePath);
-      const response = DiffResponseSchema.parse({ diff, baseSha: changeset.baseSha, headSha: changeset.headSha });
+      const response = DiffResponseSchema.parse({
+        diff,
+        baseSha: changeset.baseSha,
+        headSha: changeset.headSha,
+      });
       return response;
     } catch (error) {
       return reply.status(500).send({

@@ -1,15 +1,13 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
 import type { AgentModel } from 'git-vibe-shared';
 
-const MODELS_QUERY_KEY = ['models'];
-
 /**
- * Hook to fetch and cache available models.
- * Models are cached in memory with a long stale time (30 minutes).
+ * Hook to fetch available models from the backend.
+ * The backend caches models in memory per agent, so this hook fetches from the cached endpoint.
  */
-export function useModels() {
-  const queryClient = useQueryClient();
+export function useModels(agent?: string) {
+  const MODELS_QUERY_KEY = ['models', agent || 'opencode'];
 
   const {
     data: models = [],
@@ -19,22 +17,11 @@ export function useModels() {
     isFetching,
   } = useQuery<AgentModel[]>({
     queryKey: MODELS_QUERY_KEY,
-    queryFn: () => projectsApi.getModels().then((res) => res.data.data),
-    staleTime: 30 * 60 * 1000, // Cache for 30 minutes
-    gcTime: 60 * 60 * 1000, // Keep in memory for 1 hour
+    queryFn: () => projectsApi.getModels(agent).then((res) => res.data.data),
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes (backend handles main caching)
+    gcTime: 10 * 60 * 1000, // Keep in memory for 10 minutes
     retry: 2,
   });
-
-  /**
-   * Prefetch models on app start (call this in main.tsx or root component)
-   */
-  const prefetchModels = () => {
-    void queryClient.prefetchQuery({
-      queryKey: MODELS_QUERY_KEY,
-      queryFn: () => projectsApi.getModels().then((res) => res.data.data),
-      staleTime: 30 * 60 * 1000,
-    });
-  };
 
   return {
     models,
@@ -42,6 +29,5 @@ export function useModels() {
     error,
     refetch,
     isFetching,
-    prefetchModels,
   };
 }

@@ -4,11 +4,7 @@
  */
 
 import { z } from 'zod';
-import type {
-  AgentKey,
-  WorkItemType,
-  WorkItemStatus,
-} from './models.js';
+import type { AgentKey, WorkItemType, WorkItemStatus } from './models.js';
 import {
   AgentKeySchema,
   WorkItemTypeSchema,

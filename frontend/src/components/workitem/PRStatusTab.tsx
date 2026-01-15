@@ -35,10 +35,7 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
   const { success, error: showError } = useToast();
 
   // Fetch linked PR for this WorkItem
-  const {
-    data: linkedPR,
-    isLoading,
-  } = useQuery({
+  const { data: linkedPR, isLoading } = useQuery({
     queryKey: ['workitem-pr', workItemId],
     queryFn: async () => {
       // Placeholder: Return null for now

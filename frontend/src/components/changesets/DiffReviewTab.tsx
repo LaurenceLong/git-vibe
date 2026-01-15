@@ -75,7 +75,6 @@ export function DiffReviewTab({ changeset, worktreeStatus = 'present' }: DiffRev
     };
   }, [threads]);
 
-
   // Handle thread modal
   const handleOpenThreadModal = () => {
     setIsThreadModalOpen(true);

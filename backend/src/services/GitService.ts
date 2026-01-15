@@ -175,7 +175,11 @@ export class GitService {
     this.execCommand('git clean -fd', relayRepoPath);
   }
 
-  async syncRelayToSource(relayRepoPath: string, sourceRepoPath: string, projectName: string): Promise<void> {
+  async syncRelayToSource(
+    relayRepoPath: string,
+    sourceRepoPath: string,
+    projectName: string
+  ): Promise<void> {
     // Get the default branch from source repo
     const defaultBranch = this.getDefaultBranch(sourceRepoPath);
 
@@ -259,7 +263,9 @@ export class GitService {
         }
       }
     } catch (error) {
-      throw new Error(`Failed to list files in ${fullPath}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to list files in ${fullPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     return files;
@@ -270,7 +276,9 @@ export class GitService {
     try {
       return await fs.readFile(fullPath, 'utf-8');
     } catch (error) {
-      throw new Error(`Failed to read file ${fullPath}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to read file ${fullPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 }

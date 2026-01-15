@@ -14,6 +14,7 @@ import { Route as TargetReposIndexRouteImport } from './routes/target-repos/inde
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id'
 import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName'
+import { Route as ProjectsProjectNameIndexRouteImport } from './routes/projects/$projectName.index'
 import { Route as ProjectsProjectNameWorkitemsRouteImport } from './routes/projects/$projectName.workitems'
 import { Route as ProjectsProjectNameSettingsRouteImport } from './routes/projects/$projectName.settings'
 import { Route as ProjectsProjectNamePullrequestsRouteImport } from './routes/projects/$projectName.pullrequests'
@@ -45,6 +46,12 @@ const ProjectsProjectNameRoute = ProjectsProjectNameRouteImport.update({
   path: '/projects/$projectName',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsProjectNameIndexRoute =
+  ProjectsProjectNameIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProjectsProjectNameRoute,
+  } as any)
 const ProjectsProjectNameWorkitemsRoute =
   ProjectsProjectNameWorkitemsRouteImport.update({
     id: '/workitems',
@@ -86,10 +93,10 @@ export interface FileRoutesByFullPath {
   '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
   '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
   '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
+  '/projects/$projectName/': typeof ProjectsProjectNameIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByTo {
   '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
   '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
   '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
+  '/projects/$projectName': typeof ProjectsProjectNameIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
   '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
   '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
+  '/projects/$projectName/': typeof ProjectsProjectNameIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -125,10 +134,10 @@ export interface FileRouteTypes {
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
+    | '/projects/$projectName/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/projects/$projectName'
     | '/target-repos/$id'
     | '/projects'
     | '/target-repos'
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
+    | '/projects/$projectName'
   id:
     | '__root__'
     | '/'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
+    | '/projects/$projectName/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -196,6 +207,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectNameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$projectName/': {
+      id: '/projects/$projectName/'
+      path: '/'
+      fullPath: '/projects/$projectName/'
+      preLoaderRoute: typeof ProjectsProjectNameIndexRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
+    }
     '/projects/$projectName/workitems': {
       id: '/projects/$projectName/workitems'
       path: '/workitems'
@@ -240,6 +258,7 @@ interface ProjectsProjectNameRouteChildren {
   ProjectsProjectNamePullrequestsRoute: typeof ProjectsProjectNamePullrequestsRoute
   ProjectsProjectNameSettingsRoute: typeof ProjectsProjectNameSettingsRoute
   ProjectsProjectNameWorkitemsRoute: typeof ProjectsProjectNameWorkitemsRoute
+  ProjectsProjectNameIndexRoute: typeof ProjectsProjectNameIndexRoute
 }
 
 const ProjectsProjectNameRouteChildren: ProjectsProjectNameRouteChildren = {
@@ -248,6 +267,7 @@ const ProjectsProjectNameRouteChildren: ProjectsProjectNameRouteChildren = {
   ProjectsProjectNamePullrequestsRoute: ProjectsProjectNamePullrequestsRoute,
   ProjectsProjectNameSettingsRoute: ProjectsProjectNameSettingsRoute,
   ProjectsProjectNameWorkitemsRoute: ProjectsProjectNameWorkitemsRoute,
+  ProjectsProjectNameIndexRoute: ProjectsProjectNameIndexRoute,
 }
 
 const ProjectsProjectNameRouteWithChildren =

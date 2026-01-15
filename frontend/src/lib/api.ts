@@ -24,20 +24,19 @@ export const api = axios.create({
 });
 
 export const projectsApi = {
-  list: (page?: number, limit?: number) =>
-    api.get('/projects', { params: { page, limit } }),
+  list: (page?: number, limit?: number) => api.get('/projects', { params: { page, limit } }),
   get: (id: string) => api.get(`/projects/${id}`),
   getByName: (name: string) => api.get(`/projects/name/${name}`),
-  getModels: (provider?: string) =>
-    api.get<{ data: AgentModel[] }>('/models', { params: { provider } }),
+  getModels: (agent?: string) =>
+    api.get<{ data: AgentModel[] }>('/models', { params: { agent } }),
+  refreshModels: (agent?: string) =>
+    api.post<{ data: AgentModel[] }>('/models/refresh', undefined, { params: { agent } }),
   create: (data: CreateProjectDTO) => api.post('/projects', data),
-  update: (id: string, data: UpdateProjectDTO) =>
-    api.patch(`/projects/${id}`, data),
+  update: (id: string, data: UpdateProjectDTO) => api.patch(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
   sync: (id: string) => api.post(`/projects/${id}/sync`),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),
-  getBranchesByPath: (repoPath: string) =>
-    api.get('/branches', { params: { repoPath } }),
+  getBranchesByPath: (repoPath: string) => api.get('/branches', { params: { repoPath } }),
   getFiles: (id: string) => api.get(`/projects/${id}/files`),
   getFileContent: (id: string, filePath: string) =>
     api.get(`/projects/${id}/files/content`, { params: { path: filePath } }),
@@ -99,11 +98,8 @@ export const reviewsApi = {
     api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/resolve`),
   unresolveThread: (changesetId: string, threadId: string) =>
     api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/unresolve`),
-  addressWithAgent: (
-    changesetId: string,
-    threadId: string,
-    data: AddressWithAgentDTO
-  ) => api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/address`, data),
+  addressWithAgent: (changesetId: string, threadId: string, data: AddressWithAgentDTO) =>
+    api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/address`, data),
   addComment: (changesetId: string, threadId: string, data: CreateCommentDTO) =>
     api.post(`/changesets/${changesetId}/reviews/threads/${threadId}/comments`, data),
 };
@@ -121,8 +117,7 @@ export const workItemsApi = {
       body: data.body || undefined,
     }),
   // Update WorkItem
-  update: (id: string, data: UpdateWorkItemDTO) =>
-    api.patch(`/workitems/${id}`, data),
+  update: (id: string, data: UpdateWorkItemDTO) => api.patch(`/workitems/${id}`, data),
   // Delete WorkItem
   delete: (id: string) => api.delete(`/workitems/${id}`),
   // Create PR from WorkItem

@@ -72,7 +72,11 @@ export function WorktreeStatusComponent({
   };
 
   const handleRemove = async () => {
-    if (window.confirm('Are you sure you want to remove this worktree? This will delete the worktree directory.')) {
+    if (
+      window.confirm(
+        'Are you sure you want to remove this worktree? This will delete the worktree directory.'
+      )
+    ) {
       onRemove?.();
     }
   };
@@ -85,8 +89,8 @@ export function WorktreeStatusComponent({
           status === 'present'
             ? 'border-green-200 bg-green-50'
             : status === 'missing'
-            ? 'border-red-200 bg-red-50'
-            : 'border-yellow-200 bg-yellow-50'
+              ? 'border-red-200 bg-red-50'
+              : 'border-yellow-200 bg-yellow-50'
         }`}
       >
         <div className="flex items-start justify-between">
@@ -180,8 +184,8 @@ export function WorktreeStatusComponent({
         {status === 'missing' && !error && (
           <div className="mt-3 rounded-md bg-white p-3 text-sm text-gray-700">
             <p>
-              The worktree for this branch is not available. You can recreate it to continue working on
-              this branch.
+              The worktree for this branch is not available. You can recreate it to continue working
+              on this branch.
             </p>
           </div>
         )}

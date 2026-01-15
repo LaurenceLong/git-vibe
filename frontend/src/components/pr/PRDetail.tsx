@@ -73,7 +73,8 @@ export function PRDetail({ prId }: PRDetailProps) {
     refetchInterval: (data) => {
       // Only poll if there are any runs with status 'queued' or 'running'
       if (!data) return false;
-      const hasActiveRuns = data?.some((run: any) => run.status === 'queued' || run.status === 'running') ?? false;
+      const hasActiveRuns =
+        data?.some((run: any) => run.status === 'queued' || run.status === 'running') ?? false;
       return hasActiveRuns ? 1500 : false;
     },
   });
@@ -133,7 +134,6 @@ export function PRDetail({ prId }: PRDetailProps) {
 
   return (
     <div className="space-y-6">
-
       {/* PR Header */}
       <div className="rounded-lg border bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">

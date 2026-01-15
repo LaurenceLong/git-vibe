@@ -19,9 +19,5 @@ export interface ProjectShellProps {
  */
 export function ProjectShell({ project, children }: ProjectShellProps) {
   // This component is deprecated and should not be used
-  return (
-    <div className="space-y-6">
-      {children || <Outlet />}
-    </div>
-  );
+  return <div className="space-y-6">{children || <Outlet />}</div>;
 }

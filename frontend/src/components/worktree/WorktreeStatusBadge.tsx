@@ -19,7 +19,9 @@ export interface WorktreeStatusBadgeProps {
 /**
  * Get status type for badge based on worktree status
  */
-function getStatusType(status: WorktreeStatus): 'success' | 'warning' | 'error' | 'info' | 'neutral' {
+function getStatusType(
+  status: WorktreeStatus
+): 'success' | 'warning' | 'error' | 'info' | 'neutral' {
   switch (status) {
     case 'present':
       return 'success';

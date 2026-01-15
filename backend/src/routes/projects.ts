@@ -18,7 +18,7 @@ import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { gitService } from '../services/GitService.js';
-import { openCodeAgentAdapter } from '../services/OpenCodeAgentAdapter.js';
+import { modelsCache } from '../services/ModelsCache.js';
 import { STORAGE_CONFIG } from '../config/storage.js';
 import { cleanupDirectory } from '../utils/storage.js';
 import path from 'node:path';
@@ -157,15 +157,55 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.get('/api/models', async (request, reply) => {
+  server.get<{ Querystring: { agent?: string } }>('/api/models', async (request, reply) => {
     try {
-      const models = await openCodeAgentAdapter.getModels();
+      const { agent = 'opencode' } = request.query;
+      
+      // Validate agent parameter
+      if (agent !== 'opencode' && agent !== 'claudcode') {
+        return reply.status(400).send({
+          error: true,
+          message: 'Invalid agent parameter. Must be "opencode" or "claudcode"',
+        });
+      }
+
+      // Initialize cache for the agent if not already initialized
+      await modelsCache.initialize(agent as 'opencode' | 'claudcode');
+      
+      // Get models from cache
+      const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
       const response = ModelsResponseSchema.parse({ data: models });
       return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,
         message: 'Failed to fetch models',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  server.post<{ Querystring: { agent?: string } }>('/api/models/refresh', async (request, reply) => {
+    try {
+      const { agent = 'opencode' } = request.query;
+      
+      // Validate agent parameter
+      if (agent !== 'opencode' && agent !== 'claudcode') {
+        return reply.status(400).send({
+          error: true,
+          message: 'Invalid agent parameter. Must be "opencode" or "claudcode"',
+        });
+      }
+
+      // Force refresh the models cache for the specific agent
+      await modelsCache.refresh(agent as 'opencode' | 'claudcode');
+      const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
+      const response = ModelsResponseSchema.parse({ data: models });
+      return reply.status(200).send(response);
+    } catch (error) {
+      return reply.status(500).send({
+        error: true,
+        message: 'Failed to refresh models',
         details: error instanceof Error ? error.message : String(error),
       });
     }
@@ -224,42 +264,45 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.get<{ Params: { id: string } }>('/api/projects/:id/files/content', async (request, reply) => {
-    try {
-      const project = await projectsRepository.findById(request.params.id);
+  server.get<{ Params: { id: string } }>(
+    '/api/projects/:id/files/content',
+    async (request, reply) => {
+      try {
+        const project = await projectsRepository.findById(request.params.id);
 
-      if (!project) {
-        return reply.status(404).send({
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const filePath = (request.query as { path?: string }).path;
+        if (!filePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'File path is required',
+          });
+        }
+
+        const content = await gitService.getFileContent(project.relayRepoPath, filePath);
+
+        const response = FileContentResponseSchema.parse({
+          data: {
+            path: filePath,
+            content,
+          },
+        });
+        return reply.status(200).send(response);
+      } catch (error) {
+        return reply.status(500).send({
           error: true,
-          message: 'Project not found',
+          message: 'Failed to read file',
+          details: error instanceof Error ? error.message : String(error),
         });
       }
-
-      const filePath = (request.query as { path?: string }).path;
-      if (!filePath) {
-        return reply.status(400).send({
-          error: true,
-          message: 'File path is required',
-        });
-      }
-
-      const content = await gitService.getFileContent(project.relayRepoPath, filePath);
-
-      const response = FileContentResponseSchema.parse({
-        data: {
-          path: filePath,
-          content,
-        },
-      });
-      return reply.status(200).send(response);
-    } catch (error) {
-      return reply.status(500).send({
-        error: true,
-        message: 'Failed to read file',
-        details: error instanceof Error ? error.message : String(error),
-      });
     }
-  });
+  );
 
   server.post<{ Params: { id: string } }>('/api/projects/:id/sync', async (request, reply) => {
     try {
@@ -272,7 +315,11 @@ export async function projectsRoutes(server: FastifyInstance) {
         });
       }
 
-      await gitService.syncRelayToSource(project.relayRepoPath, project.sourceRepoPath, project.name);
+      await gitService.syncRelayToSource(
+        project.relayRepoPath,
+        project.sourceRepoPath,
+        project.name
+      );
 
       // Update syncedAt for all merged changesets that haven't been synced yet
       const allChangesets = await changesetsRepository.findAll(project.id);
@@ -296,45 +343,42 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.post<{ Params: { id: string } }>(
-    '/api/projects/:id/workitems',
-    async (request, reply) => {
-      try {
-        const body = CreateWorkItemDTOSchema.parse(request.body);
-        const projectId = request.params.id;
+  server.post<{ Params: { id: string } }>('/api/projects/:id/workitems', async (request, reply) => {
+    try {
+      const body = CreateWorkItemDTOSchema.parse(request.body);
+      const projectId = request.params.id;
 
-        // Verify project exists
-        const project = await projectsRepository.findById(projectId);
-        if (!project) {
-          return reply.status(404).send({
-            error: true,
-            message: 'Project not found',
-          });
-        }
-
-        // Create WorkItem in database
-        const workItem = await workItemsRepository.create({
-          id: uuidv4(),
-          projectId,
-          type: body.type,
-          title: body.title,
-          body: body.body,
+      // Verify project exists
+      const project = await projectsRepository.findById(projectId);
+      if (!project) {
+        return reply.status(404).send({
+          error: true,
+          message: 'Project not found',
         });
-
-        return reply.status(201).send(workItem);
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return reply.status(400).send({
-            error: true,
-            message: 'Validation failed',
-            details: error.errors,
-          });
-        }
-
-        throw error;
       }
+
+      // Create WorkItem in database
+      const workItem = await workItemsRepository.create({
+        id: uuidv4(),
+        projectId,
+        type: body.type,
+        title: body.title,
+        body: body.body,
+      });
+
+      return reply.status(201).send(workItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.status(400).send({
+          error: true,
+          message: 'Validation failed',
+          details: error.errors,
+        });
+      }
+
+      throw error;
     }
-  );
+  });
 
   server.delete<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
     try {

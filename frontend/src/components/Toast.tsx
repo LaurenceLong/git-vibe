@@ -135,7 +135,13 @@ export function useToast(): ToastContextValue {
 /**
  * ToastContainer component to display all active toasts
  */
-function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast: (id: string) => void }) {
+function ToastContainer({
+  toasts,
+  removeToast,
+}: {
+  toasts: Toast[];
+  removeToast: (id: string) => void;
+}) {
   return (
     <div className="fixed right-4 top-4 z-50 flex flex-col gap-2">
       {toasts.map((toast) => (

@@ -10,6 +10,7 @@ import { Project, AgentParams, AgentKey } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { useModels } from '@/hooks/useModels';
+import { useToast } from '@/components/Toast';
 
 export interface SettingsTabProps {
   project: Project;
@@ -22,6 +23,8 @@ export function SettingsTab({ project }: SettingsTabProps) {
   const [agentParams, setAgentParams] = useState<AgentParams>({});
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+  const { success, error: showError } = useToast();
 
   // Parse agentParams from JSON string on mount and when project changes
   useEffect(() => {
@@ -38,12 +41,21 @@ export function SettingsTab({ project }: SettingsTabProps) {
 
   const queryClient = useQueryClient();
 
-  // Fetch available models from OpenCode CLI (cached in memory)
-  const { models, isLoading: isLoadingModels, refetch: refetchModels, isFetching: isFetchingModels } = useModels();
+  // Fetch available models from the selected agent (cached in memory)
+  const {
+    models,
+    isLoading: isLoadingModels,
+    refetch: refetchModels,
+    isFetching: isFetchingModels,
+  } = useModels(defaultAgent);
 
   const updateProjectMutation = useMutation({
-    mutationFn: (data: { name?: string; defaultBranch?: string; defaultAgent?: AgentKey; agentParams?: AgentParams }) =>
-      projectsApi.update(project.id, data),
+    mutationFn: (data: {
+      name?: string;
+      defaultBranch?: string;
+      defaultAgent?: AgentKey;
+      agentParams?: AgentParams;
+    }) => projectsApi.update(project.id, data),
     onSuccess: () => {
       setMessage({ type: 'success', text: 'Settings saved successfully' });
       setIsEditing(false);
@@ -92,6 +104,19 @@ export function SettingsTab({ project }: SettingsTabProps) {
     }
     setIsEditing(false);
     setMessage(null);
+  };
+
+  const handleRefreshModels = async () => {
+    setIsRefreshingModels(true);
+    try {
+      await projectsApi.refreshModels(defaultAgent);
+      await refetchModels();
+      success('Models refreshed successfully');
+    } catch (err) {
+      showError('Failed to refresh models');
+    } finally {
+      setIsRefreshingModels(false);
+    }
   };
 
   const agentOptions: SelectOption[] = [
@@ -179,15 +204,15 @@ export function SettingsTab({ project }: SettingsTabProps) {
 
           {/* Default Model (stored in agentParams) */}
           <div className="mb-4">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center gap-2">
               <label htmlFor="default-model" className="block text-sm font-medium text-gray-700">
                 Default Model
               </label>
               <button
                 type="button"
-                onClick={() => refetchModels()}
-                disabled={isFetchingModels}
-                className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+                onClick={handleRefreshModels}
+                disabled={isRefreshingModels}
+                className="rounded p-1 text-green-600 hover:bg-green-100 hover:text-green-700 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-green-600"
                 title="Refresh model list"
               >
                 <svg
@@ -200,7 +225,7 @@ export function SettingsTab({ project }: SettingsTabProps) {
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={isFetchingModels ? 'animate-spin' : ''}
+                  className={isRefreshingModels ? 'animate-spin' : ''}
                 >
                   <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                   <path d="M3 3v5h5" />
@@ -230,7 +255,8 @@ export function SettingsTab({ project }: SettingsTabProps) {
               />
             )}
             <p className="mt-1 text-xs text-gray-500">
-              Select the default AI model. Leave empty to use the agent's default model. Models are fetched from OpenCode CLI.
+              Select the default AI model. Leave empty to use the agent's default model. Models are
+              fetched from OpenCode CLI.
             </p>
           </div>
 

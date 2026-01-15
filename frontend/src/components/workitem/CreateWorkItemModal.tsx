@@ -80,9 +80,7 @@ export function CreateWorkItemModal({
       <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
         {/* Type Selection */}
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Type
-          </label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Type</label>
           <div className="flex gap-4">
             <label className="flex cursor-pointer items-center gap-2">
               <input
