@@ -12,12 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TargetReposIndexRouteImport } from './routes/target-repos/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
-import { Route as ChangesetsIndexRouteImport } from './routes/changesets/index'
-import { Route as WorkitemsIdRouteImport } from './routes/workitems/$id'
 import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id'
 import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName'
-import { Route as ChangesetsNewRouteImport } from './routes/changesets/new'
-import { Route as ChangesetsIdRouteImport } from './routes/changesets/$id'
 import { Route as ProjectsProjectNameWorkitemsRouteImport } from './routes/projects/$projectName.workitems'
 import { Route as ProjectsProjectNameSettingsRouteImport } from './routes/projects/$projectName.settings'
 import { Route as ProjectsProjectNamePullrequestsRouteImport } from './routes/projects/$projectName.pullrequests'
@@ -39,16 +35,6 @@ const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   path: '/projects/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChangesetsIndexRoute = ChangesetsIndexRouteImport.update({
-  id: '/changesets/',
-  path: '/changesets/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WorkitemsIdRoute = WorkitemsIdRouteImport.update({
-  id: '/workitems/$id',
-  path: '/workitems/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TargetReposIdRoute = TargetReposIdRouteImport.update({
   id: '/target-repos/$id',
   path: '/target-repos/$id',
@@ -57,16 +43,6 @@ const TargetReposIdRoute = TargetReposIdRouteImport.update({
 const ProjectsProjectNameRoute = ProjectsProjectNameRouteImport.update({
   id: '/projects/$projectName',
   path: '/projects/$projectName',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChangesetsNewRoute = ChangesetsNewRouteImport.update({
-  id: '/changesets/new',
-  path: '/changesets/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChangesetsIdRoute = ChangesetsIdRouteImport.update({
-  id: '/changesets/$id',
-  path: '/changesets/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectNameWorkitemsRoute =
@@ -101,12 +77,8 @@ const ProjectsProjectNameActionsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/changesets/$id': typeof ChangesetsIdRoute
-  '/changesets/new': typeof ChangesetsNewRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
-  '/workitems/$id': typeof WorkitemsIdRoute
-  '/changesets': typeof ChangesetsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
@@ -117,12 +89,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/changesets/$id': typeof ChangesetsIdRoute
-  '/changesets/new': typeof ChangesetsNewRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
-  '/workitems/$id': typeof WorkitemsIdRoute
-  '/changesets': typeof ChangesetsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/target-repos': typeof TargetReposIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
@@ -134,12 +102,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/changesets/$id': typeof ChangesetsIdRoute
-  '/changesets/new': typeof ChangesetsNewRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/target-repos/$id': typeof TargetReposIdRoute
-  '/workitems/$id': typeof WorkitemsIdRoute
-  '/changesets/': typeof ChangesetsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/target-repos/': typeof TargetReposIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
@@ -152,12 +116,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/changesets/$id'
-    | '/changesets/new'
     | '/projects/$projectName'
     | '/target-repos/$id'
-    | '/workitems/$id'
-    | '/changesets'
     | '/projects'
     | '/target-repos'
     | '/projects/$projectName/actions'
@@ -168,12 +128,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/changesets/$id'
-    | '/changesets/new'
     | '/projects/$projectName'
     | '/target-repos/$id'
-    | '/workitems/$id'
-    | '/changesets'
     | '/projects'
     | '/target-repos'
     | '/projects/$projectName/actions'
@@ -184,12 +140,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/changesets/$id'
-    | '/changesets/new'
     | '/projects/$projectName'
     | '/target-repos/$id'
-    | '/workitems/$id'
-    | '/changesets/'
     | '/projects/'
     | '/target-repos/'
     | '/projects/$projectName/actions'
@@ -201,12 +153,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ChangesetsIdRoute: typeof ChangesetsIdRoute
-  ChangesetsNewRoute: typeof ChangesetsNewRoute
   ProjectsProjectNameRoute: typeof ProjectsProjectNameRouteWithChildren
   TargetReposIdRoute: typeof TargetReposIdRoute
-  WorkitemsIdRoute: typeof WorkitemsIdRoute
-  ChangesetsIndexRoute: typeof ChangesetsIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   TargetReposIndexRoute: typeof TargetReposIndexRoute
 }
@@ -234,20 +182,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/changesets/': {
-      id: '/changesets/'
-      path: '/changesets'
-      fullPath: '/changesets'
-      preLoaderRoute: typeof ChangesetsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/workitems/$id': {
-      id: '/workitems/$id'
-      path: '/workitems/$id'
-      fullPath: '/workitems/$id'
-      preLoaderRoute: typeof WorkitemsIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/target-repos/$id': {
       id: '/target-repos/$id'
       path: '/target-repos/$id'
@@ -260,20 +194,6 @@ declare module '@tanstack/react-router' {
       path: '/projects/$projectName'
       fullPath: '/projects/$projectName'
       preLoaderRoute: typeof ProjectsProjectNameRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/changesets/new': {
-      id: '/changesets/new'
-      path: '/changesets/new'
-      fullPath: '/changesets/new'
-      preLoaderRoute: typeof ChangesetsNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/changesets/$id': {
-      id: '/changesets/$id'
-      path: '/changesets/$id'
-      fullPath: '/changesets/$id'
-      preLoaderRoute: typeof ChangesetsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectName/workitems': {
@@ -335,12 +255,8 @@ const ProjectsProjectNameRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ChangesetsIdRoute: ChangesetsIdRoute,
-  ChangesetsNewRoute: ChangesetsNewRoute,
   ProjectsProjectNameRoute: ProjectsProjectNameRouteWithChildren,
   TargetReposIdRoute: TargetReposIdRoute,
-  WorkitemsIdRoute: WorkitemsIdRoute,
-  ChangesetsIndexRoute: ChangesetsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   TargetReposIndexRoute: TargetReposIndexRoute,
 }

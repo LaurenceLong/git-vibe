@@ -5,6 +5,8 @@ import {
   CreateThreadDTOSchema,
   AddressWithAgentDTOSchema,
   CreateCommentDTOSchema,
+  ResolveThreadResponseSchema,
+  UnresolveThreadResponseSchema,
 } from 'git-vibe-shared';
 import { reviewThreadsRepository } from '../repositories/ReviewThreadsRepository.js';
 import { reviewCommentsRepository } from '../repositories/ReviewCommentsRepository.js';
@@ -77,7 +79,8 @@ export async function reviewRoutes(server: FastifyInstance) {
 
       const updated = await reviewThreadsRepository.resolveThread(request.params.threadId);
 
-      return updated;
+      const response = ResolveThreadResponseSchema.parse(updated ?? thread);
+      return reply.status(200).send(response);
     }
   );
 
@@ -96,7 +99,8 @@ export async function reviewRoutes(server: FastifyInstance) {
 
       const updated = await reviewThreadsRepository.unresolveThread(request.params.threadId);
 
-      return updated;
+      const response = UnresolveThreadResponseSchema.parse(updated ?? thread);
+      return reply.status(200).send(response);
     }
   );
 

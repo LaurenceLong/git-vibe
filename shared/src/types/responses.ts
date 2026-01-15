@@ -230,26 +230,6 @@ export const CancelAgentRunResponseSchema = z.object({
 });
 
 // ============================================================================
-// Worktree Status Response
-// ============================================================================
-
-/**
- * Response for worktree status check
- */
-export interface WorktreeStatusResponse {
-  status: 'present' | 'missing' | 'recreating';
-  worktreePath: string;
-}
-
-/**
- * Zod schema for WorktreeStatusResponse validation
- */
-export const WorktreeStatusResponseSchema = z.object({
-  status: z.enum(['present', 'missing', 'recreating']),
-  worktreePath: z.string(),
-});
-
-// ============================================================================
 // Remove Worktree Response
 // ============================================================================
 

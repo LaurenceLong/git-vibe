@@ -127,11 +127,10 @@ export function useWorktreeManagement(options: UseWorktreeManagementOptions): Us
 
       let response;
       if (type === 'changeset') {
-        response = await changesetsApi.removeWorktree(id);
-        // For changesets, we need to call recreate after remove
-        // This is a simplified approach - in production, you'd have a dedicated recreate endpoint
+        // For changesets, recreation is not currently supported
+        throw new Error('Worktree recreation is not supported for changesets');
       } else {
-        response = await workItemsApi.recreateWorktree(projectId, worktreePath, branchName);
+        response = await workItemsApi.removeWorktree(projectId, worktreePath);
       }
       return response.data;
     },
@@ -142,7 +141,7 @@ export function useWorktreeManagement(options: UseWorktreeManagementOptions): Us
       } else {
         queryClient.invalidateQueries({ queryKey: ['workitem', id] });
       }
-      success('Worktree recreation started successfully');
+      success('Worktree removed successfully');
     },
     onError: (err: Error) => {
       showError(`Failed to recreate worktree: ${err.message}`);

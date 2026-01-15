@@ -93,7 +93,6 @@ export type {
   CreateTargetRepoDTO,
   CreateWorkItemDTO,
   UpdateWorkItemDTO,
-  RecreateWorktreeDTO,
   RemoveWorktreeDTO,
 } from './types/requests.js';
 
@@ -109,7 +108,6 @@ export {
   CreateTargetRepoDTOSchema,
   CreateWorkItemDTOSchema,
   UpdateWorkItemDTOSchema,
-  RecreateWorktreeDTOSchema,
   RemoveWorktreeDTOSchema,
 } from './types/requests.js';
 
@@ -126,7 +124,6 @@ export type {
   DiffResponse,
   ImportResponse,
   CancelAgentRunResponse,
-  WorktreeStatusResponse,
   RemoveWorktreeResponse,
   RefreshChangesetResponse,
   CloseChangesetResponse,
@@ -144,7 +141,6 @@ export {
   DiffResponseSchema,
   ImportResponseSchema,
   CancelAgentRunResponseSchema,
-  WorktreeStatusResponseSchema,
   RemoveWorktreeResponseSchema,
   RefreshChangesetResponseSchema,
   CloseChangesetResponseSchema,

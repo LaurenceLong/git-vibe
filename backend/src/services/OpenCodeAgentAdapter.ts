@@ -1,8 +1,3 @@
-import { spawn, execSync } from 'node:child_process';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-import { STORAGE_CONFIG } from '../config/storage.js';
-import { gitService } from './GitService.js';
 import {
   AgentAdapter,
   type AgentModel,
@@ -19,6 +14,7 @@ interface OpenCodeSession {
   model?: string;
   agent?: string;
   project?: string;
+  [key: string]: unknown;
 }
 
 interface OpenCodeAgentRunParams extends AgentRunParams {
@@ -37,12 +33,10 @@ interface OpenCodeAgentCorrectionParams extends AgentCorrectionParams {
   };
 }
 
-export class OpenCodeAgentAdapter extends AgentAdapter {
-  private activeProcesses = new Map<string, ReturnType<typeof spawn>>();
-  private sessionCache = new Map<string, OpenCodeSession>();
-
+export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
   async validate(config: { executablePath: string }): Promise<boolean> {
     try {
+      const { promises: fs } = await import('node:fs');
       await fs.access(config.executablePath, fs.constants.X_OK);
       return true;
     } catch {
@@ -52,27 +46,8 @@ export class OpenCodeAgentAdapter extends AgentAdapter {
 
   async getModels(): Promise<AgentModel[]> {
     try {
-      // Run opencode models command
-      const output = execSync('opencode models', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      // Parse the output - models are listed in format "provider/model"
-      const models = output
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith('Available models'));
-
-      // Parse each model into AgentModel format
-      return models.map((model) => {
-        const parts = model.split('/');
-        return {
-          id: model,
-          name: parts[1] || model,
-          provider: parts[0],
-        };
-      });
+      const { stdout } = this.execCommand('opencode models');
+      return this.parseModelsFromOutput(stdout);
     } catch (error) {
       console.error('Failed to fetch OpenCode models:', error);
       return [];
@@ -83,23 +58,15 @@ export class OpenCodeAgentAdapter extends AgentAdapter {
     const { worktreePath, agentRunId, prompt, config } = params;
 
     const runId = agentRunId;
-    const headShaBefore = gitService.getWorktreeHead(worktreePath);
-
-    const logPath = path.join(STORAGE_CONFIG.logsDir, `agent-run-${runId}.log`);
-    await fs.mkdir(STORAGE_CONFIG.logsDir, { recursive: true });
-
-    const logFile = await fs.open(logPath, 'w');
+    const logFile = await this.createLogFile(runId);
+    const { logBuffer, append } = this.createOutputHandler(logFile);
 
     // Build args for opencode run command
-    const args = ['run'];
+    const args = this.buildCommandArgs('run', {
+      model: config.model,
+      agent: config.agent,
+    });
 
-    // Add optional flags
-    if (config.model) {
-      args.push('--model', config.model);
-    }
-    if (config.agent) {
-      args.push('--agent', config.agent);
-    }
     if (config.baseArgs) {
       args.push(...config.baseArgs);
     }
@@ -107,56 +74,24 @@ export class OpenCodeAgentAdapter extends AgentAdapter {
     // Add the prompt
     args.push(prompt);
 
-    const child = spawn(config.executablePath, args, {
-      cwd: worktreePath,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        PWD: worktreePath,
-      },
-      shell: true,
-    });
-
-    let logBuffer = '';
-
-    const append = (chunk: Buffer) => {
-      const output = chunk.toString('utf-8');
-      logBuffer += output;
-      void logFile.write(output);
-    };
+    const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
 
     child.stdout?.on('data', append);
     child.stderr?.on('data', append);
 
     child.on('close', async (code) => {
-      const status = code === 0 ? 'succeeded' : 'failed';
-      const headShaAfter = gitService.getWorktreeHead(worktreePath);
-
-      await logFile.close();
-      this.activeProcesses.delete(runId);
-
-      // List sessions and save the latest one
-      try {
-        const sessions = await this.listSessions(worktreePath);
-        if (sessions.length > 0) {
-          const latestSession = sessions[0]; // Most recent session
-          this.sessionCache.set(runId, latestSession);
-
-          // Save session data to database
-          await this.saveSessionToDatabase(runId, latestSession);
+      await this.handleProcessClose(runId, worktreePath, code, logBuffer, logFile, async () => {
+        // List sessions and save the latest one
+        try {
+          const sessions = await this.listSessions(worktreePath);
+          if (sessions.length > 0) {
+            const latestSession = sessions[0]; // Most recent session
+            this.cacheSession(runId, latestSession);
+            await this.saveSessionToDatabase(runId, latestSession);
+          }
+        } catch (error) {
+          console.error('Failed to list sessions:', error);
         }
-      } catch (error) {
-        console.error('Failed to list sessions:', error);
-      }
-
-      const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
-      await agentRunsRepository.update(runId, {
-        status,
-        headShaBefore,
-        headShaAfter,
-        log: logBuffer,
-        logPath,
-        finishedAt: new Date(),
       });
     });
 
@@ -164,19 +99,19 @@ export class OpenCodeAgentAdapter extends AgentAdapter {
     return { runId };
   }
 
-  async correctWithReviewComments(params: OpenCodeAgentCorrectionParams): Promise<{ runId: string }> {
+  async correctWithReviewComments(
+    params: OpenCodeAgentCorrectionParams
+  ): Promise<{ runId: string }> {
     const { worktreePath, agentRunId, sessionId, reviewComments, config } = params;
 
     const runId = agentRunId;
-    const headShaBefore = gitService.getWorktreeHead(worktreePath);
-
-    const logPath = path.join(STORAGE_CONFIG.logsDir, `agent-run-${runId}.log`);
-    await fs.mkdir(STORAGE_CONFIG.logsDir, { recursive: true });
-
-    const logFile = await fs.open(logPath, 'w');
+    const logFile = await this.createLogFile(runId);
+    const { logBuffer, append } = this.createOutputHandler(logFile);
 
     // Build args for opencode run with session continuation
-    const args = ['run', '--session', sessionId];
+    const args = this.buildCommandArgs('run', {
+      session: sessionId,
+    });
 
     if (config.baseArgs) {
       args.push(...config.baseArgs);
@@ -185,85 +120,26 @@ export class OpenCodeAgentAdapter extends AgentAdapter {
     // Add the review comments as the prompt
     args.push(reviewComments);
 
-    const child = spawn(config.executablePath, args, {
-      cwd: worktreePath,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        PWD: worktreePath,
-      },
-      shell: true,
-    });
-
-    let logBuffer = '';
-
-    const append = (chunk: Buffer) => {
-      const output = chunk.toString('utf-8');
-      logBuffer += output;
-      void logFile.write(output);
-    };
+    const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
 
     child.stdout?.on('data', append);
     child.stderr?.on('data', append);
 
     child.on('close', async (code) => {
-      const status = code === 0 ? 'succeeded' : 'failed';
-      const headShaAfter = gitService.getWorktreeHead(worktreePath);
-
-      await logFile.close();
-      this.activeProcesses.delete(runId);
-
-      const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
-      await agentRunsRepository.update(runId, {
-        status,
-        headShaBefore,
-        headShaAfter,
-        log: logBuffer,
-        logPath,
-        finishedAt: new Date(),
-      });
+      await this.handleProcessClose(runId, worktreePath, code, logBuffer, logFile);
     });
 
     this.activeProcesses.set(runId, child);
     return { runId };
   }
 
-  async cancel(runId: string): Promise<void> {
-    const child = this.activeProcesses.get(runId);
-    if (child) {
-      child.kill('SIGTERM');
-      this.activeProcesses.delete(runId);
-    }
-  }
-
-  async getStatus(
-    runId: string
-  ): Promise<{ status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' }> {
-    if (this.activeProcesses.has(runId)) {
-      return { status: 'running' };
-    }
-
-    const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
-    const agentRun = await agentRunsRepository.findById(runId);
-
-    if (!agentRun) {
-      return { status: 'queued' };
-    }
-
-    return { status: agentRun.status };
-  }
-
   async listSessions(worktreePath: string): Promise<OpenCodeSession[]> {
     try {
-      // Run opencode session list with json format
-      const output = execSync('opencode session list --format json', {
+      const { stdout } = this.execCommand('opencode session list --format json', {
         cwd: worktreePath,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
-      // Parse JSON output
-      const sessions: OpenCodeSession[] = JSON.parse(output);
+      const sessions: OpenCodeSession[] = JSON.parse(stdout);
 
       // Sort by createdAt descending (most recent first)
       return sessions.sort((a, b) => {
@@ -272,34 +148,13 @@ export class OpenCodeAgentAdapter extends AgentAdapter {
         return bTime.localeCompare(aTime);
       });
     } catch (error) {
-      // If command fails, return empty array
       console.error('Failed to list opencode sessions:', error);
       return [];
     }
   }
 
-  private async saveSessionToDatabase(runId: string, session: OpenCodeSession): Promise<void> {
-    const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
-
-    // Store session data in inputJson as JSON string
-    const sessionData = JSON.stringify({
-      sessionId: session.id,
-      title: session.title,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
-      status: session.status,
-      model: session.model,
-      agent: session.agent,
-      project: session.project,
-    });
-
-    await agentRunsRepository.update(runId, {
-      inputJson: sessionData,
-    });
-  }
-
   getSessionForRun(runId: string): OpenCodeSession | undefined {
-    return this.sessionCache.get(runId);
+    return this.getCachedSession(runId);
   }
 }
 

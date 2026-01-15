@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateChangesetDTOSchema, RecreateWorktreeDTOSchema, RemoveWorktreeDTOSchema } from 'git-vibe-shared';
+import {
+  CreateChangesetDTOSchema,
+  RemoveWorktreeDTOSchema,
+  RefreshChangesetResponseSchema,
+  CloseChangesetResponseSchema,
+  RemoveWorktreeResponseSchema,
+} from 'git-vibe-shared';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { gitService } from '../services/GitService.js';
@@ -107,7 +113,8 @@ export async function changesetsRoutes(server: FastifyInstance) {
     const headSha = gitService.getWorktreeHead(changeset.worktreePath);
     const updated = await changesetsRepository.update(changeset.id, { headSha });
 
-    return { ...(updated ?? changeset), headSha };
+    const response = RefreshChangesetResponseSchema.parse(updated ?? { ...changeset, headSha });
+    return reply.status(200).send(response);
   });
 
   server.delete<{ Params: { id: string } }>('/api/changesets/:id', async (request, reply) => {
@@ -149,7 +156,8 @@ export async function changesetsRoutes(server: FastifyInstance) {
 
     const updated = await changesetsRepository.update(changeset.id, { status: 'cancelled' });
 
-    return reply.status(200).send(updated);
+    const response = CloseChangesetResponseSchema.parse(updated ?? changeset);
+    return reply.status(200).send(response);
   });
 
   server.post<{ Params: { id: string } }>(
@@ -176,10 +184,11 @@ export async function changesetsRoutes(server: FastifyInstance) {
         const repoPath = project.relayRepoPath || project.sourceRepoPath;
         gitService.removeWorktree(changeset.worktreePath, repoPath);
 
-        return reply.status(200).send({
+        const response = RemoveWorktreeResponseSchema.parse({
           success: true,
           message: 'Worktree removed successfully',
         });
+        return reply.status(200).send(response);
       } catch (error) {
         return reply.status(500).send({
           error: true,

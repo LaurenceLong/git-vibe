@@ -39,7 +39,7 @@ export function CommentComposer({
   } = useForm<AddCommentInput>({
     resolver: zodResolver(AddCommentSchema),
     defaultValues: {
-      comment: '',
+      body: '',
     },
   });
 
@@ -53,11 +53,11 @@ export function CommentComposer({
       {/* Comment */}
       <div>
         <Textarea
-          id="comment"
+          id="body"
           rows={3}
           placeholder={placeholder}
-          {...register('comment')}
-          error={errors.comment?.message}
+          {...register('body')}
+          error={errors.body?.message}
           disabled={isLoading}
         />
       </div>

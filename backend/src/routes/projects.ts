@@ -160,9 +160,8 @@ export async function projectsRoutes(server: FastifyInstance) {
   server.get('/api/models', async (request, reply) => {
     try {
       const models = await openCodeAgentAdapter.getModels();
-      return reply.status(200).send({
-        data: models,
-      });
+      const response = ModelsResponseSchema.parse({ data: models });
+      return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,
@@ -187,10 +186,11 @@ export async function projectsRoutes(server: FastifyInstance) {
       const branches = gitService.listBranches(repoPath);
       const defaultBranch = gitService.getDefaultBranch(repoPath);
 
-      return reply.status(200).send({
+      const response = BranchesResponseSchema.parse({
         data: branches,
         defaultBranch,
       });
+      return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,
@@ -213,9 +213,8 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       const files = await gitService.listFiles(project.relayRepoPath);
 
-      return reply.status(200).send({
-        data: files,
-      });
+      const response = FilesResponseSchema.parse({ data: files });
+      return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,
@@ -246,12 +245,13 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       const content = await gitService.getFileContent(project.relayRepoPath, filePath);
 
-      return reply.status(200).send({
+      const response = FileContentResponseSchema.parse({
         data: {
           path: filePath,
           content,
         },
       });
+      return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,
@@ -282,10 +282,11 @@ export async function projectsRoutes(server: FastifyInstance) {
         }
       }
 
-      return reply.status(200).send({
+      const response = SyncResponseSchema.parse({
         success: true,
         message: 'Synced relay repo to source repo',
       });
+      return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,
@@ -369,7 +370,11 @@ export async function projectsRoutes(server: FastifyInstance) {
       // Delete the project from database (cascade will handle related records)
       await projectsRepository.delete(request.params.id);
 
-      return reply.status(204).send();
+      const response = DeleteProjectResponseSchema.parse({
+        success: true,
+        message: 'Project deleted successfully',
+      });
+      return reply.status(200).send(response);
     } catch (error) {
       return reply.status(500).send({
         error: true,

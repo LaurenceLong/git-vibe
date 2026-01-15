@@ -1,7 +1,7 @@
 /**
  * WorkItemDetail Component
  *
- * Main WorkItem detail page with tabs for Discussion, Agent Config, and PR Status
+ * WorkItem detail view within project context
  * WorkItems are task definitions only - Changesets handle workspaces
  */
 
@@ -100,7 +100,6 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
         return 'neutral';
     }
   };
-
 
   return (
     <div className="space-y-6">

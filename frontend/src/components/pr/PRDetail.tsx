@@ -10,7 +10,6 @@
  * - Handle merge/close actions
  */
 
-import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { changesetsApi, diffsApi, agentRunsApi, importsApi } from '@/lib/api';
 import { ControlledTabs } from '@/components/ui/Tabs';
@@ -105,9 +104,7 @@ export function PRDetail({ prId }: PRDetailProps) {
         <div className="text-center text-red-600">
           <p className="font-medium">Error loading PR</p>
           <p className="mt-1 text-sm">{error instanceof Error ? error.message : 'Unknown error'}</p>
-          <Link to="/changesets" className="mt-4 inline-block text-blue-600 hover:underline">
-            Back to Pull Requests
-          </Link>
+          <div className="mt-4 text-sm text-gray-600">Back to Pull Requests</div>
         </div>
       </div>
     );
@@ -119,9 +116,7 @@ export function PRDetail({ prId }: PRDetailProps) {
       <div className="flex items-center justify-center py-12">
         <div className="text-center text-gray-600">
           <p>PR not found</p>
-          <Link to="/changesets" className="mt-4 inline-block text-blue-600 hover:underline">
-            Back to Pull Requests
-          </Link>
+          <div className="mt-4 text-sm text-gray-600">Back to Pull Requests</div>
         </div>
       </div>
     );
@@ -138,12 +133,6 @@ export function PRDetail({ prId }: PRDetailProps) {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div>
-        <Link to="/changesets" className="text-sm text-blue-600 hover:underline">
-          ← Back to Pull Requests
-        </Link>
-      </div>
 
       {/* PR Header */}
       <div className="rounded-lg border bg-white p-6 shadow-sm">

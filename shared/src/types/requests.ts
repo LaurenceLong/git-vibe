@@ -184,14 +184,14 @@ export const AddressWithAgentDTOSchema = z.object({
  * DTO for creating a review comment
  */
 export interface CreateCommentDTO {
-  comment: string;
+  body: string;
 }
 
 /**
  * Zod schema for CreateCommentDTO validation
  */
 export const CreateCommentDTOSchema = z.object({
-  comment: z.string().min(1),
+  body: z.string().min(1),
 });
 
 // ============================================================================
@@ -259,22 +259,6 @@ export const UpdateWorkItemDTOSchema = z.object({
 // ============================================================================
 // Worktree Request DTOs
 // ============================================================================
-
-/**
- * DTO for recreating a worktree
- */
-export interface RecreateWorktreeDTO {
-  worktreePath: string;
-  branchName: string;
-}
-
-/**
- * Zod schema for RecreateWorktreeDTO validation
- */
-export const RecreateWorktreeDTOSchema = z.object({
-  worktreePath: z.string().min(1),
-  branchName: z.string().min(1),
-});
 
 /**
  * DTO for removing a worktree

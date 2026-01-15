@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateImportDTOSchema } from 'git-vibe-shared';
+import { CreateImportDTOSchema, ImportResponseSchema } from 'git-vibe-shared';
 import { importsRepository } from '../repositories/ImportsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { targetReposRepository } from '../repositories/TargetReposRepository.js';
@@ -82,10 +82,11 @@ export async function importsRoutes(server: FastifyInstance) {
             finishedAt: new Date(),
           });
 
-          return reply.status(201).send({
+          const response = ImportResponseSchema.parse({
             message: 'Import skipped - no changes',
             import: updated ?? importRecord,
           });
+          return reply.status(201).send(response);
         }
 
         await gitService.applyPatch(targetRepo.repoPath, patch);
@@ -106,10 +107,11 @@ export async function importsRoutes(server: FastifyInstance) {
           headSha: sourceHeadSha,
         });
 
-        return reply.status(201).send({
+        const response = ImportResponseSchema.parse({
           message: 'Import successful',
           import: updated ?? importRecord,
         });
+        return reply.status(201).send(response);
       } catch (error) {
         const updated = await importsRepository.update(importId, {
           status: 'failed',

@@ -130,10 +130,6 @@ export const workItemsApi = {
   // Get PRs for WorkItem
   getPRs: (workItemId: string) => api.get(`/workitems/${workItemId}/prs`),
   // Worktree management
-  getWorktreeStatus: (projectId: string, worktreePath: string) =>
-    api.get(`/projects/${projectId}/worktree-status`, { params: { worktreePath } }),
-  recreateWorktree: (projectId: string, worktreePath: string, branchName: string) =>
-    api.post(`/projects/${projectId}/worktrees/recreate`, { worktreePath, branchName }),
   removeWorktree: (projectId: string, worktreePath: string) =>
     api.post(`/projects/${projectId}/worktrees/remove`, { worktreePath }),
 };

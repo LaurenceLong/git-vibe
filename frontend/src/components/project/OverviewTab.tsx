@@ -7,7 +7,6 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { workItemsApi, changesetsApi, projectsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -191,9 +190,8 @@ export function OverviewTab({ project }: OverviewTabProps) {
         ) : recentWorkItems.length > 0 ? (
           <div className="space-y-3">
             {recentWorkItems.map((workItem: any) => (
-              <Link
+              <div
                 key={workItem.id}
-                to={`/workitems/${workItem.id}`}
                 className="block rounded-md border p-4 transition-colors hover:bg-gray-50"
               >
                 <div className="flex items-start justify-between">
@@ -212,7 +210,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
                     </div>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         ) : (
@@ -236,9 +234,8 @@ export function OverviewTab({ project }: OverviewTabProps) {
         ) : recentPRs.length > 0 ? (
           <div className="space-y-3">
             {recentPRs.map((pr: any) => (
-              <Link
+              <div
                 key={pr.id}
-                to={`/changesets/${pr.id}`}
                 className="block rounded-md border p-4 transition-colors hover:bg-gray-50"
               >
                 <div className="flex items-start justify-between">
@@ -265,7 +262,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
                     </div>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         ) : (

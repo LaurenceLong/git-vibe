@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { TriggerAgentRunDTOSchema } from 'git-vibe-shared';
+import { TriggerAgentRunDTOSchema, CancelAgentRunResponseSchema } from 'git-vibe-shared';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { changesetsRepository } from '../repositories/ChangeSetsRepository.js';
 import { openCodeAgentAdapter } from '../services/OpenCodeAgentAdapter.js';
@@ -121,6 +121,11 @@ export async function agentRunsRoutes(server: FastifyInstance) {
       finishedAt: new Date(),
     });
 
-    return { message: 'Agent run cancelled', id: request.params.id, agentRun: updated };
+    const response = CancelAgentRunResponseSchema.parse({
+      message: 'Agent run cancelled',
+      id: request.params.id,
+      agentRun: updated ?? agentRun,
+    });
+    return reply.status(200).send(response);
   });
 }

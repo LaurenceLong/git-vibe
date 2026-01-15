@@ -6,7 +6,6 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { workItemsApi } from '@/lib/api';
 import { Project, WorkItem, WorkItemType, WorkItemStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -26,7 +25,6 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const navigate = useNavigate();
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['workitems', project.id, currentPage, itemsPerPage],
@@ -43,9 +41,8 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
     title: string;
     body?: string;
   }) => {
-    const newWorkItem = await createWorkItem({ projectId: project.id, ...data });
-    // Navigate to WorkItem detail
-    navigate({ to: `/workitems/${newWorkItem.id}` });
+    await createWorkItem({ projectId: project.id, ...data });
+    // Stay on the workitems tab after creation
     setIsCreateModalOpen(false);
   };
 
@@ -110,7 +107,6 @@ export function WorkItemsTab({ project }: WorkItemsTabProps) {
             <div
               key={workItem.id}
               className="block cursor-pointer rounded-lg border p-4 transition-colors hover:bg-gray-50"
-              onClick={() => navigate({ to: `/workitems/${workItem.id}` })}
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">

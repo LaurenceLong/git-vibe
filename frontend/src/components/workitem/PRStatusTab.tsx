@@ -13,7 +13,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { workItemsApi, changesetsApi } from '@/lib/api';
 import { ChangeSet } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -289,11 +288,11 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
               See the complete PR with diff, reviews, and more
             </p>
           </div>
-          <Link to={`/changesets/${linkedPR.id}`}>
-            <Button variant="secondary" size="sm">
+          <div>
+            <Button variant="secondary" size="sm" disabled>
               Open PR
             </Button>
-          </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -5,7 +5,6 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { changesetsApi } from '@/lib/api';
 import { Project, ChangeSet, PRStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -63,10 +62,8 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
       ) : filteredPRs.length > 0 ? (
         <div className="space-y-3">
           {filteredPRs.map((pr: ChangeSet) => (
-            <Link
+            <div
               key={pr.id}
-              to="/changesets/$id"
-              params={{ id: pr.id }}
               className="block rounded-lg border p-4 transition-colors hover:bg-gray-50"
             >
               <div className="flex items-start justify-between">
@@ -93,7 +90,7 @@ export function PullRequestsTab({ project }: PullRequestsTabProps) {
                   </div>
                 </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       ) : (
