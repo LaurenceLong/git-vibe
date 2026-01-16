@@ -7,8 +7,8 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { workItemsApi } from '@/lib/api';
-import { Project, WorkItem, WorkItemType, WorkItemStatus } from '@/types';
+import { workItemsApi, agentRunsApi } from '@/lib/api';
+import { Project, WorkItem, WorkItemType, WorkItemStatus, AgentRun, AgentRunStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/Button';
@@ -16,7 +16,102 @@ import { Pagination } from '@/components/ui/Pagination';
 import { CreateWorkItemModal } from '@/components/workitem/CreateWorkItemModal';
 import { useCreateWorkItem } from '@/hooks/useWorkItem';
 import { WorkItemDetail } from '@/components/workitem/WorkItemDetail';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Terminal, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+
+/**
+ * StatusBadge component for displaying agent run status
+ */
+function AgentRunStatusBadge({ status }: { status: AgentRunStatus }) {
+  const statusConfig: Record<
+    AgentRunStatus,
+    { variant: 'success' | 'warning' | 'destructive' | 'info' | 'neutral'; label: string }
+  > = {
+    running: { variant: 'info', label: 'Running' },
+    queued: { variant: 'neutral', label: 'Queued' },
+    failed: { variant: 'destructive', label: 'Failed' },
+    succeeded: { variant: 'success', label: 'Completed' },
+    cancelled: { variant: 'neutral', label: 'Canceled' },
+  };
+
+  const config = statusConfig[status];
+  return <Badge variant={config.variant}>{config.label}</Badge>;
+}
+
+/**
+ * LogPreview component for displaying log previews
+ */
+function LogPreview({
+  agentRunId,
+  isExpanded,
+  onToggle: _onToggle,
+}: {
+  agentRunId: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const {
+    data: logs,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['agent-run-preview', agentRunId],
+    queryFn: async () => {
+      const [stdout, stderr] = await Promise.all([
+        agentRunsApi.getStdoutTail(agentRunId, 5),
+        agentRunsApi.getStderrTail(agentRunId, 5),
+      ]);
+      return { stdout, stderr };
+    },
+    enabled: isExpanded, // Only fetch when expanded
+    staleTime: 5000, // Cache for 5 seconds
+  });
+
+  if (!isExpanded) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 rounded-md bg-gray-900 p-3">
+      {isLoading ? (
+        <div className="flex items-center space-x-2 text-sm text-gray-400">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-blue-400" />
+          <span>Loading preview...</span>
+        </div>
+      ) : error ? (
+        <div className="flex items-center space-x-2 text-sm text-red-400">
+          <AlertCircle className="h-4 w-4" />
+          <span>Unable to load preview</span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {logs?.stdout && (
+            <div>
+              <div className="mb-1 flex items-center space-x-2">
+                <Terminal className="h-3 w-3 text-green-400" />
+                <span className="text-xs font-medium text-gray-400">Stdout</span>
+              </div>
+              <pre className="overflow-x-auto text-xs text-gray-300">
+                {logs.stdout || <span className="text-gray-500">No output</span>}
+              </pre>
+            </div>
+          )}
+          {logs?.stderr && (
+            <div className="mt-2">
+              <div className="mb-1 flex items-center space-x-2">
+                <Terminal className="h-3 w-3 text-red-400" />
+                <span className="text-xs font-medium text-gray-400">Stderr</span>
+              </div>
+              <pre className="overflow-x-auto text-xs text-red-300">{logs.stderr}</pre>
+            </div>
+          )}
+          {!logs?.stdout && !logs?.stderr && (
+            <p className="text-xs text-gray-500">No logs available</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface WorkItemsTabProps {
   project: Project;
@@ -45,6 +140,52 @@ export function WorkItemsTab({
 
   const workItems = response?.data || [];
   const pagination = response?.pagination;
+
+  // Track expanded work items for log previews
+  const [expandedWorkItems, setExpandedWorkItems] = useState<Set<string>>(new Set());
+
+  // Fetch agent runs for all work items
+  const { data: agentRunsMap } = useQuery({
+    queryKey: ['workitems-agent-runs', workItems.map((wi) => wi.id)],
+    queryFn: async () => {
+      const runsMap = new Map<string, AgentRun[]>();
+      await Promise.all(
+        workItems.map(async (workItem) => {
+          try {
+            const response = await agentRunsApi.listByWorkItem(workItem.id);
+            runsMap.set(workItem.id, response.data);
+          } catch (error) {
+            console.error(`Failed to fetch agent runs for work item ${workItem.id}:`, error);
+            runsMap.set(workItem.id, []);
+          }
+        })
+      );
+      return runsMap;
+    },
+    enabled: workItems.length > 0,
+  });
+
+  // Get the latest agent run for a work item
+  const getLatestAgentRun = (workItemId: string): AgentRun | null => {
+    const runs = agentRunsMap?.get(workItemId) || [];
+    if (runs.length === 0) return null;
+    // Sort by createdAt descending to get the most recent run
+    return runs.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
+  };
+
+  const toggleExpanded = (workItemId: string) => {
+    setExpandedWorkItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(workItemId)) {
+        next.delete(workItemId);
+      } else {
+        next.add(workItemId);
+      }
+      return next;
+    });
+  };
 
   const { createWorkItem, isLoading: isCreating } = useCreateWorkItem();
 
@@ -139,42 +280,89 @@ export function WorkItemsTab({
         </div>
       ) : filteredWorkItems.length > 0 ? (
         <div className="space-y-3">
-          {filteredWorkItems.map((workItem: WorkItem) => (
-            <div
-              key={workItem.id}
-              onClick={() => handleWorkItemClick(workItem.id)}
-              className="block cursor-pointer rounded-lg border p-4 transition-colors hover:border-blue-300 hover:bg-gray-50"
-            >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-medium text-gray-900 hover:text-blue-600">
-                    {workItem.title}
-                  </h3>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge variant={workItem.type === 'issue' ? 'info' : 'warning'}>
-                      {workItem.type}
-                    </Badge>
-                    <Badge variant={workItem.status === 'open' ? 'success' : 'neutral'}>
-                      {workItem.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-600">
-                    Created {new Date(workItem.createdAt).toLocaleDateString()}
+          {filteredWorkItems.map((workItem: WorkItem) => {
+            const latestAgentRun = getLatestAgentRun(workItem.id);
+            const isExpanded = expandedWorkItems.has(workItem.id);
+
+            return (
+              <div
+                key={workItem.id}
+                className="rounded-lg border transition-colors hover:border-blue-300 hover:bg-gray-50"
+              >
+                <div
+                  onClick={() => handleWorkItemClick(workItem.id)}
+                  className="cursor-pointer p-4"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-medium text-gray-900 hover:text-blue-600">
+                        {workItem.title}
+                      </h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge variant={workItem.type === 'issue' ? 'info' : 'warning'}>
+                          {workItem.type}
+                        </Badge>
+                        <Badge variant={workItem.status === 'open' ? 'success' : 'neutral'}>
+                          {workItem.status}
+                        </Badge>
+                        {latestAgentRun && <AgentRunStatusBadge status={latestAgentRun.status} />}
+                      </div>
+                      <div className="mt-2 text-sm text-gray-600">
+                        Created {new Date(workItem.createdAt).toLocaleDateString()}
+                        {latestAgentRun && (
+                          <span className="ml-3">
+                            Agent run: {new Date(latestAgentRun.createdAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="ml-4 flex items-center space-x-2">
+                      {latestAgentRun && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpanded(workItem.id);
+                          }}
+                          className="flex items-center space-x-1 rounded-md px-2 py-1 text-sm font-medium text-gray-600 hover:bg-gray-100"
+                          title="Toggle log preview"
+                        >
+                          <Terminal className="h-4 w-4" />
+                          <span>Logs</span>
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                      <div className="text-gray-400">
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="ml-4 text-gray-400">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </div>
+                {latestAgentRun && (
+                  <LogPreview
+                    agentRunId={latestAgentRun.id}
+                    isExpanded={isExpanded}
+                    onToggle={() => toggleExpanded(workItem.id)}
+                  />
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyState

@@ -184,6 +184,10 @@ export class AgentService {
       linkedAgentRunId?: string;
     }
   ): Promise<AgentRun> {
+    // Validate prompt
+    if (!prompt || typeof prompt !== 'string') {
+      throw new Error('Prompt is required and must be a string');
+    }
     // Check concurrency limit
     const canStart = await this.canStartTask(project.id);
     if (!canStart) {
@@ -230,7 +234,7 @@ export class AgentService {
         workItemId: updatedWorkItem.id,
         projectId: project.id,
         agentKey: agentType,
-        inputSummary: prompt.substring(0, 200),
+        inputSummary: prompt ? prompt.substring(0, 200) : null,
         inputJson: JSON.stringify({
           prompt,
           config,
@@ -399,7 +403,7 @@ export class AgentService {
       workItemId: workItem.id,
       projectId: project.id,
       agentKey: agentType,
-      inputSummary: prompt.substring(0, 200),
+      inputSummary: prompt ? prompt.substring(0, 200) : null,
       inputJson: JSON.stringify({
         prompt,
         config,
@@ -458,9 +462,38 @@ export class AgentService {
       throw new Error('Project not found');
     }
 
-    // Parse original input
-    const inputJson = JSON.parse(agentRun.inputJson) as { prompt: string; config: AgentConfig };
-    const prompt = inputJson.prompt;
+    // Parse original input and extract prompt
+    let prompt: string;
+    try {
+      const inputJson = JSON.parse(agentRun.inputJson) as { prompt?: string; config?: AgentConfig };
+      // Try to get prompt from inputJson
+      prompt = inputJson.prompt || '';
+      
+      // Fallback to inputSummary if prompt is not available
+      if (!prompt && agentRun.inputSummary) {
+        prompt = agentRun.inputSummary;
+      }
+      
+      // Final fallback to workItem title
+      if (!prompt && workItem.title) {
+        prompt = workItem.title;
+      }
+      
+      // If still no prompt, throw an error
+      if (!prompt) {
+        throw new Error('Cannot restart task: original prompt not found');
+      }
+    } catch (error) {
+      // If JSON parsing fails or prompt extraction fails, use fallbacks
+      if (agentRun.inputSummary) {
+        prompt = agentRun.inputSummary;
+      } else if (workItem.title) {
+        prompt = workItem.title;
+      } else {
+        throw new Error('Cannot restart task: no prompt available');
+      }
+    }
+
     const agentParams = this.parseAgentParams(project.agentParams);
 
     // Start new agent run
@@ -629,6 +662,9 @@ export class AgentService {
       throw new Error('Project not found');
     }
 
+    // Preserve the existing status (set by adapter when process completes)
+    const existingStatus = agentRun.status;
+
     try {
       // Stage changes after agent exits
       gitService.stageAllChanges(workItem.worktreePath);
@@ -647,10 +683,12 @@ export class AgentService {
       // Determine head SHA after
       const headShaAfter = gitService.getHeadSha(workItem.worktreePath);
 
-      // Update AgentRun with final status
+      // Update AgentRun - preserve existing status unless finalization fails
       await agentRunsRepository.update(agentRunId, {
-        status: 'succeeded',
-        finishedAt: new Date(),
+        // Only update status if it's still 'running' (shouldn't happen, but be safe)
+        // Otherwise preserve the status set by the adapter (succeeded/failed)
+        status: existingStatus === 'running' ? 'succeeded' : existingStatus,
+        finishedAt: agentRun.finishedAt || new Date(),
         headShaAfter,
         commitSha,
       });
@@ -663,7 +701,7 @@ export class AgentService {
       // PR head SHA is tracked in WorkItem, not in PR schema
       // PR only stores sourceBranch and targetBranch references
     } catch (error) {
-      // Update AgentRun with failed status
+      // Update AgentRun with failed status if finalization fails
       await agentRunsRepository.update(agentRunId, {
         status: 'failed',
         finishedAt: new Date(),

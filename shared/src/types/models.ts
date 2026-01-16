@@ -314,6 +314,8 @@ export interface AgentRun {
   resumeCount: number | null; // Number of times this task has been resumed
   log: string | null;
   logPath: string | null;
+  stdoutPath: string | null; // Path to stdout log file
+  stderrPath: string | null; // Path to stderr log file
   headShaBefore: string | null;
   headShaAfter: string | null;
   commitSha: string | null; // The auto-commit SHA if created
@@ -339,6 +341,8 @@ export const AgentRunSchema = z.object({
   resumeCount: z.number().nullable(), // Number of times this task has been resumed
   log: z.string().nullable(),
   logPath: z.string().nullable(),
+  stdoutPath: z.string().nullable(), // Path to stdout log file
+  stderrPath: z.string().nullable(), // Path to stderr log file
   headShaBefore: z.string().nullable(),
   headShaAfter: z.string().nullable(),
   commitSha: z.string().nullable(), // The auto-commit SHA if created

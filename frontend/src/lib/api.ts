@@ -69,6 +69,35 @@ export const agentRunsApi = {
       inputSummary: data.inputSummary || undefined,
     }),
   cancel: (id: string) => api.post(`/agent-runs/${id}/cancel`),
+  // Get stdout log for an agent run
+  getStdout: async (id: string): Promise<string> => {
+    const response = await api.get<string>(`/agent-runs/${id}/stdout`);
+    return response.data;
+  },
+  // Get stderr log for an agent run
+  getStderr: async (id: string): Promise<string> => {
+    const response = await api.get<string>(`/agent-runs/${id}/stderr`);
+    return response.data;
+  },
+  // Get both stdout and stderr logs for an agent run
+  getLogs: async (id: string): Promise<{ stdout: string; stderr: string }> => {
+    const response = await api.get<{ stdout: string; stderr: string }>(`/agent-runs/${id}/logs`);
+    return response.data;
+  },
+  // Get the last N lines of stdout log (for preview in list)
+  getStdoutTail: async (id: string, lines: number = 10): Promise<string> => {
+    const fullLog = await agentRunsApi.getStdout(id);
+    const logLines = fullLog.split('\n');
+    const tailLines = logLines.slice(-lines);
+    return tailLines.join('\n');
+  },
+  // Get the last N lines of stderr log (for preview in list)
+  getStderrTail: async (id: string, lines: number = 10): Promise<string> => {
+    const fullLog = await agentRunsApi.getStderr(id);
+    const logLines = fullLog.split('\n');
+    const tailLines = logLines.slice(-lines);
+    return tailLines.join('\n');
+  },
 };
 
 export const importsApi = {

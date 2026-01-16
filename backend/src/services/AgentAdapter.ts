@@ -60,23 +60,46 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
   /**
    * Get the logs directory path for storing agent run logs
    */
-  protected getLogsDir(): string {
-    const { STORAGE_CONFIG } = require('../config/storage.js');
+  protected async getLogsDir(): Promise<string> {
+    const { STORAGE_CONFIG } = await import('../config/storage.js');
     return STORAGE_CONFIG.logsDir;
   }
 
   /**
    * Get the log file path for a specific agent run
    */
-  protected getLogFilePath(runId: string): string {
-    return path.join(this.getLogsDir(), `agent-run-${runId}.log`);
+  protected async getLogFilePath(runId: string): Promise<string> {
+    const logsDir = await this.getLogsDir();
+    return path.join(logsDir, `agent-run-${runId}.log`);
+  }
+
+  /**
+   * Get the stdout log file path for a specific agent run
+   */
+  protected async getStdoutPath(runId: string): Promise<string> {
+    const logsDir = await this.getLogsDir();
+    return path.join(logsDir, `agent-run-${runId}-stdout.log`);
+  }
+
+  /**
+   * Get the stderr log file path for a specific agent run
+   */
+  protected async getStderrPath(runId: string): Promise<string> {
+    const logsDir = await this.getLogsDir();
+    return path.join(logsDir, `agent-run-${runId}-stderr.log`);
   }
 
   /**
    * Ensure the logs directory exists
    */
   protected async ensureLogsDir(): Promise<void> {
-    await fs.mkdir(this.getLogsDir(), { recursive: true });
+    const logsDir = await this.getLogsDir();
+    try {
+      await fs.mkdir(logsDir, { recursive: true });
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to create logs directory at ${logsDir}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -140,16 +163,28 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
       shell?: boolean;
     }
   ): ReturnType<typeof spawn> {
-    return spawn(executablePath, args, {
-      ...options,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        PWD: options.cwd,
-        ...options.env,
-      },
-      shell: true,
-    });
+    try {
+      const child = spawn(executablePath, args, {
+        ...options,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          PWD: options.cwd,
+          ...options.env,
+        },
+        shell: true,
+      });
+
+      // Log process errors
+      child.on('error', (error) => {
+        console.error(`[AgentAdapter] Process error for ${executablePath}:`, error);
+      });
+
+      return child;
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to spawn process ${executablePath}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -157,8 +192,33 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
    */
   protected async createLogFile(runId: string): Promise<ReturnType<typeof fs.open>> {
     await this.ensureLogsDir();
-    const logPath = this.getLogFilePath(runId);
-    return await fs.open(logPath, 'w');
+    const logPath = await this.getLogFilePath(runId);
+    try {
+      return await fs.open(logPath, 'w');
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to create log file at ${logPath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create stdout and stderr log files and return their handles
+   */
+  protected async createStdoutStderrFiles(runId: string): Promise<{
+    stdoutFile: Awaited<ReturnType<typeof fs.open>>;
+    stderrFile: Awaited<ReturnType<typeof fs.open>>;
+  }> {
+    await this.ensureLogsDir();
+    const stdoutPath = await this.getStdoutPath(runId);
+    const stderrPath = await this.getStderrPath(runId);
+    try {
+      const stdoutFile = await fs.open(stdoutPath, 'w');
+      const stderrFile = await fs.open(stderrPath, 'w');
+      return { stdoutFile, stderrFile };
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to create log files:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -177,6 +237,36 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
     };
 
     return { logBuffer, append };
+  }
+
+  /**
+   * Create separate stdout and stderr output handlers
+   */
+  protected createStdoutStderrHandlers(
+    stdoutFile: Awaited<ReturnType<typeof fs.open>>,
+    stderrFile: Awaited<ReturnType<typeof fs.open>>
+  ): {
+    stdoutBuffer: string;
+    stderrBuffer: string;
+    appendStdout: (_chunk: Buffer) => void;
+    appendStderr: (_chunk: Buffer) => void;
+  } {
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+
+    const appendStdout = (chunk: Buffer) => {
+      const output = chunk.toString('utf-8');
+      stdoutBuffer += output;
+      void stdoutFile.write(output);
+    };
+
+    const appendStderr = (chunk: Buffer) => {
+      const output = chunk.toString('utf-8');
+      stderrBuffer += output;
+      void stderrFile.write(output);
+    };
+
+    return { stdoutBuffer, stderrBuffer, appendStdout, appendStderr };
   }
 
   /**
@@ -202,7 +292,7 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
     }
 
     const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
-    const logPath = this.getLogFilePath(runId);
+    const logPath = await this.getLogFilePath(runId);
 
     await agentRunsRepository.update(runId, {
       status,
@@ -212,6 +302,114 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
       logPath,
       finishedAt: new Date(),
     });
+
+    // Release lock and finalize agent run
+    try {
+      const { agentService } = await import('./AgentService.js');
+      await agentService.finalizeAgentRun(runId);
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to finalize agent run ${runId}:`, error);
+      // Even if finalization fails, try to release the lock
+      try {
+        const agentRun = await agentRunsRepository.findById(runId);
+        if (agentRun) {
+          const { workItemsRepository } = await import('../repositories/WorkItemsRepository.js');
+          await workItemsRepository.releaseLock(agentRun.workItemId, runId);
+        }
+      } catch (lockError) {
+        console.error(`[AgentAdapter] Failed to release lock for run ${runId}:`, lockError);
+      }
+    }
+  }
+
+  /**
+   * Handle process completion with separate stdout/stderr and update database
+   */
+  protected async handleProcessCloseWithStdoutStderr(
+    runId: string,
+    worktreePath: string,
+    exitCode: number | null,
+    stdoutBuffer: string,
+    stderrBuffer: string,
+    stdoutFile: Awaited<ReturnType<typeof fs.open>>,
+    stderrFile: Awaited<ReturnType<typeof fs.open>>,
+    onBeforeUpdate?: () => Promise<void>
+  ): Promise<void> {
+    const status = exitCode === 0 ? 'succeeded' : 'failed';
+    const headShaBefore = gitService.getWorktreeHead(worktreePath);
+    const headShaAfter = gitService.getWorktreeHead(worktreePath);
+
+    await stdoutFile.close();
+    await stderrFile.close();
+    this.activeProcesses.delete(runId);
+
+    if (onBeforeUpdate) {
+      await onBeforeUpdate();
+    }
+
+    const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+    const logPath = await this.getLogFilePath(runId);
+    const stdoutPath = await this.getStdoutPath(runId);
+    const stderrPath = await this.getStderrPath(runId);
+
+    // Combine stdout and stderr for the log field
+    const combinedLog = `STDOUT:\n${stdoutBuffer}\n\nSTDERR:\n${stderrBuffer}`;
+
+    await agentRunsRepository.update(runId, {
+      status,
+      headShaBefore,
+      headShaAfter,
+      log: combinedLog,
+      logPath,
+      stdoutPath,
+      stderrPath,
+      finishedAt: new Date(),
+    });
+
+    // Release lock and finalize agent run
+    try {
+      const { agentService } = await import('./AgentService.js');
+      await agentService.finalizeAgentRun(runId);
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to finalize agent run ${runId}:`, error);
+      // Even if finalization fails, try to release the lock
+      try {
+        const agentRun = await agentRunsRepository.findById(runId);
+        if (agentRun) {
+          const { workItemsRepository } = await import('../repositories/WorkItemsRepository.js');
+          await workItemsRepository.releaseLock(agentRun.workItemId, runId);
+        }
+      } catch (lockError) {
+        console.error(`[AgentAdapter] Failed to release lock for run ${runId}:`, lockError);
+      }
+    }
+  }
+
+  /**
+   * Read the contents of a log file
+   */
+  protected async readLogFile(filePath: string): Promise<string> {
+    try {
+      return await fs.readFile(filePath, 'utf-8');
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to read log file at ${filePath}:`, error);
+      return '';
+    }
+  }
+
+  /**
+   * Read the last N lines of a log file
+   */
+  protected async readLogFileTail(filePath: string, lines: number = 10): Promise<string> {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const allLines = content.split('\n');
+      const tailLines = allLines.slice(-lines);
+      return tailLines.join('\n');
+    } catch (error) {
+      console.error(`[AgentAdapter] Failed to read log file tail at ${filePath}:`, error);
+      return '';
+    }
   }
 
   /**

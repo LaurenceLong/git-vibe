@@ -85,6 +85,19 @@ export async function workitemsRoutes(server: FastifyInstance) {
           body: body.body,
         });
 
+        // Automatically execute task: initialize workspace and start agent
+        // This runs asynchronously and doesn't block the response
+        agentService
+          .executeTask(workItem.projectId, workItem.id, workItem.title, workItem.body || undefined)
+          .then(() => {
+            console.log(`Task started successfully for work item ${workItem.id}`);
+          })
+          .catch((error) => {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`Failed to execute task for work item ${workItem.id}:`, errorMessage);
+            console.error('Full error details:', error);
+          });
+
         return reply.status(201).send(workItem);
       } catch (error) {
         if (error instanceof z.ZodError) {

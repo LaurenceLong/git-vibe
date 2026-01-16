@@ -275,3 +275,113 @@ export function useStartWorkItemTask(workItemId: string) {
     error: mutation.error as Error | null,
   };
 }
+
+/**
+ * Hook to cancel a task for a WorkItem
+ *
+ * @param workItemId - The ID of WorkItem
+ * @param taskId - The ID of the task to cancel
+ * @returns Mutation object with cancel task function
+ */
+export function useCancelWorkItemTask(workItemId: string, taskId: string) {
+  const queryClient = useQueryClient();
+  const { success, error: showError } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const response = await workItemsApi.cancelTask(workItemId, taskId);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate WorkItem query to update task status
+      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
+      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: ['workitems'] });
+      success('Task cancelled successfully');
+    },
+    onError: (err: Error) => {
+      showError(`Failed to cancel task: ${err.message}`);
+    },
+  });
+
+  return {
+    cancelTask: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}
+
+/**
+ * Hook to restart a task for a WorkItem
+ *
+ * @param workItemId - The ID of WorkItem
+ * @param taskId - The ID of the task to restart
+ * @returns Mutation object with restart task function
+ */
+export function useRestartWorkItemTask(workItemId: string, taskId: string) {
+  const queryClient = useQueryClient();
+  const { success, error: showError } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const response = await workItemsApi.restartTask(workItemId, taskId);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate WorkItem query to update task status
+      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
+      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: ['workitems'] });
+      // Invalidate pull-requests lists
+      queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
+      success('Task restarted successfully');
+    },
+    onError: (err: Error) => {
+      showError(`Failed to restart task: ${err.message}`);
+    },
+  });
+
+  return {
+    restartTask: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}
+
+/**
+ * Hook to resume a task for a WorkItem
+ *
+ * @param workItemId - The ID of WorkItem
+ * @param taskId - The ID of the task to resume
+ * @param prompt - The prompt to resume with
+ * @returns Mutation object with resume task function
+ */
+export function useResumeWorkItemTask(workItemId: string, taskId: string, prompt: string) {
+  const queryClient = useQueryClient();
+  const { success, error: showError } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const response = await workItemsApi.resumeTask(workItemId, taskId, prompt);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate WorkItem query to update task status
+      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
+      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: ['workitems'] });
+      // Invalidate pull-requests lists
+      queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
+      success('Task resumed successfully');
+    },
+    onError: (err: Error) => {
+      showError(`Failed to resume task: ${err.message}`);
+    },
+  });
+
+  return {
+    resumeTask: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}

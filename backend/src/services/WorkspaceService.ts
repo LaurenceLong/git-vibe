@@ -2,6 +2,7 @@ import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { gitService } from './GitService.js';
 import type { WorkItem, Project } from '../types/models.js';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { STORAGE_CONFIG } from '../config/storage.js';
 
 /**
@@ -43,27 +44,61 @@ export class WorkspaceService {
     const worktreeStatus = gitService.getWorktreeStatus(repoPath, worktreePath);
 
     if (worktreeStatus === 'present') {
-      // Worktree already exists, refresh head SHA
-      const headSha = gitService.getWorktreeHead(worktreePath);
+      // Worktree is registered in Git, check if directory exists on disk
+      const dirExists = await fs
+        .access(worktreePath)
+        .then(() => true)
+        .catch(() => false);
 
-      // Update WorkItem with current state
-      const updated = await workItemsRepository.update(workItem.id, {
-        worktreePath,
-        headBranch,
-        baseBranch,
-        baseSha,
-        headSha,
-        workspaceStatus: 'ready',
-      });
+      if (dirExists) {
+        // Worktree exists and directory is present, refresh head SHA
+        const headSha = gitService.getWorktreeHead(worktreePath);
 
-      if (!updated) {
-        throw new Error(`Failed to update WorkItem ${workItem.id}`);
+        // Update WorkItem with current state
+        const updated = await workItemsRepository.update(workItem.id, {
+          worktreePath,
+          headBranch,
+          baseBranch,
+          baseSha,
+          headSha,
+          workspaceStatus: 'ready',
+        });
+
+        if (!updated) {
+          throw new Error(`Failed to update WorkItem ${workItem.id}`);
+        }
+
+        return updated;
+      } else {
+        // Worktree is registered but directory is missing, prune stale worktree
+        try {
+          gitService.pruneWorktrees(repoPath);
+        } catch (error) {
+          console.warn(
+            `Warning when pruning worktrees: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       }
-
-      return updated;
     }
 
-    // Step 7: Create worktree with new branch
+    // Step 7: Check if worktree directory exists on disk but is not registered
+    try {
+      const dirExists = await fs
+        .access(worktreePath)
+        .then(() => true)
+        .catch(() => false);
+      if (dirExists) {
+        // Directory exists but is not a valid worktree, remove it
+        await fs.rm(worktreePath, { recursive: true, force: true });
+      }
+    } catch (error) {
+      // Ignore errors when checking/removing directory, proceed with worktree creation
+      console.warn(
+        `Warning when checking worktree directory: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    // Step 8: Create worktree with new branch
     try {
       gitService.createWorktree(repoPath, worktreePath, headBranch, baseBranch);
     } catch (error) {
@@ -76,10 +111,10 @@ export class WorkspaceService {
       }
     }
 
-    // Step 8: Get initial head SHA (same as baseSha initially)
+    // Step 9: Get initial head SHA (same as baseSha initially)
     const headSha = gitService.getWorktreeHead(worktreePath);
 
-    // Step 9: Persist workspace fields
+    // Step 10: Persist workspace fields
     const updated = await workItemsRepository.update(workItem.id, {
       worktreePath,
       headBranch,

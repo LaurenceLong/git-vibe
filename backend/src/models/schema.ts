@@ -175,6 +175,8 @@ export const agentRuns = sqliteTable(
     ),
     log: text('log'),
     logPath: text('log_path'),
+    stdoutPath: text('stdout_path'),
+    stderrPath: text('stderr_path'),
     headShaBefore: text('head_sha_before'),
     headShaAfter: text('head_sha_after'),
     commitSha: text('commit_sha'),

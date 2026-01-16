@@ -218,7 +218,7 @@ export function ControlledTabs({
 
   return (
     <div className={className}>
-      <TabList>
+      <TabList className="px-6">
         {tabs.map((tab, index) => {
           const isActive = tab.props.value === activeValue;
           return (

@@ -35,12 +35,13 @@ interface ClaudeCodeAgentCorrectionParams extends AgentCorrectionParams {
 export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
   async validate(config: { executablePath: string }): Promise<boolean> {
     try {
-      const { promises: fs } = await import('node:fs');
-      await fs.access(config.executablePath, fs.constants.X_OK);
+      // Try to execute a simple command to verify the executable is available
+      // This works with both full paths and command names in PATH
+      this.execCommand(`${config.executablePath} --version`, { encoding: 'utf-8' });
       return true;
-    } catch {
+    } catch (error) {
       throw new Error(
-        `Claude Code executable not found or not executable: ${config.executablePath}`
+        `Claude Code executable not found or not executable: ${config.executablePath}. Error: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

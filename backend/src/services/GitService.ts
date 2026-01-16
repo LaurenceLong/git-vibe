@@ -81,16 +81,23 @@ export class GitService {
 
   createWorktree(repoPath: string, worktreePath: string, branch: string, baseRef: string): void {
     // Create new branch from baseRef and check it out in the worktree
-    this.execCommand(`git worktree add -b ${branch} ${worktreePath} ${baseRef}`, repoPath);
+    // Use -f flag to force creation if worktree is registered but missing on disk
+    this.execCommand(`git worktree add -f -b ${branch} ${worktreePath} ${baseRef}`, repoPath);
   }
 
   createWorktreeFromExistingBranch(repoPath: string, worktreePath: string, branch: string): void {
     // Create worktree from existing branch (without -b flag)
-    this.execCommand(`git worktree add ${worktreePath} ${branch}`, repoPath);
+    // Use -f flag to force creation if worktree is registered but missing on disk
+    this.execCommand(`git worktree add -f ${worktreePath} ${branch}`, repoPath);
   }
 
   removeWorktree(worktreePath: string, repoPath: string): void {
     this.execCommand(`git worktree remove ${worktreePath}`, repoPath);
+  }
+
+  pruneWorktrees(repoPath: string): void {
+    // Prune stale worktree registrations (worktrees that are registered but missing on disk)
+    this.execCommand('git worktree prune', repoPath);
   }
 
   deleteBranch(branchName: string, repoPath: string): void {
