@@ -80,6 +80,15 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       const stdoutPath = await this.getStdoutPath(runId);
       const stderrPath = await this.getStderrPath(runId);
       console.log(`[OpenCodeAgent] Log files created: stdout=${stdoutPath}, stderr=${stderrPath}`);
+      
+      // Update database with log file paths immediately so SSE streaming can work
+      const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+      await agentRunsRepository.update(runId, {
+        stdoutPath,
+        stderrPath,
+      });
+      console.log(`[OpenCodeAgent] Log file paths saved to database for real-time streaming`);
+      
       const { stdoutBuffer, stderrBuffer, appendStdout, appendStderr } =
         this.createStdoutStderrHandlers(stdoutFile, stderrFile);
 
@@ -93,11 +102,23 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
         args.push(...config.baseArgs);
       }
 
-      // Add the prompt
+      // Add the prompt - opencode run accepts [message..] as positional args
+      // When the prompt contains newlines, we need to pass it as a single argument
+      // Node.js spawn will handle proper escaping when using an array of args
       args.push(prompt);
 
+      // Log the command (note: args.join doesn't show proper quoting, but spawn handles it correctly)
+      const commandPreview = args
+        .map((arg) => {
+          // Escape for log display - wrap in quotes if contains spaces or newlines
+          if (arg.includes(' ') || arg.includes('\n')) {
+            return `"${arg.replace(/"/g, '\\"')}"`;
+          }
+          return arg;
+        })
+        .join(' ');
       console.log(
-        `[OpenCodeAgent] Spawning process with command: ${config.executablePath} ${args.join(' ')}`
+        `[OpenCodeAgent] Spawning process with command: ${config.executablePath} ${commandPreview}`
       );
       const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
       console.log(`[OpenCodeAgent] Process spawned with PID: ${child.pid}`);
@@ -143,7 +164,12 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
                 console.log(`[OpenCodeAgent] Latest session ID: ${latestSession.id}`);
                 this.cacheSession(runId, latestSession);
                 await this.saveSessionToDatabase(runId, latestSession);
-                console.log(`[OpenCodeAgent] Session saved to database`);
+                // Update the sessionId field in the database with the actual opencode session ID
+                const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+                await agentRunsRepository.update(runId, {
+                  sessionId: latestSession.id,
+                });
+                console.log(`[OpenCodeAgent] Session ID updated in database: ${latestSession.id}`);
               }
             } catch (error) {
               console.error('[OpenCodeAgent] Failed to list sessions:', error);
@@ -181,6 +207,15 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       const stdoutPath = await this.getStdoutPath(runId);
       const stderrPath = await this.getStderrPath(runId);
       console.log(`[OpenCodeAgent] Log files created: stdout=${stdoutPath}, stderr=${stderrPath}`);
+      
+      // Update database with log file paths immediately so SSE streaming can work
+      const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+      await agentRunsRepository.update(runId, {
+        stdoutPath,
+        stderrPath,
+      });
+      console.log(`[OpenCodeAgent] Log file paths saved to database for real-time streaming`);
+      
       const { stdoutBuffer, stderrBuffer, appendStdout, appendStderr } =
         this.createStdoutStderrHandlers(stdoutFile, stderrFile);
 

@@ -140,9 +140,10 @@ export function useUpdateWorkItem(id: string) {
  * Hook to delete a WorkItem
  *
  * @param id - The ID of WorkItem to delete
+ * @param onSuccess - Optional callback to execute after successful deletion
  * @returns Mutation object with delete function
  */
-export function useDeleteWorkItem(id: string) {
+export function useDeleteWorkItem(id: string, onSuccess?: () => void) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
@@ -157,6 +158,10 @@ export function useDeleteWorkItem(id: string) {
       // Invalidate WorkItems lists
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem deleted successfully');
+      // Execute optional callback after showing success message
+      if (onSuccess) {
+        onSuccess();
+      }
     },
     onError: (err: Error) => {
       showError(`Failed to delete WorkItem: ${err.message}`);

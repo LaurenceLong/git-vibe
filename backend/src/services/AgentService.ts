@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
+import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { gitService } from '../services/GitService.js';
 import { workspaceService } from './WorkspaceService.js';
 import { prService } from './PRService.js';
@@ -31,7 +32,7 @@ export interface TaskExecutionResult {
     title: string;
     body?: string;
   };
-  pullRequest: PullRequest;
+  pullRequest?: PullRequest;
   agentRun: AgentRun;
 }
 
@@ -158,6 +159,40 @@ export class AgentService {
   }
 
   /**
+   * Close existing PR if there's no diff between base and head
+   * This ensures PRs with no changes are automatically closed
+   */
+  private async closeExistingPRIfNoDiff(workItem: WorkItem, headSha?: string): Promise<void> {
+    // Check if PR exists for this WorkItem
+    const existingPR = await pullRequestsRepository.findByWorkItemId(workItem.id);
+    if (!existingPR || existingPR.status !== 'open') {
+      // No PR exists or PR is already closed/merged
+      return;
+    }
+
+    // Verify there's actually no diff before closing
+    if (!workItem.worktreePath || !workItem.baseSha) {
+      // Can't verify diff, skip closing
+      return;
+    }
+
+    try {
+      // Use provided headSha or get current HEAD
+      const currentHeadSha = headSha || gitService.getHeadSha(workItem.worktreePath);
+      const diff = gitService.getDiff(workItem.baseSha, currentHeadSha, workItem.worktreePath);
+      const hasActualChanges = diff.trim().length > 0;
+
+      if (!hasActualChanges) {
+        // No diff - close the PR
+        await prService.closePR(existingPR);
+      }
+    } catch (error) {
+      // If we can't get the diff, don't close the PR (fail safe)
+      console.error(`Failed to check diff for PR ${existingPR.id}:`, error);
+    }
+  }
+
+  /**
    * Clean up worktree for a closed WorkItem
    * Only removes worktree when WorkItem is closed or deleted
    */
@@ -204,7 +239,7 @@ export class AgentService {
     const lockAcquired = await workItemsRepository.acquireLock(
       updatedWorkItem.id,
       runId,
-      3600000 // Default TTL: 1 hour in milliseconds
+      3600000 * 6 // Default TTL: 6 hour in milliseconds
     );
 
     if (!lockAcquired) {
@@ -281,7 +316,7 @@ export class AgentService {
   }
 
   /**
-   * Execute a task: open PR and start agent automatically
+   * Execute a task: start agent automatically (PR will be created after agent finishes if there are changes)
    */
   async executeTask(
     projectId: string,
@@ -305,11 +340,19 @@ export class AgentService {
       // Parse agent params from project
       const agentParams = this.parseAgentParams(project.agentParams);
 
-      // Open PR for WorkItem
-      const pullRequest = await this.openPRForWorkItem(workItem, project);
+      // Ensure workspace is initialized (needed for agent run, but don't create PR yet)
+      await workspaceService.ensureWorkspace(workItem, project);
 
-      // Build prompt from work item
-      const prompt = `Task: ${workItemTitle}${workItemBody ? `\n\nDescription: ${workItemBody}` : ''}`;
+      // Build prompt from work item (use workItem.body from database to ensure we have the latest description)
+      // workItem.body can be null, so we need to check explicitly
+      const description = workItem.body ?? workItemBody ?? '';
+      const prompt = description.trim()
+        ? `Task: ${workItemTitle}\n\nDescription: ${description}`
+        : `Task: ${workItemTitle}`;
+
+      console.log(`[AgentService] Building prompt for work item ${workItemId}`);
+      console.log(`[AgentService] Title: ${workItemTitle}`);
+      console.log(`[AgentService] Final prompt length: ${prompt.length} characters`);
 
       // Start agent run
       const agentRun = await this.startAgentRun(workItem, project, prompt, agentParams);
@@ -320,7 +363,7 @@ export class AgentService {
           title: workItemTitle,
           body: workItemBody,
         },
-        pullRequest,
+        // PR will be created in finalizeAgentRun if there are changes
         agentRun,
       };
     } catch (error) {
@@ -396,6 +439,28 @@ export class AgentService {
       );
     }
 
+    // Extract original prompt from the original run
+    let originalPrompt = '';
+    try {
+      const originalInputJson = JSON.parse(agentRun.inputJson) as { prompt?: string; config?: AgentConfig };
+      originalPrompt = originalInputJson.prompt || '';
+      
+      // Fallback to inputSummary if prompt is not available
+      if (!originalPrompt && agentRun.inputSummary) {
+        originalPrompt = agentRun.inputSummary;
+      }
+    } catch {
+      // If JSON parsing fails, use inputSummary as fallback
+      if (agentRun.inputSummary) {
+        originalPrompt = agentRun.inputSummary;
+      }
+    }
+
+    // Combine original prompt with new prompt
+    const combinedPrompt = originalPrompt
+      ? `${originalPrompt}\n\nAdditional instructions: ${prompt}`
+      : prompt;
+
     // Create new agent run record linked to the original
     const newRunId = uuidv4();
     const newAgentRun = await agentRunsRepository.create({
@@ -403,9 +468,11 @@ export class AgentService {
       workItemId: workItem.id,
       projectId: project.id,
       agentKey: agentType,
-      inputSummary: prompt ? prompt.substring(0, 200) : null,
+      inputSummary: combinedPrompt ? combinedPrompt.substring(0, 200) : null,
       inputJson: JSON.stringify({
-        prompt,
+        prompt: combinedPrompt,
+        originalPrompt,
+        newPrompt: prompt,
         config,
       }),
       sessionId: agentRun.sessionId, // Reuse the same session_id
@@ -427,7 +494,7 @@ export class AgentService {
         worktreePath: workItem.worktreePath || '',
         agentRunId: newRunId,
         sessionId: agentRun.sessionId,
-        reviewComments: prompt,
+        reviewComments: combinedPrompt,
         config,
       })
       .catch(async (error: unknown) => {
@@ -666,22 +733,49 @@ export class AgentService {
     const existingStatus = agentRun.status;
 
     try {
-      // Stage changes after agent exits
+      // Stage all changes first (including new files)
+      // This is necessary because new files won't show up in git diff until staged
       gitService.stageAllChanges(workItem.worktreePath);
 
-      // Check if there are staged changes
-      const hasChanges = !gitService.hasStagedChanges(workItem.worktreePath);
+      // Check if there are staged changes after staging
+      const hasStagedChanges = gitService.hasStagedChanges(workItem.worktreePath);
 
       let commitSha: string | null = null;
+      let headShaAfter: string;
 
-      if (hasChanges) {
+      if (hasStagedChanges) {
         // Commit if changes exist
         const commitMessage = `AgentRun ${agentRunId}: ${agentRun.inputSummary || 'Agent execution'}`;
         commitSha = gitService.commitChanges(workItem.worktreePath, commitMessage);
-      }
+        headShaAfter = gitService.getHeadSha(workItem.worktreePath);
 
-      // Determine head SHA after
-      const headShaAfter = gitService.getHeadSha(workItem.worktreePath);
+        // Check if there's an actual diff between base and head (to avoid creating PRs with no changes)
+        if (!workItem.baseSha) {
+          throw new Error(`WorkItem ${workItem.id} missing baseSha`);
+        }
+        const diff = gitService.getDiff(workItem.baseSha, headShaAfter, workItem.worktreePath);
+        const hasActualChanges = diff.trim().length > 0;
+
+        if (hasActualChanges) {
+          // Create PR only if there are actual changes
+          await this.openPRForWorkItem(workItem, project);
+        } else {
+          // No actual changes in diff - close any existing PR and update agent run log
+          await this.closeExistingPRIfNoDiff(workItem, headShaAfter);
+          const noChangesMessage = '\n\n[Finalization] No changes detected in diff - PR creation skipped.';
+          await agentRunsRepository.update(agentRunId, {
+            log: (agentRun.log ?? '') + noChangesMessage,
+          });
+        }
+      } else {
+        // No staged changes - close any existing PR and update agent run log
+        headShaAfter = gitService.getHeadSha(workItem.worktreePath);
+        await this.closeExistingPRIfNoDiff(workItem, headShaAfter);
+        const noChangesMessage = '\n\n[Finalization] No changes detected - PR creation skipped.';
+        await agentRunsRepository.update(agentRunId, {
+          log: (agentRun.log ?? '') + noChangesMessage,
+        });
+      }
 
       // Update AgentRun - preserve existing status unless finalization fails
       await agentRunsRepository.update(agentRunId, {

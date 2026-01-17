@@ -149,6 +149,101 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
     }
   );
 
+  // GET /api/pull-requests/:id/commits-with-tasks - Get PR commits grouped by tasks
+  server.get<{ Params: { id: string } }>(
+    '/api/pull-requests/:id/commits-with-tasks',
+    async (request, reply) => {
+      const pr = await pullRequestsRepository.findById(request.params.id);
+
+      if (!pr) {
+        return reply.status(404).send({
+          error: true,
+          message: 'Pull request not found',
+        });
+      }
+
+      const workItem = await workItemsRepository.findById(pr.workItemId);
+      if (!workItem) {
+        return reply.status(404).send({
+          error: true,
+          message: 'WorkItem not found',
+        });
+      }
+
+      try {
+        const project = await projectsRepository.findById(pr.projectId);
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        console.log(`Getting commits for PR ${pr.id}, WorkItem ${workItem.id}`, {
+          worktreePath: workItem.worktreePath,
+          headBranch: workItem.headBranch,
+          baseSha: workItem.baseSha,
+          headSha: workItem.headSha,
+        });
+
+        const commitsWithTasks = await prService.getCommitsWithTasks(pr, workItem, project);
+        
+        console.log(`Returning ${commitsWithTasks.length} commit groups for PR ${pr.id}`);
+        
+        return { data: commitsWithTasks };
+      } catch (error) {
+        console.error(`Error getting commits for PR ${pr.id}:`, error);
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to get commits with tasks',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  // GET /api/pull-requests/:id/statistics - Get PR statistics
+  server.get<{ Params: { id: string } }>(
+    '/api/pull-requests/:id/statistics',
+    async (request, reply) => {
+      const pr = await pullRequestsRepository.findById(request.params.id);
+
+      if (!pr) {
+        return reply.status(404).send({
+          error: true,
+          message: 'Pull request not found',
+        });
+      }
+
+      const workItem = await workItemsRepository.findById(pr.workItemId);
+      if (!workItem) {
+        return reply.status(404).send({
+          error: true,
+          message: 'WorkItem not found',
+        });
+      }
+
+      try {
+        const project = await projectsRepository.findById(pr.projectId);
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const statistics = await prService.getStatistics(pr, workItem, project);
+        return statistics;
+      } catch (error) {
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to get PR statistics',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
   // POST /api/pull-requests/:id/merge - Merge PR
   server.post<{ Params: { id: string }; Body: { strategy?: 'merge' | 'squash' | 'rebase' } }>(
     '/api/pull-requests/:id/merge',

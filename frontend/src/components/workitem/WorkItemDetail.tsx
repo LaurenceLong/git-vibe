@@ -20,18 +20,23 @@ import { AlertCircle, Calendar, ListTodo, X, RefreshCw, Play, Terminal } from 'l
 import { TaskManagementTab } from './TaskManagementTab';
 import { PRStatusTab } from './PRStatusTab';
 import { LogDetailTab } from './LogDetailTab';
+import { AgentConfigTab } from './AgentConfigTab';
+import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
+import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
 import { workItemsApi } from '@/lib/api';
 
 export interface WorkItemDetailProps {
   workItemId: string;
+  onDeleteSuccess?: () => void;
 }
 
 /**
  * WorkItemDetail component
  *
  * @param workItemId - The ID of WorkItem to display
+ * @param onDeleteSuccess - Optional callback to execute after successful deletion
  */
-export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
+export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailProps) {
   const [tasks, setTasks] = useState<
     Array<{
       id: string;
@@ -44,8 +49,22 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const { data: workItem, isLoading, error } = useWorkItem(workItemId);
   const { closeWorkItem, isLoading: isClosing } = useCloseWorkItem(workItemId);
-  const { deleteWorkItem, isLoading: isDeleting } = useDeleteWorkItem(workItemId);
+  const { deleteWorkItem, isLoading: isDeleting } = useDeleteWorkItem(workItemId, onDeleteSuccess);
   const { startTask, isLoading: isStarting } = useStartWorkItemTask(workItemId);
+
+  // Worktree management
+  const worktreeManagement = useWorktreeManagement({
+    id: workItemId,
+    projectId: workItem?.projectId || '',
+    worktreePath: workItem?.worktreePath || null,
+    branchName: workItem?.headBranch || '',
+  });
+
+  // Determine worktree status
+  const getWorktreeStatus = (): 'present' | 'missing' | 'recreating' => {
+    if (worktreeManagement.isRecreating) return 'recreating';
+    return workItem?.worktreePath ? 'present' : 'missing';
+  };
 
   // Fetch tasks to check status
   const fetchTasks = useCallback(async () => {
@@ -332,6 +351,21 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
         </div>
       </div>
 
+      {/* Worktree Status */}
+      <WorktreeStatusComponent
+        status={getWorktreeStatus()}
+        path={workItem.worktreePath || null}
+        branchName={workItem.headBranch || ''}
+        projectId={workItem.projectId}
+        createdAt={workItem.createdAt}
+        updatedAt={workItem.updatedAt}
+        onRecreate={worktreeManagement.recreateWorktree}
+        onRemove={worktreeManagement.removeWorktree}
+        isRecreating={worktreeManagement.isRecreating}
+        isRemoving={worktreeManagement.isRemoving}
+        error={worktreeManagement.error?.message}
+      />
+
       {/* Tabs */}
       <div className="rounded-lg border bg-white shadow-sm">
         <ControlledTabs defaultValue="tasks">
@@ -347,7 +381,6 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
               <span>Logs</span>
             </span>
           </Tab>
-          <Tab value="discussion">Discussion</Tab>
           <Tab value="agent-config">Agent Config</Tab>
           <Tab value="pr-status">PR Status</Tab>
           <TabPanel value="tasks">
@@ -370,18 +403,9 @@ export function WorkItemDetail({ workItemId }: WorkItemDetailProps) {
               )}
             </div>
           </TabPanel>
-          <TabPanel value="discussion">
-            <div className="p-6">
-              <div className="py-12 text-center">
-                <p className="text-sm text-gray-600">Discussion tab - Coming soon</p>
-              </div>
-            </div>
-          </TabPanel>
           <TabPanel value="agent-config">
             <div className="p-6">
-              <div className="py-12 text-center">
-                <p className="text-sm text-gray-600">Agent Config tab - Coming soon</p>
-              </div>
+              <AgentConfigTab workItemId={workItemId} />
             </div>
           </TabPanel>
           <TabPanel value="pr-status">

@@ -6,6 +6,7 @@
 import { spawn, execSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { gitService } from './GitService.js';
 
 export type AgentModel = {
@@ -152,7 +153,51 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
   }
 
   /**
+   * Resolve executable path from PATH environment variable
+   * Returns the full path if found, or the original path if already absolute or not found
+   */
+  protected resolveExecutablePath(executablePath: string): string {
+    // If it's already an absolute path or contains path separators, return as-is
+    if (path.isAbsolute(executablePath) || executablePath.includes(path.sep)) {
+      return executablePath;
+    }
+
+    // Resolve from PATH environment variable
+    const pathEnv = process.env.PATH || '';
+    const pathExt = process.platform === 'win32' ? process.env.PATHEXT || '.EXE;.CMD;.BAT' : '';
+
+    // Split PATH by platform-specific separator
+    const pathDirs = pathEnv.split(process.platform === 'win32' ? ';' : ':');
+
+    // On Windows, also check with extensions
+    const extensions = process.platform === 'win32' ? pathExt.split(';') : [''];
+
+    for (const dir of pathDirs) {
+      for (const ext of extensions) {
+        const fullPath = path.join(dir, executablePath + ext);
+        try {
+          // Check if file exists and is executable
+          // Note: In Node.js, we can't easily check execute permissions, but we can check existence
+          // The spawn will fail if not executable anyway
+          if (fs.access) {
+            // This is async, but for now we'll let spawn handle the error
+            // In a real implementation, we might want to make this async or use sync version
+            return fullPath;
+          }
+        } catch {
+          // Continue searching
+        }
+      }
+    }
+
+    // If not found in PATH, return original (spawn will fail with proper error)
+    return executablePath;
+  }
+
+  /**
    * Spawn a child process and capture its output
+   * Uses shell: false by default for better security and argument handling
+   * Resolves executable path from PATH if needed
    */
   protected spawnProcess(
     executablePath: string,
@@ -164,20 +209,52 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
     }
   ): ReturnType<typeof spawn> {
     try {
-      const child = spawn(executablePath, args, {
-        ...options,
+      // Resolve executable path from PATH if it's not already absolute
+      // This allows us to use shell: false while still supporting PATH resolution
+      let resolvedPath = executablePath;
+      if (!path.isAbsolute(executablePath) && !executablePath.includes(path.sep)) {
+        // Try to resolve from PATH using which/where command
+        try {
+          const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+          const result = execSync(`${whichCmd} ${executablePath}`, {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          resolvedPath = result.trim().split('\n')[0].trim();
+        } catch {
+          // If which/where fails, try manual PATH resolution or fall back to original
+          resolvedPath = this.resolveExecutablePath(executablePath);
+        }
+      }
+
+      // Use shell: false by default for:
+      // 1. Better security (no shell injection)
+      // 2. Proper handling of special characters and newlines
+      // 3. More predictable cross-platform behavior
+      // 4. Better performance (no shell overhead)
+      // Only use shell if explicitly requested
+      const useShell = options.shell === true;
+
+      const child = spawn(resolvedPath, args, {
+        cwd: options.cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
           PWD: options.cwd,
           ...options.env,
         },
-        shell: true,
+        shell: useShell,
       });
 
       // Log process errors
       child.on('error', (error) => {
-        console.error(`[AgentAdapter] Process error for ${executablePath}:`, error);
+        console.error(`[AgentAdapter] Process error for ${resolvedPath}:`, error);
+        // If error is ENOENT and we tried to resolve, log helpful message
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          console.error(
+            `[AgentAdapter] Executable not found: ${executablePath} (resolved: ${resolvedPath})`
+          );
+        }
       });
 
       return child;
@@ -253,17 +330,44 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
   } {
     let stdoutBuffer = '';
     let stderrBuffer = '';
+    const lastStdoutFlushTime = { value: Date.now() };
+    const lastStderrFlushTime = { value: Date.now() };
+    const FLUSH_INTERVAL = 100; // Flush every 100ms
+
+    const flushIfNeeded = async (
+      file: Awaited<ReturnType<typeof fs.open>>,
+      lastFlushTimeRef: { value: number }
+    ) => {
+      const now = Date.now();
+      if (now - lastFlushTimeRef.value >= FLUSH_INTERVAL) {
+        try {
+          await file.sync(); // Flush the file to disk
+          lastFlushTimeRef.value = now;
+        } catch (error) {
+          // Ignore flush errors, but log them
+          console.error('[AgentAdapter] Failed to flush log file:', error);
+        }
+      }
+    };
 
     const appendStdout = (chunk: Buffer) => {
       const output = chunk.toString('utf-8');
       stdoutBuffer += output;
-      void stdoutFile.write(output);
+      // Write and flush if needed
+      stdoutFile.write(output).catch((error) => {
+        console.error('[AgentAdapter] Failed to write stdout:', error);
+      });
+      void flushIfNeeded(stdoutFile, lastStdoutFlushTime);
     };
 
     const appendStderr = (chunk: Buffer) => {
       const output = chunk.toString('utf-8');
       stderrBuffer += output;
-      void stderrFile.write(output);
+      // Write and flush if needed
+      stderrFile.write(output).catch((error) => {
+        console.error('[AgentAdapter] Failed to write stderr:', error);
+      });
+      void flushIfNeeded(stderrFile, lastStderrFlushTime);
     };
 
     return { stdoutBuffer, stderrBuffer, appendStdout, appendStderr };

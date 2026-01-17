@@ -6,10 +6,16 @@ import { PRStatus } from '@/types';
 
 export const Route = createFileRoute('/projects/$projectName/pullrequests')({
   component: ProjectPullRequests,
-  validateSearch: (search: Record<string, unknown>) => ({
-    status: (search.status as PRStatus | 'all') || 'all',
-    prId: (search.prId as string) || null,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const prId = search.prId;
+    // Handle string "null", actual null, undefined, or empty string
+    const normalizedPrId =
+      !prId || prId === 'null' || prId === '' ? null : (prId as string);
+    return {
+      status: (search.status as PRStatus | 'all') || 'all',
+      prId: normalizedPrId,
+    };
+  },
 });
 
 /**

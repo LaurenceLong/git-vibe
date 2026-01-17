@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateWorkItemDTOSchema, UpdateWorkItemDTOSchema } from 'git-vibe-shared';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
+import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { agentService } from '../services/AgentService.js';
 import { workspaceService } from '../services/WorkspaceService.js';
@@ -289,9 +290,13 @@ export async function workitemsRoutes(server: FastifyInstance) {
     // Clean up worktree before deleting WorkItem
     const project = await projectsRepository.findById(workItem.projectId);
     if (project) {
-      workspaceService.deleteWorkspace(workItem, project).catch((error) => {
+      try {
+        await workspaceService.deleteWorkspace(workItem, project);
+      } catch (error) {
+        // Log error but continue with deletion
+        // Worktree cleanup failure shouldn't prevent WorkItem deletion
         console.error(`Failed to clean up workspace for WorkItem ${request.params.id}:`, error);
-      });
+      }
     }
 
     // Delete from database
@@ -348,7 +353,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
       });
     }
 
-    const pr = await workItemsRepository.getPullRequestByWorkItemId(request.params.id);
+    const pr = await pullRequestsRepository.findByWorkItemId(request.params.id);
     return pr ? [pr] : [];
   });
 

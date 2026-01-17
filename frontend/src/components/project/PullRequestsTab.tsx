@@ -4,8 +4,9 @@
  * Items are clickable and navigate to detail view
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { pullRequestsApi } from '@/lib/api';
 import { Project, PullRequest, PullRequestStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -25,10 +26,16 @@ export function PullRequestsTab({
   initialStatus = 'all',
   initialPrId = null,
 }: PullRequestsTabProps) {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<PullRequestStatus | 'all'>(initialStatus);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedPRId, setSelectedPRId] = useState<string | null>(initialPrId);
   const itemsPerPage = 10;
+
+  // Sync selectedPRId with initialPrId when URL changes
+  useEffect(() => {
+    setSelectedPRId(initialPrId);
+  }, [initialPrId]);
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['pull-requests', project.id, currentPage, itemsPerPage],
@@ -46,10 +53,22 @@ export function PullRequestsTab({
 
   const handlePRClick = (prId: string) => {
     setSelectedPRId(prId);
+    // Update URL to include prId
+    navigate({
+      to: '/projects/$projectName/pullrequests',
+      params: { projectName: project.name },
+      search: { status: statusFilter, prId },
+    });
   };
 
   const handleBackToList = () => {
     setSelectedPRId(null);
+    // Update URL to remove prId
+    navigate({
+      to: '/projects/$projectName/pullrequests',
+      params: { projectName: project.name },
+      search: { status: statusFilter, prId: null },
+    });
   };
 
   // If a PR is selected, show the detail view

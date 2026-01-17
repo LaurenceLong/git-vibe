@@ -7,6 +7,7 @@ import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { agentService } from '../services/AgentService.js';
 import { promises as fs } from 'node:fs';
 import { watch } from 'node:fs';
+import path from 'node:path';
 
 export async function agentRunsRoutes(server: FastifyInstance) {
   // POST /api/work-items/:id/agent-runs - Start agent run for a WorkItem
@@ -316,23 +317,57 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         }
       }
 
-      // Poll for new content every 500ms (fallback if file watching doesn't work)
-      const pollInterval = setInterval(async () => {
+      // Get log file paths - use database paths or derive from run ID
+      const getStdoutPath = async (): Promise<string | null> => {
         if (agentRun.stdoutPath) {
-          stdoutPosition = await readAndSendLogs(
-            agentRun.stdoutPath,
-            'stdout',
-            stdoutPosition
-          );
+          return agentRun.stdoutPath;
         }
+        // If path not in database yet, try to derive it
+        try {
+          const { STORAGE_CONFIG } = await import('../config/storage.js');
+          const logsDir = STORAGE_CONFIG.logsDir;
+          const derivedPath = path.join(logsDir, `agent-run-${request.params.id}-stdout.log`);
+          const stats = await fs.stat(derivedPath);
+          if (stats.isFile()) {
+            return derivedPath;
+          }
+        } catch {
+          // File doesn't exist yet
+        }
+        return null;
+      };
+
+      const getStderrPath = async (): Promise<string | null> => {
         if (agentRun.stderrPath) {
-          stderrPosition = await readAndSendLogs(
-            agentRun.stderrPath,
-            'stderr',
-            stderrPosition
-          );
+          return agentRun.stderrPath;
         }
-      }, 500);
+        // If path not in database yet, try to derive it
+        try {
+          const { STORAGE_CONFIG } = await import('../config/storage.js');
+          const logsDir = STORAGE_CONFIG.logsDir;
+          const derivedPath = path.join(logsDir, `agent-run-${request.params.id}-stderr.log`);
+          const stats = await fs.stat(derivedPath);
+          if (stats.isFile()) {
+            return derivedPath;
+          }
+        } catch {
+          // File doesn't exist yet
+        }
+        return null;
+      };
+
+      // Poll for new content every 100ms for faster real-time streaming
+      // This is more frequent than the 100ms flush interval, ensuring we catch updates quickly
+      const pollInterval = setInterval(async () => {
+        const stdoutPath = await getStdoutPath();
+        if (stdoutPath) {
+          stdoutPosition = await readAndSendLogs(stdoutPath, 'stdout', stdoutPosition);
+        }
+        const stderrPath = await getStderrPath();
+        if (stderrPath) {
+          stderrPosition = await readAndSendLogs(stderrPath, 'stderr', stderrPosition);
+        }
+      }, 100);
 
       // Keep connection alive
       const keepAliveInterval = setInterval(() => {

@@ -1,7 +1,8 @@
 ```markdown
 # GitVibe — PLAN.md (Refactored, PR-centric, WorkItem Workspace)
 
-> Audience: engineers implementing GitVibe from scratch.  
+> **Status**: Implementation complete for MVP scope. This document describes the architecture and design principles.  
+> **Audience**: engineers maintaining or extending GitVibe.  
 > Goal: a GitHub-like agent coding management system where **each WorkItem owns a single persistent workspace** (git worktree + branch), **agent runs are serialized**, **backend auto-commits after each run**, and **merge is controlled via a first-class Pull Request model**.  
 > Terminology note: we **do not** use “ChangeSet”. Patch export (optional) is a PR feature.
 
@@ -91,9 +92,9 @@ GitVibe uses a **relay repository** (local or server-side) as the execution envi
 > This PLAN assumes GitVibe controls the repo locally (relay) for simplicity and reliability.
 
 ### 3.2 Branch Strategy
-- Base branch: typically `main` (configurable per project)
-- WorkItem head branch: `wi/<work_item_id>` (or `wi/<id>-<slug>`)
-- Worktree directory: `<data_dir>/worktrees/<project_id>/<work_item_id>/`
+- Base branch: typically `main` (configurable per project via `default_branch`)
+- WorkItem head branch: `wi/<work_item_id>` (deterministic, same WorkItem always gets same branch)
+- Worktree directory: `<storage_base_dir>/worktrees/<work_item_id>/` (simplified from original plan)
 
 ### 3.3 Base SHA Strategy
 PR diff correctness depends on base selection.
@@ -110,24 +111,30 @@ Recommended:
 > Use UUIDs if preferred; examples use integer IDs for readability.
 
 ### 4.1 projects
-- `id`
-- `name`
-- `repo_path` (path to relay repo clone)
-- `default_base_branch` (e.g., `main`)
+- `id` (UUID)
+- `name` (unique)
+- `source_repo_path` (path to source repository)
+- `source_repo_url` (optional, for reference)
+- `relay_repo_path` (path to relay repo clone)
+- `default_branch` (e.g., `main`)
+- `default_agent` (e.g., `opencode`, `claudecode`)
+- `agent_params` (JSON string for agent configuration)
+- `max_agent_concurrency` (default: 3)
 - timestamps
 
 ### 4.2 work_items
-- `id`
-- `project_id`
+- `id` (UUID)
+- `project_id` (foreign key)
+- `type` (`issue` | `feature-request`)
 - `title`
-- `description`
+- `body` (optional description)
 - `status` (`open` | `closed`)
 - **workspace fields**
   - `workspace_status` (`not_initialized` | `ready` | `error`)
   - `worktree_path` (unique)
-  - `head_branch` (unique within project)
-  - `base_branch`
-  - `base_sha` (set when workspace initialized or PR created; see chosen strategy)
+  - `head_branch` (unique within project, format: `wi/<work_item_id>`)
+  - `base_branch` (from project default)
+  - `base_sha` (set when workspace initialized)
   - `head_sha` (cached; update after runs and on demand)
 - **locking fields** (to serialize runs/merge)
   - `lock_owner_run_id` (nullable)
@@ -135,50 +142,92 @@ Recommended:
 - timestamps
 
 Constraints:
-- unique `(project_id, head_branch)`
-- unique `worktree_path`
+- unique `(project_id, head_branch)` (enforced via index)
+- unique `worktree_path` (enforced via index)
 
 ### 4.3 pull_requests
-- `id`
-- `project_id`
+- `id` (UUID)
+- `project_id` (foreign key)
 - `work_item_id` (unique, enforcing 1:1 by default)
-- `title`
-- `body`
+- `title` (from work item)
+- `description` (from work item body)
 - `status` (`open` | `merged` | `closed`)
-- `base_branch`
-- `base_sha` (frozen at PR creation)
-- `head_branch` (from work item)
-- `head_sha` (cached)
-- `merge_strategy` (`merge` | `squash` | `rebase`)
+- `source_branch` (from work item head_branch)
+- `target_branch` (from work item base_branch)
+- `merge_strategy` (`merge` | `squash` | `rebase`, default: `merge`)
 - `merged_at` (nullable)
+- `merged_by` (nullable, currently 'system')
 - `merge_commit_sha` (nullable)
 - timestamps
 
 Constraints:
-- unique `work_item_id`
+- unique `work_item_id` (enforced)
+
+Note: Base SHA and head SHA are tracked in the WorkItem, not duplicated in PR table.
 
 ### 4.4 agent_runs
-- `id`
-- `project_id`
-- `work_item_id`
-- `agent_key` (e.g., `claude_code`, `openai_codex`, etc.)
-- `session_id` (required; determined before launching)
-- `status` (`queued` | `running` | `succeeded` | `failed` | `canceled`)
-- `resume_count` (optional)
-- `started_at`
-- `finished_at`
-- `head_sha_before`
-- `head_sha_after` (after auto-commit; may equal before if no changes)
+- `id` (UUID)
+- `project_id` (foreign key)
+- `work_item_id` (foreign key)
+- `agent_key` (e.g., `opencode`, `claudecode`)
+- `session_id` (required; WorkItem-scoped by default: `wi-<work_item_id>`)
+- `status` (`queued` | `running` | `succeeded` | `failed` | `cancelled`)
+- `input_summary` (truncated prompt for display)
+- `input_json` (full prompt and config as JSON)
+- `linked_agent_run_id` (nullable, for resume/correction chains)
+- `log` (text, for small logs)
+- `log_path` (file path for large logs)
+- `stdout_path` (file path for stdout)
+- `stderr_path` (file path for stderr)
+- `head_sha_before` (SHA before run)
+- `head_sha_after` (SHA after auto-commit; may equal before if no changes)
 - `commit_sha` (the auto-commit SHA if created; nullable if no changes)
-- `log_path` (or `log_text` if you store in DB; prefer path for large logs)
-- `error_message` (nullable)
+- `started_at` (nullable)
+- `finished_at` (nullable)
 - timestamps
 
 Indexes:
-- `(work_item_id, status)`
-- `(work_item_id, started_at desc)`
+- `(work_item_id)` (for listing runs per work item)
+- `(session_id)` (for session-based queries)
+- `(status)` (for filtering by status)
 
-### 4.5 approvals (optional MVP+)
+### 4.5 review_threads (implemented)
+- `id` (UUID)
+- `pull_request_id` (foreign key)
+- `status` (`open` | `resolved` | `outdated`)
+- `severity` (`info` | `warning` | `error`)
+- `anchor` (file path and line reference)
+- timestamps
+
+### 4.6 review_comments (implemented)
+- `id` (UUID)
+- `thread_id` (foreign key)
+- `body` (comment text)
+- timestamps
+
+### 4.7 target_repos (implemented)
+- `id` (UUID)
+- `name`
+- `repo_path` (unique, path to target repository)
+- `default_branch`
+- timestamps
+
+### 4.8 imports (implemented)
+- `id` (UUID)
+- `pull_request_id` (foreign key)
+- `target_repo_id` (foreign key)
+- `strategy` (`patch` - currently only patch strategy)
+- `status` (`pending` | `running` | `succeeded` | `failed`)
+- `source_base_sha` (from PR base)
+- `source_head_sha` (from PR head)
+- `target_base_sha` (target repo SHA before import)
+- `target_result_sha` (target repo SHA after import)
+- `log` (import log text)
+- `started_at` (nullable)
+- `finished_at` (nullable)
+- timestamps
+
+### 4.9 approvals (optional MVP+)
 - `id`
 - `pull_request_id`
 - `user_id`
@@ -285,31 +334,27 @@ Recommended default policy options (pick one and document it):
 
 This PLAN assumes **WorkItem-scoped** unless caller overrides.
 
-### 7.3 Run steps
-1. Ensure workspace initialized (`worktree_path` exists)
-2. Determine `head_sha_before = git -C worktree rev-parse HEAD`
-3. Create AgentRun row with `status=running`, `session_id`, `head_sha_before`
-4. Spawn agent with:
+### 7.3 Run steps (Implementation)
+1. Check project concurrency limit (enforced per project, not just per WorkItem)
+2. Ensure workspace initialized (`worktree_path` exists via `ensureWorkspace`)
+3. Acquire WorkItem lock (with TTL for crash recovery)
+4. Determine `head_sha_before = git rev-parse HEAD` in worktree
+5. Create AgentRun row with `status=running`, `session_id`, `head_sha_before`
+6. Spawn agent asynchronously with:
    - CWD = worktree_path
-   - Env includes project/workitem metadata
-   - If Claude Code: include `--session-id <session_id>` (or equivalent)
-5. Stream logs to `log_path`
-6. On agent exit:
-   - Stage changes:
-     - `git -C worktree add -A`
-   - If there are staged changes:
-     - `git -C worktree commit -m "<conventional message>" --no-gpg-sign`
-     - capture `commit_sha`
-   - Else:
-     - no commit; `commit_sha = null`
-7. Determine `head_sha_after = git -C worktree rev-parse HEAD`
-8. Persist AgentRun:
-   - status succeeded/failed
-   - finished_at, head_sha_after, commit_sha, error_message if any
-9. Update WorkItem and PR cached head_sha:
-   - `work_items.head_sha = head_sha_after`
-   - `pull_requests.head_sha = head_sha_after` if PR exists
-10. Release lock
+   - Agent-specific arguments (e.g., `--session-id` for ClaudeCode)
+   - Logs streamed to files (`log_path`, `stdout_path`, `stderr_path`)
+7. Agent adapter handles process lifecycle and updates status
+8. On agent completion (via adapter callback):
+   - Call `finalizeAgentRun()`:
+     - Stage changes: `git add -A`
+     - Check if staged changes exist
+     - If changes: commit with message `AgentRun <id>: <input_summary>`
+     - Capture `commit_sha` and `head_sha_after`
+   - Update AgentRun: status, finished_at, head_sha_after, commit_sha
+   - Update WorkItem cached `head_sha`
+   - Release lock and untrack from project concurrency
+9. Error handling: On failure, still attempt finalization but mark status as `failed`
 
 ### 7.4 Failure behavior
 If agent fails:
@@ -528,16 +573,17 @@ flowchart LR
 
 ### 11.1 Deterministic commit messages
 For auto-commits, use a consistent format:
-- `AgentRun <id>: <agent_key> - <short summary>`
-Store the long summary in AgentRun logs.
+- `AgentRun <id>: <input_summary>`
+Where `input_summary` is the first 200 characters of the prompt. Full prompt and config stored in `input_json`.
 
 ### 11.2 Large logs
 Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
 
 ### 11.3 Lock TTL and crash recovery
-- Use a TTL on the WorkItem lock
-- Renew heartbeat while running
-- If TTL expires, allow new run but record the previous run as `failed` with `lock_expired` reason (best-effort)
+- Use a TTL on the WorkItem lock (default: 1 hour)
+- Lock is released in `finally` block after agent completion
+- If TTL expires, new runs can acquire lock (previous run may be marked as failed if detected)
+- Current implementation: Lock released immediately after finalization, no heartbeat renewal (simplified)
 
 ### 11.4 Security
 - Run agents in a sandbox where possible
@@ -546,32 +592,78 @@ Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
 
 ---
 
-## 12) MVP Scope Checklist
+## 12) Implementation Status
 
-**Must-have**
-- WorkItem CRUD
-- Workspace init (implicit)
-- PR open + PR view (diff + commits)
-- AgentRun start + logs + status
-- Backend auto-commit
-- WorkItem lock (no concurrent run)
-- Merge (at least one strategy) with conflict detection
+### ✅ MVP Scope (Complete)
 
-**Nice-to-have next**
+**Core Features**
+- ✅ WorkItem CRUD
+- ✅ Workspace init (implicit on first agent run)
+- ✅ PR open + PR view (diff + commits)
+- ✅ AgentRun start + logs + status
+- ✅ Backend auto-commit (after successful runs)
+- ✅ WorkItem lock (no concurrent run per WorkItem)
+- ✅ Merge (all three strategies: merge, squash, rebase) with conflict detection
+- ✅ Project-level concurrency limits (configurable per project)
+- ✅ Multiple agent adapters (OpenCode, ClaudeCode)
+- ✅ Session-based resume functionality
+- ✅ Review threads and comments
+- ✅ Patch import to target repositories
+- ✅ Agent run cancellation
+- ✅ Update base / rebase PR functionality
+
+**Additional Features Implemented**
+- ✅ Models cache for agent adapters
+- ✅ Review comment addressing (agent correction)
+- ✅ Import job tracking and history
+- ✅ Worktree cleanup on WorkItem deletion
+- ✅ Comprehensive error handling and logging
+
+### 🔄 Nice-to-have (Future Enhancements)
 - Approvals / required reviewers
-- Cancel run
-- Update base / rebase
-- Patch export endpoint
-- Cleanup worktrees after merge
+- Patch export endpoint (GET /pull-requests/:id/patch)
 - GitHub integration (sync PR / statuses)
+- Distributed runners across machines (job queue + remote workspace)
+- Multiple workspaces per WorkItem (non-goal for MVP)
 
 ---
 
 ## 13) Non-goals (for initial release)
 - Multiple workspaces per WorkItem
-- Concurrent agents on the same WorkItem
-- Fully GitHub-compatible review comment threading (can be added later)
+- Concurrent agents on the same WorkItem (enforced by lock)
+- Fully GitHub-compatible review comment threading (basic threading implemented)
 - Distributed runners across machines (add later with job queue + remote workspace)
+- User authentication/authorization (single-user local-first design)
+- Webhooks or external integrations (can be added later)
+
+## 14) Current Implementation Details
+
+### 14.1 Agent Adapters
+Two agent adapters are implemented:
+- **OpenCodeAgentAdapter**: For OpenCode CLI agent
+- **ClaudeCodeAgentAdapter**: For Claude Code agent
+
+Both extend `AgentAdapter` base class and implement:
+- `validate()`: Check executable availability
+- `run()`: Execute agent with prompt
+- `correctWithReviewComments()`: Resume/correct with review feedback
+- `getModels()`: List available models
+- `cancel()`: Cancel running process
+- `getStatus()`: Check run status
+
+### 14.2 Project Concurrency
+Projects have a `max_agent_concurrency` setting (default: 3) that limits concurrent agent runs across all WorkItems in a project. This is tracked in-memory by `AgentService`.
+
+### 14.3 Storage Configuration
+Storage paths are configurable via environment variables:
+- `STORAGE_BASE_DIR`: Base directory for all GitVibe data
+- Defaults to system temp directory (`/tmp/git-vibe` on Unix, `%TEMP%\git-vibe` on Windows)
+
+### 14.4 Database Migrations
+Two migration systems supported:
+1. **Drizzle Kit migrations** (recommended): Uses `drizzle-kit generate` and `drizzle-orm/migrator`
+2. **Raw SQL migrations**: Fallback for `.sql` files in `drizzle/` directory
+
+Migration system auto-detects which to use based on presence of `drizzle/meta/_journal.json`.
 
 ---
-```

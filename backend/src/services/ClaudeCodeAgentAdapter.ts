@@ -91,10 +91,29 @@ export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
     const logFile = await this.createLogFile(runId);
     const { logBuffer, append } = this.createOutputHandler(logFile);
 
-    // Build args for claude -p command (print mode)
+    // Get sessionId from the agent run record
+    const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+    const agentRun = await agentRunsRepository.findById(runId);
+    let sessionId = agentRun?.sessionId;
+
+    // Claude Code requires a valid UUID for --session-id
+    // If sessionId is not a valid UUID (e.g., starts with "wi-"), generate a new UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!sessionId || !uuidRegex.test(sessionId)) {
+      const { v4: uuidv4 } = await import('uuid');
+      sessionId = uuidv4();
+      // Update the database with the generated UUID session ID
+      await agentRunsRepository.update(runId, {
+        sessionId,
+      });
+      console.log(`[ClaudeCodeAgent] Generated and saved session ID: ${sessionId}`);
+    }
+
+    // Build args for claude -p command (print mode) with --session-id
     const args = this.buildCommandArgs('-p', {
       model: config.model,
       agent: config.agent,
+      'session-id': sessionId,
     });
 
     if (config.baseArgs) {
@@ -111,13 +130,13 @@ export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
 
     child.on('close', async (code) => {
       await this.handleProcessClose(runId, worktreePath, code, logBuffer, logFile, async () => {
-        // Claude Code doesn't have session listing in print mode
-        // Session tracking is done via --session-id flag
+        // Session ID is already set and saved to database
+        console.log(`[ClaudeCodeAgent] Session ID recorded: ${sessionId}`);
       });
     });
 
     this.activeProcesses.set(runId, child);
-    return { runId };
+    return { runId, sessionId };
   }
 
   async correctWithReviewComments(
@@ -129,12 +148,11 @@ export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
     const logFile = await this.createLogFile(runId);
     const { logBuffer, append } = this.createOutputHandler(logFile);
 
-    // Build args for claude -c -p command (continue with print mode)
-    const args = this.buildCommandArgs('-c', {
-      'session-id': sessionId,
-    });
-
-    args.push('-p');
+    // Claude Code uses -r (resume) to resume a specific session by ID
+    // According to docs: claude -r "<session>" "query" resumes session by ID or name
+    // For print mode: claude -r "<session-id>" -p "query"
+    // Build args for claude -r with session ID and -p (print mode)
+    const args: string[] = ['-r', sessionId, '-p'];
 
     if (config.baseArgs) {
       args.push(...config.baseArgs);

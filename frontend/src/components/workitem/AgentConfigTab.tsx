@@ -46,16 +46,18 @@ export function AgentConfigTab({ workItemId, worktreeStatus = 'present' }: Agent
   const [pollingRuns, setPollingRuns] = useState<Set<string>>(new Set());
 
   // Fetch agent runs for this WorkItem
-  // Note: This endpoint doesn't exist yet, we'll use a placeholder
   const { data: agentRuns, isLoading } = useQuery({
     queryKey: ['agent-runs', workItemId],
     queryFn: async () => {
-      // Placeholder: Return empty array for now
-      // TODO: Implement actual API call when backend is ready
-      return [];
+      const response = await agentRunsApi.listByWorkItem(workItemId);
+      return (response.data || []) as AgentRun[];
     },
     refetchInterval: (data) => {
-      const hasActiveRuns = (data || []).some(
+      // Ensure data is an array before calling .some()
+      if (!Array.isArray(data)) {
+        return false;
+      }
+      const hasActiveRuns = data.some(
         (run: AgentRun) => run.status === 'queued' || run.status === 'running'
       );
       return hasActiveRuns ? 2000 : false;
@@ -95,12 +97,17 @@ export function AgentConfigTab({ workItemId, worktreeStatus = 'present' }: Agent
       prompt: string;
       config: { executablePath: string; baseArgs?: string[] };
     }) => {
-      // Placeholder: No actual API call yet
-      // TODO: Implement actual API call when backend is ready
-      return { id: Date.now().toString(), ...data };
+      const response = await agentRunsApi.trigger(workItemId, {
+        agentKey: data.agentKey,
+        inputSummary: data.inputSummary,
+        prompt: data.prompt,
+        config: data.config,
+      });
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-runs', workItemId] });
+      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
       success('Agent run triggered successfully');
       setIsConfigModalOpen(false);
     },

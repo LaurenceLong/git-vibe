@@ -52,6 +52,8 @@ export const pullRequestsApi = {
   get: (id: string) => api.get(`/pull-requests/${id}`),
   getDiff: (id: string) => api.get(`/pull-requests/${id}/diff`),
   getCommits: (id: string) => api.get(`/pull-requests/${id}/commits`),
+  getCommitsWithTasks: (id: string) => api.get(`/pull-requests/${id}/commits-with-tasks`),
+  getStatistics: (id: string) => api.get(`/pull-requests/${id}/statistics`),
   merge: (id: string, strategy?: 'merge' | 'squash' | 'rebase') =>
     api.post(`/pull-requests/${id}/merge`, { strategy }),
   close: (id: string) => api.post(`/pull-requests/${id}/close`),

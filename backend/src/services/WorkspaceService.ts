@@ -204,6 +204,7 @@ export class WorkspaceService {
   /**
    * Delete both worktree and branch for a WorkItem
    * Use this when permanently deleting a WorkItem
+   * Does not update the WorkItem in the database (since it's being deleted)
    */
   async deleteWorkspace(workItem: WorkItem, project: Project): Promise<void> {
     if (!workItem.worktreePath) {
@@ -213,8 +214,30 @@ export class WorkspaceService {
 
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
 
-    // Remove worktree first
-    await this.removeWorktree(workItem, project);
+    // Remove worktree directly (don't call removeWorktree as it tries to update the WorkItem)
+    try {
+      const worktreeStatus = gitService.getWorktreeStatus(repoPath, workItem.worktreePath);
+      if (worktreeStatus === 'present') {
+        gitService.removeWorktree(workItem.worktreePath, repoPath);
+      }
+    } catch (error) {
+      // Worktree may not exist or may have been removed, log and continue
+      console.warn(`Failed to remove worktree ${workItem.worktreePath}:`, error);
+    }
+
+    // Ensure worktree directory is removed (git worktree remove should do this, but be safe)
+    try {
+      const dirExists = await fs
+        .access(workItem.worktreePath)
+        .then(() => true)
+        .catch(() => false);
+      if (dirExists) {
+        await fs.rm(workItem.worktreePath, { recursive: true, force: true });
+      }
+    } catch (error) {
+      // Directory may not exist or may have been removed, log and continue
+      console.warn(`Failed to remove worktree directory ${workItem.worktreePath}:`, error);
+    }
 
     // Delete branch if it exists
     if (workItem.headBranch) {

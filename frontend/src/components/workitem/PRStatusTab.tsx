@@ -7,19 +7,22 @@
  * - Display PR status for this WorkItem
  * - Show if PR exists (linked PullRequest)
  * - If PR exists: show PR link, status, merge status
- * - If PR doesn't exist: show "Create PR" button
+ * - If PR doesn't exist: show message that PRs are auto-created after agent runs
  * - Display PR details (base branch, head branch, SHAs)
  * - Show PR actions (merge, close) if applicable
+ * - Navigate to PR detail page via "View Full Details" link
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { workItemsApi, pullRequestsApi } from '@/lib/api';
+import { Link } from '@tanstack/react-router';
+import { workItemsApi, pullRequestsApi, projectsApi } from '@/lib/api';
 import { PullRequest } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { GitPullRequest, GitBranch, Hash, CheckCircle, XCircle } from 'lucide-react';
+import { GitPullRequest, GitBranch, Hash, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { useWorkItem } from '@/hooks/useWorkItem';
 
 export interface PRStatusTabProps {
   workItemId: string;
@@ -34,32 +37,27 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
-  // Fetch linked PR for this WorkItem
-  const { data: linkedPR, isLoading } = useQuery({
-    queryKey: ['workitem-pr', workItemId],
+  // Fetch workItem to get projectId
+  const { data: workItem } = useWorkItem(workItemId);
+
+  // Fetch project to get project name for navigation
+  const { data: project } = useQuery({
+    queryKey: ['project', workItem?.projectId],
+    queryFn: async () => {
+      if (!workItem?.projectId) return null;
+      const response = await projectsApi.get(workItem.projectId);
+      return response.data;
+    },
+    enabled: !!workItem?.projectId,
+  });
+
+  // Fetch all PRs for this WorkItem
+  const { data: prs, isLoading } = useQuery({
+    queryKey: ['workitem-prs', workItemId],
     queryFn: async () => {
       // Get PRs for this WorkItem
       const response = await workItemsApi.getPRs(workItemId);
-      const prs = response.data as PullRequest[];
-      // Return the first PR if any
-      return prs.length > 0 ? prs[0] : null;
-    },
-  });
-
-  // Create PR mutation
-  const createPRMutation = useMutation({
-    mutationFn: async () => {
-      const response = await workItemsApi.createPR(workItemId);
-      return response.data as PullRequest;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workitem-pr', workItemId] });
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
-      success('PR created successfully');
-    },
-    onError: (err: Error) => {
-      showError(`Failed to create PR: ${err.message}`);
+      return (response.data || []) as PullRequest[];
     },
   });
 
@@ -70,7 +68,7 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workitem-pr', workItemId] });
+      queryClient.invalidateQueries({ queryKey: ['workitem-prs', workItemId] });
       queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR merged successfully');
@@ -87,7 +85,7 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workitem-pr', workItemId] });
+      queryClient.invalidateQueries({ queryKey: ['workitem-prs', workItemId] });
       queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR closed successfully');
@@ -96,12 +94,6 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
       showError(`Failed to close PR: ${err.message}`);
     },
   });
-
-  const handleCreatePR = async () => {
-    if (window.confirm('Are you sure you want to create a PR from this WorkItem?')) {
-      await createPRMutation.mutateAsync();
-    }
-  };
 
   const handleMergePR = async (prId: string) => {
     if (window.confirm('Are you sure you want to merge this PR?')) {
@@ -143,156 +135,154 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
     );
   }
 
-  // No PR exists
-  if (!linkedPR) {
+  // No PRs exist
+  if (!prs || prs.length === 0) {
     return (
       <div className="rounded-lg border bg-white p-6 shadow-sm">
         <EmptyState
           icon={GitPullRequest}
           title="No PR created yet"
-          description="Create a Pull Request from this WorkItem to start the review process"
-          action={
-            <Button variant="primary" onClick={handleCreatePR} loading={createPRMutation.isPending}>
-              Create PR
-            </Button>
-          }
+          description="Pull Requests are automatically created after each agent run completes successfully"
         />
       </div>
     );
   }
 
-  // PR exists
+  // PRs exist - show all of them
   return (
     <div className="space-y-6">
-      {/* PR Header */}
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-start justify-between">
-          <div className="flex-1">
-            <div className="mb-2 flex items-center space-x-2">
-              <StatusBadge status={getPRStatusType(linkedPR.status)}>{linkedPR.status}</StatusBadge>
-              <span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
-                Pull Request
-              </span>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">{linkedPR.title}</h2>
-            {linkedPR.description && (
-              <p className="mt-2 whitespace-pre-wrap text-gray-600">{linkedPR.description}</p>
-            )}
-          </div>
-          <div className="flex items-center space-x-2">
-            {linkedPR.status === 'open' && (
-              <>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleMergePR(linkedPR.id)}
-                  loading={mergePRMutation.isPending}
-                >
-                  Merge
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleClosePR(linkedPR.id)}
-                  loading={closePRMutation.isPending}
-                >
-                  Close
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* PR Details */}
-        <div className="grid grid-cols-1 gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <GitBranch className="h-4 w-4" />
-            <span>
-              <span className="font-medium">Base Branch:</span> {linkedPR.targetBranch}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <GitBranch className="h-4 w-4" />
-            <span>
-              <span className="font-medium">Head Branch:</span> {linkedPR.sourceBranch}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <Hash className="h-4 w-4" />
-            <span>
-              <span className="font-medium">Merge Strategy:</span>{' '}
-              <span className="capitalize">{linkedPR.mergeStrategy}</span>
-            </span>
-          </div>
-          {linkedPR.mergeCommitSha && (
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Hash className="h-4 w-4" />
-              <span>
-                <span className="font-medium">Merge Commit:</span>{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">
-                  {linkedPR.mergeCommitSha.slice(0, 8)}
-                </code>
-              </span>
-            </div>
-          )}
-        </div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">
+          Pull Requests ({prs.length})
+        </h2>
       </div>
 
-      {/* PR Status Actions */}
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">PR Status</h3>
-        <div className="space-y-4">
-          {linkedPR.status === 'merged' && (
-            <div className="flex items-start space-x-3 rounded-md border border-green-200 bg-green-50 p-4">
-              <CheckCircle className="mt-0.5 h-5 w-5 text-green-600" />
-              <div>
-                <h4 className="font-medium text-green-900">PR Merged</h4>
-                <p className="mt-1 text-sm text-green-700">
-                  This PR has been successfully merged into the base branch
-                </p>
+      {/* PRs List */}
+      <div className="space-y-4">
+        {prs.map((pr) => (
+          <div key={pr.id} className="rounded-lg border bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-start justify-between">
+              <div className="flex-1">
+                <div className="mb-2 flex items-center space-x-2">
+                  <StatusBadge status={getPRStatusType(pr.status)}>{pr.status}</StatusBadge>
+                  <span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
+                    Pull Request #{pr.id.slice(0, 8)}
+                  </span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">{pr.title}</h3>
+                {pr.description && (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">{pr.description}</p>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                {pr.status === 'open' && (
+                  <>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleMergePR(pr.id)}
+                      loading={mergePRMutation.isPending}
+                    >
+                      Merge
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleClosePR(pr.id)}
+                      loading={closePRMutation.isPending}
+                    >
+                      Close
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
-          )}
-          {linkedPR.status === 'closed' && (
-            <div className="flex items-start space-x-3 rounded-md border border-gray-200 bg-gray-50 p-4">
-              <XCircle className="mt-0.5 h-5 w-5 text-gray-600" />
-              <div>
-                <h4 className="font-medium text-gray-900">PR Closed</h4>
-                <p className="mt-1 text-sm text-gray-700">
-                  This PR has been closed without merging
-                </p>
-              </div>
-            </div>
-          )}
-          {linkedPR.status === 'open' && (
-            <div className="flex items-start space-x-3 rounded-md border border-blue-200 bg-blue-50 p-4">
-              <GitPullRequest className="mt-0.5 h-5 w-5 text-blue-600" />
-              <div>
-                <h4 className="font-medium text-blue-900">PR Open</h4>
-                <p className="mt-1 text-sm text-blue-700">
-                  This PR is currently open and ready for review
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Link to PR Detail */}
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-medium text-gray-900">View Full PR Details</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              See the complete PR with diff, reviews, and more
-            </p>
+            {/* PR Details */}
+            <div className="grid grid-cols-1 gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <GitBranch className="h-4 w-4" />
+                <span>
+                  <span className="font-medium">Base Branch:</span> {pr.targetBranch}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <GitBranch className="h-4 w-4" />
+                <span>
+                  <span className="font-medium">Head Branch:</span> {pr.sourceBranch}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <Hash className="h-4 w-4" />
+                <span>
+                  <span className="font-medium">Merge Strategy:</span>{' '}
+                  <span className="capitalize">{pr.mergeStrategy}</span>
+                </span>
+              </div>
+              {pr.mergeCommitSha && (
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <Hash className="h-4 w-4" />
+                  <span>
+                    <span className="font-medium">Merge Commit:</span>{' '}
+                    <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">
+                      {pr.mergeCommitSha.slice(0, 8)}
+                    </code>
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <span>
+                  <span className="font-medium">Created:</span>{' '}
+                  {new Date(pr.createdAt).toLocaleString()}
+                </span>
+              </div>
+              {pr.mergedAt && (
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <span>
+                    <span className="font-medium">Merged:</span>{' '}
+                    {new Date(pr.mergedAt).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* PR Status and Actions */}
+            <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
+              <div className="flex items-center space-x-4">
+                {pr.status === 'merged' && (
+                  <div className="flex items-center space-x-2 text-sm text-green-700">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Merged successfully</span>
+                  </div>
+                )}
+                {pr.status === 'closed' && (
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <XCircle className="h-4 w-4" />
+                    <span>Closed</span>
+                  </div>
+                )}
+                {pr.status === 'open' && (
+                  <div className="flex items-center space-x-2 text-sm text-blue-700">
+                    <GitPullRequest className="h-4 w-4" />
+                    <span>Open for review</span>
+                  </div>
+                )}
+              </div>
+              {project && (
+                <Link
+                  to="/projects/$projectName/pullrequests"
+                  params={{ projectName: project.name }}
+                  search={{ status: 'all', prId: pr.id }}
+                  className="flex items-center space-x-1 text-sm text-blue-600 transition-colors hover:text-blue-800"
+                >
+                  <span>View Full Details</span>
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              )}
+            </div>
           </div>
-          <div>
-            <Button variant="secondary" size="sm" disabled>
-              Open PR
-            </Button>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );

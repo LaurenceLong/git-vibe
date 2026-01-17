@@ -8,7 +8,7 @@ A local-first web application that orchestrates multiple AI coding agents to wor
 - **Target Repos**: Configure destination repositories for imports
 - **WorkItems**: Create work items that own persistent worktree workspaces for code changes
 - **Pull Requests**: First-class PR model with merge gates, conflict detection, and review
-- **Agent Integration**: Trigger OpenCode CLI agents to modify code in serialized runs
+- **Agent Integration**: Trigger multiple AI coding agents (OpenCode, ClaudeCode) to modify code in serialized runs
 - **Workspace Locking**: Ensures only one agent run per WorkItem at a time
 - **Auto-Commit**: Backend automatically commits changes after each agent run
 - **Diff Viewing**: View code changes with inline diff
@@ -38,10 +38,11 @@ GitVibe uses a **PR-centric and WorkItem-workspace-centric** model:
 
 ### Backend
 
-- Node.js + TypeScript
+- Node.js 20+ + TypeScript
 - Fastify web framework
 - SQLite database with Drizzle ORM
 - Git CLI integration
+- Agent adapter system (OpenCode, ClaudeCode)
 
 ### Frontend
 
@@ -58,7 +59,7 @@ GitVibe uses a **PR-centric and WorkItem-workspace-centric** model:
 - Node.js >= 20
 - npm >= 10
 - Git
-- OpenCode CLI (for agent functionality)
+- AI Agent CLI (OpenCode or Claude Code) - see agent configuration below
 
 ### Installation
 
@@ -104,8 +105,9 @@ HOST=127.0.0.1
 DATABASE_URL=./data/db.sqlite
 STORAGE_BASE_DIR=/tmp/git-vibe
 LOG_LEVEL=info
-OPENCODE_EXECUTABLE=/path/to/opencode
 ```
+
+**Note**: Agent executable paths are configured per-project in the UI, not via environment variables. See "Agent Configuration" section below.
 
 ## Usage
 
@@ -151,19 +153,32 @@ Navigate to the WorkItem and open a PR:
 - The PR is automatically created with 1:1 relationship to the WorkItem
 - PR tracks base SHA, head SHA, and merge status
 
-### 6. Trigger Agent Runs
+### 6. Configure Agent (Per Project)
+
+Each project can be configured with agent settings:
+
+- **Default Agent**: Choose `opencode` or `claudecode`
+- **Agent Executable Path**: Path to the agent CLI (e.g., `/usr/local/bin/opencode` or `/usr/local/bin/claude`)
+- **Agent Parameters**: JSON configuration for model selection, arguments, etc.
+- **Max Concurrency**: Maximum concurrent agent runs across all WorkItems in the project (default: 3)
+
+### 7. Trigger Agent Runs
 
 In the WorkItem detail view, trigger agent runs:
 
-- Agent Key: `opencode`
+- Agent runs use the project's default agent configuration
 - Prompt: Your task description
-- Config: OpenCode executable path and arguments
+- The system automatically initializes the workspace if needed
 
-**Workspace Locking**: Only one agent run can be active per WorkItem at a time. If a run is in progress, new runs will be rejected with a 409 Conflict error.
+**Workspace Locking**: Only one agent run can be active per WorkItem at a time. If a run is in progress, new runs will be rejected with an error.
+
+**Project Concurrency**: The project's `max_agent_concurrency` setting limits how many agent runs can execute simultaneously across all WorkItems in that project.
 
 **Auto-Commit**: After each agent run completes successfully, the backend automatically stages and commits any changes made by the agent. This produces a clean commit history and stable PR diffs.
 
-### 7. Review Pull Request
+**Session Continuity**: Agent runs use WorkItem-scoped session IDs (`wi-<work_item_id>`) by default, enabling resume functionality where agents can continue previous conversations.
+
+### 8. Review Pull Request
 
 View the PR to review changes:
 
@@ -173,7 +188,7 @@ View the PR to review changes:
 - **Checks**: Agent run history and status
 - **Reviews**: Review threads and comments
 
-### 8. Merge PR
+### 9. Merge PR
 
 When satisfied with changes, merge the PR:
 
@@ -187,7 +202,7 @@ When satisfied with changes, merge the PR:
 - Workspace lock must be free
 - No merge conflicts
 
-### 9. Import to Target Repo
+### 10. Import to Target Repo
 
 Optionally import changes to your target repository:
 
@@ -201,7 +216,7 @@ GitVibe will:
 3. Create a commit with PR metadata
 4. Record import in history
 
-### 10. Clean Up
+### 11. Clean Up
 
 When done, delete the WorkItem to:
 
@@ -216,22 +231,28 @@ git-vibe/
 ├── backend/           # Fastify API + SQLite + Git integration
 │   ├── src/
 │   │   ├── routes/      # API route handlers
-│   │   ├── services/    # GitService, PRService, WorkspaceService, AgentAdapter
+│   │   ├── services/    # GitService, PRService, WorkspaceService, AgentService, AgentAdapters
 │   │   ├── repositories/ # Database access layer
 │   │   ├── models/      # Drizzle schema
 │   │   ├── middleware/   # Fastify middleware
+│   │   ├── db/          # Database client and migrations
+│   │   ├── config/      # Configuration (storage paths, etc.)
 │   │   ├── types/       # TypeScript types
 │   │   └── utils/       # Utilities
-│   ├── drizzle/         # Migrations
+│   ├── drizzle/         # Database migrations
 │   └── package.json
 ├── frontend/          # React + Vite application
 │   ├── src/
-│   │   ├── components/ # UI components
+│   │   ├── components/ # UI components (agent, workitem, worktree, etc.)
 │   │   ├── routes/     # TanStack Router config
-│   │   ├── lib/        # API client
+│   │   ├── hooks/      # React hooks (useAgentRunPolling, usePR, etc.)
+│   │   ├── lib/        # API client and utilities
 │   │   └── main.tsx
 │   └── package.json
 └── shared/            # Shared types and utilities
+    ├── src/
+    │   ├── types/      # Common types (models, requests, responses)
+    │   └── index.ts
     └── package.json
 ```
 
@@ -257,6 +278,8 @@ git-vibe/
 - `POST /api/work-items/:id/init-workspace` - Initialize workspace (optional)
 - `POST /api/work-items/:id/agent-runs` - Start agent run
 - `POST /api/work-items/:id/resume` - Resume task with same session_id
+- `POST /api/work-items/:id/restart` - Restart task with same prompt
+- `GET /api/work-items/:id/agent-runs` - List all runs for work item
 
 ### Pull Requests
 
@@ -265,12 +288,13 @@ git-vibe/
 - `GET /api/pull-requests/:id/commits` - Get PR commits
 - `POST /api/pull-requests/:id/merge` - Merge PR
 - `POST /api/pull-requests/:id/close` - Close PR without merge
-- `GET /api/pull-requests/:id/patch` - Export patch (optional)
+- `POST /api/pull-requests/:id/update-base` - Update base branch and optionally rebase
 
 ### Agent Runs
 
 - `GET /api/agent-runs/:id` - Get run status and logs
-- `POST /api/agent-runs/:id/cancel` - Cancel running agent (optional)
+- `POST /api/agent-runs/:id/cancel` - Cancel running agent
+- `GET /api/agent-runs/:id` - Get run status, logs, and details
 - `GET /api/work-items/:id/agent-runs` - List runs for work item
 
 ### Imports
@@ -316,12 +340,104 @@ GitVibe implements workspace locking at the WorkItem level to ensure serialized 
 
 - **Lock Fields**: `lock_owner_run_id` and `lock_expires_at` on WorkItem table
 - **Acquisition**: Before starting an agent run, the system acquires a lock on the WorkItem
-- **TTL**: Locks have a time-to-live (TTL) for crash recovery
-- **Heartbeat**: Lock TTL is renewed periodically while the agent is running
-- **Release**: Lock is released in a finally block on success/failure/cancel
-- **Conflict**: If a lock is already held and not expired, new runs are rejected with 409 Conflict
+- **TTL**: Locks have a time-to-live (TTL, default: 1 hour) for crash recovery
+- **Release**: Lock is released after agent run finalization (success/failure/cancel)
+- **Conflict**: If a lock is already held and not expired, new runs are rejected with an error
 
 This prevents concurrent agent runs from corrupting the workspace state.
+
+## Project Concurrency Limits
+
+In addition to WorkItem-level locking, projects have configurable concurrency limits:
+
+- **Per-Project Limit**: `max_agent_concurrency` setting (default: 3)
+- **Enforcement**: Limits concurrent agent runs across all WorkItems in a project
+- **Purpose**: Prevents resource exhaustion when multiple WorkItems are active
+- **Tracking**: Managed in-memory by `AgentService`
+
+## Agent Adapters
+
+GitVibe supports multiple AI coding agents through an adapter system:
+
+### OpenCode Agent
+- **Key**: `opencode`
+- **Executable**: `opencode` CLI
+- **Features**: Full agent execution, model selection, session management
+
+### ClaudeCode Agent
+- **Key**: `claudecode`
+- **Executable**: `claude` CLI
+- **Features**: Full agent execution with `--session-id` support for conversation continuity
+
+### Adding New Agents
+To add a new agent adapter:
+1. Create a new adapter class extending `AgentAdapter`
+2. Implement required methods: `validate()`, `run()`, `correctWithReviewComments()`, `getModels()`, `cancel()`, `getStatus()`
+3. Register the adapter in `AgentService` constructor
+4. Update `AgentType` union type
+
+## Development
+
+### Running Tests
+
+Currently, the project does not include automated tests. Manual testing is recommended.
+
+### Code Style
+
+The project uses:
+- **ESLint** for linting
+- **Prettier** for code formatting
+- **TypeScript** strict mode
+
+Run linting and formatting:
+```bash
+npm run lint
+npm run format
+```
+
+### Database Migrations
+
+Generate new migrations:
+```bash
+cd backend
+npm run db:generate
+```
+
+Run migrations:
+```bash
+npm run db:migrate
+```
+
+View database with Drizzle Studio:
+```bash
+cd backend
+npm run db:studio
+```
+
+## Architecture Notes
+
+### Session Management
+- Agent runs use WorkItem-scoped session IDs by default: `wi-<work_item_id>`
+- This enables conversation continuity across multiple runs
+- Resume functionality creates new AgentRun records but reuses the same session_id
+
+### Auto-Commit Behavior
+- Only successful agent runs trigger auto-commit
+- Failed runs leave workspace unchanged for debugging
+- Commit messages follow format: `AgentRun <id>: <input_summary>`
+
+### Review System
+- Review threads can be created on PRs with file/line anchors
+- Comments can be added to threads
+- Threads can be resolved/unresolved
+- Review comments can trigger agent corrections via `address` endpoint
+
+### Import System
+- Patch-based import strategy (currently only strategy)
+- Generates patch from PR diff (`base_sha..head_sha`)
+- Applies patch to target repository using `git apply --3way`
+- Creates commit with PR metadata
+- Tracks import history with status and logs
 
 ## License
 

@@ -14,7 +14,7 @@ export default [
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
-        allowDefaultProject: ['drizzle.config.ts', 'drizzle/migrate.ts'],
+        allowDefaultProject: ['drizzle.config.ts'],
       },
       ecmaVersion: 2022,
       sourceType: 'module',

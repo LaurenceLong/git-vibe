@@ -10,18 +10,22 @@
  * - Handle merge/close actions
  */
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { pullRequestsApi, importsApi } from '@/lib/api';
+import { pullRequestsApi } from '@/lib/api';
 import { useWorkItem } from '@/hooks/useWorkItem';
-import { ControlledTabs } from '@/components/ui/Tabs';
+import { useMergePR, useClosePR } from '@/hooks/usePR';
 import { OverviewTab } from '@/components/pr/OverviewTab';
 import { ConversationTab } from '@/components/pr/ConversationTab';
+import { CommitsTab } from '@/components/pr/CommitsTab';
+import { FilesChangedTab } from '@/components/pr/FilesChangedTab';
 import { ChecksTab } from '@/components/pr/ChecksTab';
-import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
-import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
+import { Button } from '@/components/ui/Button';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { GitMerge, X as GitClose } from 'lucide-react';
 
 // Import tabs components directly
-import { Tab, TabPanel } from '@/components/ui/Tabs';
+import { Tab, TabPanel, TabList, TabPanels } from '@/components/ui/Tabs';
 
 /**
  * Props for the PRDetail component
@@ -38,6 +42,10 @@ export interface PRDetailProps {
  * @param prId - The PR ID
  */
 export function PRDetail({ prId }: PRDetailProps) {
+  // Merge/Close actions - MUST be called before any early returns (Rules of Hooks)
+  const { mergePR, isLoading: isMerging } = useMergePR(prId);
+  const { closePR, isLoading: isClosing } = useClosePR(prId);
+
   // Fetch PR data
   const {
     data: pr,
@@ -48,30 +56,11 @@ export function PRDetail({ prId }: PRDetailProps) {
     queryFn: () => pullRequestsApi.get(prId).then((res) => res.data),
   });
 
-  // Fetch associated WorkItem for worktree management
+  // Fetch associated WorkItem
   const { data: workItem } = useWorkItem(pr?.workItemId || '');
 
-  // Worktree management (using WorkItem's workspace)
-  const worktreeManagement = useWorktreeManagement({
-    id: workItem?.id || '',
-    projectId: workItem?.projectId || '',
-    worktreePath: workItem?.worktreePath || null,
-    branchName: workItem?.headBranch || '',
-  });
-
-  // Fetch diff
-  useQuery({
-    queryKey: ['diff', prId, workItem?.headSha],
-    queryFn: () => pullRequestsApi.getDiff(prId).then((res) => res.data),
-    enabled: !!pr && !!workItem?.headSha,
-  });
-
-  // Fetch imports (now associated with PR)
-  useQuery({
-    queryKey: ['imports', prId],
-    queryFn: () => importsApi.list(prId).then((res) => res.data),
-    enabled: !!pr,
-  });
+  // Tab state management
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Loading state
   if (isLoading) {
@@ -113,10 +102,40 @@ export function PRDetail({ prId }: PRDetailProps) {
   // Get PR status
   const prStatus = pr.status;
 
-  // Determine worktree status
-  const getWorktreeStatus = (): 'present' | 'missing' | 'recreating' => {
-    if (worktreeManagement.isRecreating) return 'recreating';
-    return workItem?.worktreePath ? 'present' : 'missing';
+  // Determine worktree status for actions
+  const actionsDisabled = !workItem?.worktreePath;
+
+  const getStatusType = (status: string): 'success' | 'error' | 'info' | 'neutral' | 'warning' => {
+    switch (status) {
+      case 'open':
+        return 'info';
+      case 'merged':
+        return 'success';
+      case 'closed':
+        return 'neutral';
+      default:
+        return 'neutral';
+    }
+  };
+
+  const handleMerge = async () => {
+    if (window.confirm('Are you sure you want to merge this PR?')) {
+      try {
+        await mergePR(pr.mergeStrategy);
+      } catch (error) {
+        console.error('Failed to merge PR:', error);
+      }
+    }
+  };
+
+  const handleClose = async () => {
+    if (window.confirm('Are you sure you want to close this PR?')) {
+      try {
+        await closePR();
+      } catch (error) {
+        console.error('Failed to close PR:', error);
+      }
+    }
   };
 
   return (
@@ -124,9 +143,40 @@ export function PRDetail({ prId }: PRDetailProps) {
       {/* PR Header */}
       <div className="rounded-lg border bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{pr.title}</h1>
+          <div className="flex-1">
+            <div className="mb-2 flex items-center space-x-3">
+              <StatusBadge status={getStatusType(prStatus)}>{prStatus}</StatusBadge>
+              <h1 className="text-2xl font-bold text-gray-900">{pr.title}</h1>
+            </div>
             {pr.description && <p className="mt-2 text-gray-600">{pr.description}</p>}
+          </div>
+          <div className="ml-4 flex items-center space-x-2">
+            {prStatus === 'open' && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleMerge}
+                  loading={isMerging}
+                  disabled={actionsDisabled}
+                  title={actionsDisabled ? 'Worktree is missing' : 'Merge PR'}
+                >
+                  <GitMerge className="mr-2 h-4 w-4" />
+                  Merge
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={handleClose}
+                  loading={isClosing}
+                  disabled={actionsDisabled}
+                  title={actionsDisabled ? 'Worktree is missing' : 'Close PR'}
+                >
+                  <GitClose className="mr-2 h-4 w-4" />
+                  Close
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -161,51 +211,90 @@ export function PRDetail({ prId }: PRDetailProps) {
             </div>
           )}
         </div>
-
-        {/* Worktree Status */}
-        <WorktreeStatusComponent
-          status={getWorktreeStatus()}
-          path={workItem?.worktreePath || null}
-          branchName={workItem?.headBranch || ''}
-          projectId={workItem?.projectId || ''}
-          createdAt={workItem?.createdAt}
-          updatedAt={workItem?.updatedAt}
-          onRecreate={worktreeManagement.recreateWorktree}
-          onRemove={worktreeManagement.removeWorktree}
-          isRecreating={worktreeManagement.isRecreating}
-          isRemoving={worktreeManagement.isRemoving}
-          error={worktreeManagement.error?.message}
-        />
       </div>
 
       {/* Tabs */}
-      <ControlledTabs defaultValue="overview">
-        <Tab value="overview">Overview</Tab>
-        <Tab value="conversation">Conversation</Tab>
-        <Tab value="checks">Checks</Tab>
-        <Tab value="imports">Imports</Tab>
-
-        <TabPanel value="overview">
-          <OverviewTab pr={pr} worktreeStatus={getWorktreeStatus()} />
-        </TabPanel>
-
-        <TabPanel value="conversation">
-          <ConversationTab prId={prId} />
-        </TabPanel>
-
-        <TabPanel value="checks">
-          <ChecksTab prId={prId} agentRuns={[]} worktreeStatus={getWorktreeStatus()} />
-        </TabPanel>
-
-        <TabPanel value="imports">
-          <div className="rounded-lg border bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900">Imports</h2>
-            <p className="text-sm text-gray-600">
-              Imports functionality will be implemented in a future update.
-            </p>
-          </div>
-        </TabPanel>
-      </ControlledTabs>
+      <div>
+        <TabList className="px-6">
+          <Tab
+            value="overview"
+            onClick={() => setActiveTab('overview')}
+            className={
+              activeTab === 'overview'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }
+            aria-selected={activeTab === 'overview'}
+          >
+            Overview
+          </Tab>
+          <Tab
+            value="conversation"
+            onClick={() => setActiveTab('conversation')}
+            className={
+              activeTab === 'conversation'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }
+            aria-selected={activeTab === 'conversation'}
+          >
+            Conversation
+          </Tab>
+          <Tab
+            value="commits"
+            onClick={() => setActiveTab('commits')}
+            className={
+              activeTab === 'commits'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }
+            aria-selected={activeTab === 'commits'}
+          >
+            Commits
+          </Tab>
+          <Tab
+            value="files"
+            onClick={() => setActiveTab('files')}
+            className={
+              activeTab === 'files'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }
+            aria-selected={activeTab === 'files'}
+          >
+            Files changed
+          </Tab>
+          <Tab
+            value="checks"
+            onClick={() => setActiveTab('checks')}
+            className={
+              activeTab === 'checks'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }
+            aria-selected={activeTab === 'checks'}
+          >
+            Checks
+          </Tab>
+        </TabList>
+        <TabPanels>
+          <TabPanel value="overview" className={activeTab === 'overview' ? '' : 'hidden'}>
+            <OverviewTab pr={pr} onNavigateToTab={setActiveTab} />
+          </TabPanel>
+          <TabPanel value="conversation" className={activeTab === 'conversation' ? '' : 'hidden'}>
+            <ConversationTab prId={prId} workItemId={pr.workItemId} />
+          </TabPanel>
+          <TabPanel value="commits" className={activeTab === 'commits' ? '' : 'hidden'}>
+            <CommitsTab prId={prId} workItemId={pr.workItemId} />
+          </TabPanel>
+          <TabPanel value="files" className={activeTab === 'files' ? '' : 'hidden'}>
+            <FilesChangedTab prId={prId} />
+          </TabPanel>
+          <TabPanel value="checks" className={activeTab === 'checks' ? '' : 'hidden'}>
+            <ChecksTab prId={prId} agentRuns={[]} />
+          </TabPanel>
+        </TabPanels>
+      </div>
     </div>
   );
 }

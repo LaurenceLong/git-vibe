@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -183,6 +183,9 @@ export class GitService {
   }
 
   commitChanges(repoPath: string, message: string): string {
+    // Stage all changes including new/untracked files before committing
+    // This ensures new files are always included in the commit
+    this.stageAllChanges(repoPath);
     this.execCommand(`git commit -m "${message}"`, repoPath);
     return this.getHeadSha(repoPath);
   }
@@ -192,8 +195,30 @@ export class GitService {
   }
 
   hasStagedChanges(repoPath: string): boolean {
-    const status = this.execCommand('git diff --cached --quiet', repoPath);
-    return status.trim().length === 0;
+    try {
+      this.execCommand('git diff --cached --quiet', repoPath);
+      // Exit code 0 means no changes
+      return false;
+    } catch {
+      // Exit code 1 means there are changes
+      return true;
+    }
+  }
+
+  hasUnstagedChanges(repoPath: string): boolean {
+    try {
+      this.execCommand('git diff --quiet', repoPath);
+      // Exit code 0 means no changes
+      return false;
+    } catch {
+      // Exit code 1 means there are changes
+      return true;
+    }
+  }
+
+  hasAnyChanges(repoPath: string): boolean {
+    // Check for any changes (staged or unstaged)
+    return this.hasStagedChanges(repoPath) || this.hasUnstagedChanges(repoPath);
   }
 
   async createRelayRepo(
@@ -366,6 +391,111 @@ export class GitService {
 
   getLogOneline(repoPath: string, range: string): string {
     return this.execCommand(`git log --oneline ${range}`, repoPath).trim();
+  }
+
+  /**
+   * Get detailed commit log with SHA, message, author, date
+   * Returns array of commit objects
+   */
+  getLogDetailed(repoPath: string, range: string): Array<{
+    sha: string;
+    message: string;
+    author: string;
+    date: string;
+  }> {
+    const format = '%H|%s|%an|%ai';
+    // Use spawnSync instead of execSync to better handle errors and avoid Windows cmd.exe issues
+    // Pass command as array to avoid shell interpretation (prevents %s from being interpreted as env var on Windows)
+    const result = spawnSync('git', ['log', `--format=${format}`, range], {
+      cwd: repoPath,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    
+    if (result.error) {
+      throw new Error(`Git command failed: git log --format=${format} ${range}\nError: ${result.error.message}`);
+    }
+    
+    if (result.status !== 0) {
+      const stderr = (result.stderr || '').toString();
+      // If the error is about no commits found or invalid range, return empty array
+      if (stderr.includes('does not have any commits') || 
+          stderr.includes('unknown revision') ||
+          stderr.includes('bad revision')) {
+        return [];
+      }
+      throw new Error(`Git command failed: git log --format=${format} ${range}\nStderr: ${stderr || 'No error details'}`);
+    }
+    
+    const output = (result.stdout || '').toString().trim();
+    if (!output) {
+      return [];
+    }
+
+    return output.split('\n').map((line) => {
+      const [sha, message, author, date] = line.split('|');
+      return { sha, message, author, date };
+    });
+  }
+
+  /**
+   * Get diff statistics (files changed, additions, deletions)
+   */
+  getDiffStats(baseSha: string, headSha: string, repoPath: string): {
+    filesChanged: number;
+    additions: number;
+    deletions: number;
+  } {
+    try {
+      const output = this.execCommand(
+        `git diff --numstat ${baseSha}..${headSha}`,
+        repoPath
+      ).trim();
+
+      if (!output) {
+        return { filesChanged: 0, additions: 0, deletions: 0 };
+      }
+
+      let filesChanged = 0;
+      let additions = 0;
+      let deletions = 0;
+
+      const lines = output.split('\n');
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          filesChanged++;
+          const add = parseInt(parts[0], 10);
+          const del = parseInt(parts[1], 10);
+          if (!isNaN(add)) additions += add;
+          if (!isNaN(del)) deletions += del;
+        }
+      }
+
+      return { filesChanged, additions, deletions };
+    } catch {
+      return { filesChanged: 0, additions: 0, deletions: 0 };
+    }
+  }
+
+  /**
+   * Get files changed in a commit range
+   */
+  getFilesChanged(baseSha: string, headSha: string, repoPath: string): string[] {
+    try {
+      const output = this.execCommand(
+        `git diff --name-only ${baseSha}..${headSha}`,
+        repoPath
+      ).trim();
+
+      if (!output) {
+        return [];
+      }
+
+      return output.split('\n').filter((file) => file.length > 0);
+    } catch {
+      return [];
+    }
   }
 
   testMergeNoCommit(repoPath: string, branch: string): void {

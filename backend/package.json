@@ -8,8 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "db:generate": "drizzle-kit generate:sqlite",
-    "db:migrate": "tsx drizzle/migrate.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate-cli.ts",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\""
