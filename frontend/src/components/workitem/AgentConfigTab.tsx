@@ -38,7 +38,11 @@ export interface AgentConfigTabProps {
  *
  * @param workItemId - The ID of WorkItem to display agent runs for
  */
-export function AgentConfigTab({ workItemId, worktreeStatus = 'present', isActive = true }: AgentConfigTabProps) {
+export function AgentConfigTab({
+  workItemId,
+  worktreeStatus = 'present',
+  isActive = true,
+}: AgentConfigTabProps) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();

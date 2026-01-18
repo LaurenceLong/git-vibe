@@ -192,7 +192,11 @@ function TaskMessage({ task, isLatestTask, isActive }: TaskMessageProps) {
  * @param prId - The ID of PR to display comments for
  * @param workItemId - The ID of WorkItem associated with this PR
  */
-export function ConversationTab({ prId: _prId, workItemId, isActive = true }: ConversationTabProps) {
+export function ConversationTab({
+  prId: _prId,
+  workItemId,
+  isActive = true,
+}: ConversationTabProps) {
   const [newMessage, setNewMessage] = useState('');
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();

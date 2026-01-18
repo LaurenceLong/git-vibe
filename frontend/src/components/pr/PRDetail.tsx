@@ -316,7 +316,11 @@ export function PRDetail({ prId }: PRDetailProps) {
         <TabPanels>
           <TabPanel value="overview" className={activeTab === 'overview' ? '' : 'hidden'}>
             {activeTab === 'overview' && (
-              <OverviewTab pr={pr} onNavigateToTab={setActiveTab} isActive={activeTab === 'overview'} />
+              <OverviewTab
+                pr={pr}
+                onNavigateToTab={setActiveTab}
+                isActive={activeTab === 'overview'}
+              />
             )}
           </TabPanel>
           <TabPanel value="conversation" className={activeTab === 'conversation' ? '' : 'hidden'}>
@@ -330,7 +334,11 @@ export function PRDetail({ prId }: PRDetailProps) {
           </TabPanel>
           <TabPanel value="commits" className={activeTab === 'commits' ? '' : 'hidden'}>
             {activeTab === 'commits' && (
-              <CommitsTab prId={prId} workItemId={pr.workItemId} isActive={activeTab === 'commits'} />
+              <CommitsTab
+                prId={prId}
+                workItemId={pr.workItemId}
+                isActive={activeTab === 'commits'}
+              />
             )}
           </TabPanel>
           <TabPanel value="files" className={activeTab === 'files' ? '' : 'hidden'}>
