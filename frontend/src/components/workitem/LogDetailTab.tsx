@@ -20,7 +20,7 @@ export interface LogDetailTabProps {
   agentRunId: string;
 }
 
-interface LogPaneProps {
+export interface LogPaneProps {
   title: string;
   content: string;
   accentColor: string;
@@ -33,7 +33,7 @@ interface LogPaneProps {
 /**
  * LogPane component - displays a single log pane with header and content
  */
-function LogPane({
+export function LogPane({
   title,
   content,
   accentColor,
