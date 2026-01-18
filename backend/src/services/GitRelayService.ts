@@ -87,7 +87,7 @@ export class GitRelayService {
       // Return the commit SHA
       return this.execCommand('git rev-parse HEAD', sourceRepoPath).trim();
     }
-    
+
     // No changes, return null
     return null;
   }

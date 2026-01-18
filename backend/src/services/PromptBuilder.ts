@@ -75,7 +75,9 @@ export class PromptBuilder {
     }
 
     // Parse markdown format: ## Task\n\n...\n\n## Description\n\n...\n\n## User Message\n\n...\n\n## Resume Instructions\n\n...
-    const markdownTaskMatch = originalPrompt.match(/^##\s+Task\s*\n\n(.+?)(?:\n\n##\s+Description\s*\n\n(.+?))?(?:\n\n##\s+User\s+Message\s*\n\n(.+?))?(?:\n\n##\s+Resume\s+Instructions\s*\n\n(.+?))?$/s);
+    const markdownTaskMatch = originalPrompt.match(
+      /^##\s+Task\s*\n\n(.+?)(?:\n\n##\s+Description\s*\n\n(.+?))?(?:\n\n##\s+User\s+Message\s*\n\n(.+?))?(?:\n\n##\s+Resume\s+Instructions\s*\n\n(.+?))?$/s
+    );
     if (markdownTaskMatch) {
       parts.task = markdownTaskMatch[1]?.trim();
       parts.description = markdownTaskMatch[2]?.trim();

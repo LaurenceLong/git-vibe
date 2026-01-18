@@ -35,7 +35,6 @@ temp/
 assemble.py
 disassemble.py
 
-*.sql
 *.sqlite
 *.txt
 

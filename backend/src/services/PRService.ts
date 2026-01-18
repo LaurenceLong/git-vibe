@@ -219,7 +219,7 @@ export class PRService {
     }> = [];
 
     // Group task commits by their associated task
-    const commitsByTask = new Map<AgentRun, Array<typeof taskCommits[0]>>();
+    const commitsByTask = new Map<AgentRun, Array<(typeof taskCommits)[0]>>();
     for (const commit of taskCommits) {
       const task = taskCommitsMap.get(commit.sha);
       if (task) {
@@ -313,7 +313,10 @@ export class PRService {
     let mainRepoPath = repoPath;
     if (!mainRepoPath && workItem.worktreePath) {
       // Extract main repo path from worktree path (worktrees are typically in a subdirectory)
-      const worktreeDir = workItem.worktreePath.substring(0, workItem.worktreePath.lastIndexOf(path.sep));
+      const worktreeDir = workItem.worktreePath.substring(
+        0,
+        workItem.worktreePath.lastIndexOf(path.sep)
+      );
       const worktreesIndex = worktreeDir.lastIndexOf(path.sep + 'worktrees');
       if (worktreesIndex !== -1) {
         mainRepoPath = worktreeDir.substring(0, worktreesIndex);
@@ -322,16 +325,16 @@ export class PRService {
         mainRepoPath = workItem.worktreePath;
       }
     }
-    
+
     if (!mainRepoPath) {
       reasons.push('Cannot determine repository path for merge check');
       return { canMerge: false, reasons };
     }
-    
+
     // Find if target branch is checked out in a worktree
     const targetBranchWorktree = gitService.findWorktreeForBranch(mainRepoPath, pr.targetBranch);
     const testMergePath = targetBranchWorktree || mainRepoPath;
-    
+
     try {
       // Test merge to check for conflicts
       gitService.checkoutBranch(testMergePath, pr.targetBranch);
@@ -398,7 +401,7 @@ export class PRService {
         // For rebase, source branch might also be in a worktree
         const sourceBranchWorktree = gitService.findWorktreeForBranch(repoPath, pr.sourceBranch);
         const rebaseSourcePath = sourceBranchWorktree || repoPath;
-        
+
         gitService.checkoutBranch(rebaseSourcePath, pr.sourceBranch);
         gitService.rebaseBranch(rebaseSourcePath, pr.targetBranch);
         gitService.checkoutBranch(mergePath, pr.targetBranch);

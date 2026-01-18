@@ -186,15 +186,11 @@ export class GitCommitService {
       // Use --name-status to get both commit info and file changes
       // Format: %H|%s|%an|%ai followed by file changes
       const format = '%H|%s|%an|%ai';
-      const result = spawnSync(
-        'git',
-        ['log', `--format=${format}`, '--name-only', range],
-        {
-          cwd: repoPath,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        }
-      );
+      const result = spawnSync('git', ['log', `--format=${format}`, '--name-only', range], {
+        cwd: repoPath,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
       if (result.error) {
         throw new Error(
