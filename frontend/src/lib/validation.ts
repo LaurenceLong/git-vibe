@@ -5,7 +5,6 @@
 import { z } from 'zod';
 import {
   TriggerAgentRunDTOSchema,
-  CreateImportDTOSchema,
   UpdateWorkItemDTOSchema,
   CreateThreadDTOSchema,
   CreateCommentDTOSchema,
@@ -17,7 +16,6 @@ import {
 
 export {
   TriggerAgentRunDTOSchema,
-  CreateImportDTOSchema,
   UpdateWorkItemDTOSchema,
   CreateThreadDTOSchema,
   CreateCommentDTOSchema,
@@ -74,13 +72,6 @@ export type CreateTargetRepoInput = z.infer<typeof CreateTargetRepoSchema>;
 export const CreateAgentRunSchema = TriggerAgentRunDTOSchema;
 
 export type CreateAgentRunInput = z.infer<typeof CreateAgentRunSchema>;
-
-/**
- * Schema for creating a new import (with custom error messages)
- */
-export const CreateImportSchema = CreateImportDTOSchema;
-
-export type CreateImportInput = z.infer<typeof CreateImportSchema>;
 
 /**
  * Schema for creating a new review thread (with custom error messages)

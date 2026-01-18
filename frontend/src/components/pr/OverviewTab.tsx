@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PullRequest } from '@/types';
 import { pullRequestsApi } from '@/lib/api';
 import { FileText, User } from 'lucide-react';
+import { formatDateTime } from '@/lib/datetime';
 
 /**
  * Props for the OverviewTab component
@@ -133,7 +134,7 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
             </div>
             <div className="flex-1">
               <p className="text-sm text-gray-900">PR created</p>
-              <p className="text-xs text-gray-500">{new Date(pr.createdAt).toLocaleString()}</p>
+              <p className="text-xs text-gray-500">{formatDateTime(pr.createdAt)}</p>
             </div>
           </div>
           {pr.mergedAt && (
@@ -143,7 +144,7 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
               </div>
               <div className="flex-1">
                 <p className="text-sm text-gray-900">PR merged</p>
-                <p className="text-xs text-gray-500">{new Date(pr.mergedAt).toLocaleString()}</p>
+                <p className="text-xs text-gray-500">{formatDateTime(pr.mergedAt)}</p>
               </div>
             </div>
           )}
@@ -155,7 +156,7 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
               <div className="flex-1">
                 <p className="text-sm text-gray-900">PR closed</p>
                 {pr.updatedAt && pr.updatedAt !== pr.createdAt && (
-                  <p className="text-xs text-gray-500">{new Date(pr.updatedAt).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">{formatDateTime(pr.updatedAt)}</p>
                 )}
               </div>
             </div>
@@ -170,7 +171,7 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-gray-900">PR updated</p>
-                  <p className="text-xs text-gray-500">{new Date(pr.updatedAt).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">{formatDateTime(pr.updatedAt)}</p>
                 </div>
               </div>
             )}

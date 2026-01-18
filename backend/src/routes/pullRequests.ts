@@ -5,13 +5,16 @@ import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { prService } from '../services/PRService.js';
 import { gitService } from '../services/GitService.js';
+import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
 
 export async function pullRequestsRoutes(server: FastifyInstance) {
   // GET /api/pull-requests - List PRs (with optional project filter and pagination)
-  server.get<{ Querystring: { projectId?: string; page?: number; limit?: number } }>(
+  server.get<{ Querystring: { projectId?: string; page?: string; limit?: string } }>(
     '/api/pull-requests',
     async (request) => {
-      const { projectId, page = 1, limit = 10 } = request.query;
+      const { projectId, page: pageStr, limit: limitStr } = request.query;
+      const page = parseInt(pageStr || '1', 10);
+      const limit = parseInt(limitStr || '10', 10);
 
       let prs: Awaited<ReturnType<typeof pullRequestsRepository.findByProjectId>>;
 
@@ -29,7 +32,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
       const paginatedPRs = prs.slice(startIndex, endIndex);
 
       return {
-        data: paginatedPRs,
+        data: paginatedPRs.map(pullRequestToDTO),
         pagination: {
           page,
           limit,
@@ -51,7 +54,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
       });
     }
 
-    return pr;
+    return pullRequestToDTO(pr);
   });
 
   // GET /api/pull-requests/:id/diff - Get PR diff
@@ -138,7 +141,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
         }
 
         const commits = await prService.getCommits(pr, workItem, project);
-        return { data: commits };
+        return commits;
       } catch (error) {
         return reply.status(500).send({
           error: true,
@@ -190,7 +193,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
 
         console.log(`Returning ${commitsWithTasks.length} commit groups for PR ${pr.id}`);
 
-        return { data: commitsWithTasks };
+        return commitsWithTasks;
       } catch (error) {
         console.error(`Error getting commits for PR ${pr.id}:`, error);
         return reply.status(500).send({
@@ -276,7 +279,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
       try {
         const { strategy = 'merge' } = request.body;
         const mergedPR = await prService.mergePR(pr, workItem, project, strategy);
-        return reply.status(200).send(mergedPR);
+        return reply.status(200).send(pullRequestToDTO(mergedPR));
       } catch (error) {
         return reply.status(400).send({
           error: true,
@@ -302,7 +305,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
 
       try {
         const closedPR = await prService.closePR(pr);
-        return reply.status(200).send(closedPR);
+        return reply.status(200).send(pullRequestToDTO(closedPR));
       } catch (error) {
         return reply.status(500).send({
           error: true,
@@ -345,7 +348,7 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
       try {
         const { rebase = false } = request.body;
         const result = await prService.updateBase(pr, workItem, project, rebase);
-        return reply.status(200).send(result);
+        return reply.status(200).send(pullRequestToDTO(result.pr));
       } catch (error) {
         return reply.status(500).send({
           error: true,

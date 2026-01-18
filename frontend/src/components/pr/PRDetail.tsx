@@ -23,6 +23,7 @@ import { ChecksTab } from '@/components/pr/ChecksTab';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { GitMerge, X as GitClose } from 'lucide-react';
+import { formatDateTime } from '@/lib/datetime';
 
 // Import tabs components directly
 import { Tab, TabPanel, TabList, TabPanels } from '@/components/ui/Tabs';
@@ -194,7 +195,7 @@ export function PRDetail({ prId }: PRDetailProps) {
           </div>
           <div>
             <span className="font-medium text-gray-700">Created:</span>{' '}
-            <span className="text-gray-900">{new Date(pr.createdAt).toLocaleString()}</span>
+            <span className="text-gray-900">{formatDateTime(pr.createdAt)}</span>
           </div>
           {workItem?.headSha && (
             <div>
@@ -207,7 +208,7 @@ export function PRDetail({ prId }: PRDetailProps) {
           {pr.mergedAt && (
             <div>
               <span className="font-medium text-gray-700">Merged:</span>{' '}
-              <span className="text-gray-900">{new Date(pr.mergedAt).toLocaleString()}</span>
+              <span className="text-gray-900">{formatDateTime(pr.mergedAt)}</span>
             </div>
           )}
         </div>

@@ -8,6 +8,9 @@ import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { agentService } from '../services/AgentService.js';
 import { workspaceService } from '../services/WorkspaceService.js';
 import { prService } from '../services/PRService.js';
+import { toDTO as workItemToDTO } from '../mappers/workItems.js';
+import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
+import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
 
 export async function workitemsRoutes(server: FastifyInstance) {
   // POST /api/workitems - Create new WorkItem and automatically start agent
@@ -46,7 +49,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
           console.error('Full error details:', error);
         });
 
-      return reply.status(201).send(workItem);
+      return reply.status(201).send(workItemToDTO(workItem));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -99,7 +102,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
             console.error('Full error details:', error);
           });
 
-        return reply.status(201).send(workItem);
+        return reply.status(201).send(workItemToDTO(workItem));
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({
@@ -134,7 +137,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
       const workItems = allWorkItems.slice(offset, offset + limit);
 
       return {
-        data: workItems,
+        data: workItems.map(workItemToDTO),
         pagination: {
           page,
           limit,
@@ -156,7 +159,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
       });
     }
 
-    return workItem;
+    return workItemToDTO(workItem);
   });
 
   // POST /api/work-items/:id/init-workspace - Initialize workspace for WorkItem
@@ -181,7 +184,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
       try {
         const updatedWorkItem = await workspaceService.initWorkspace(workItem, project);
-        return reply.status(200).send(updatedWorkItem);
+        return reply.status(200).send(workItemToDTO(updatedWorkItem));
       } catch (error) {
         return reply.status(500).send({
           error: true,
@@ -228,7 +231,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
         // Resume the task using the same session
         const agentRun = await agentService.resumeTask(latestRunWithSession.id, prompt);
-        return reply.status(201).send(agentRun);
+        return reply.status(201).send(agentRunToDTO(agentRun));
       } catch (error) {
         return reply.status(400).send({
           error: true,
@@ -253,6 +256,13 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
       const updated = await workItemsRepository.update(request.params.id, body);
 
+      if (!updated) {
+        return reply.status(404).send({
+          error: true,
+          message: 'WorkItem not found',
+        });
+      }
+
       // If WorkItem is being closed, clean up its worktree
       if (body.status === 'closed') {
         const project = await projectsRepository.findById(workItem.projectId);
@@ -263,7 +273,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
         }
       }
 
-      return reply.status(200).send(updated);
+      return reply.status(200).send(workItemToDTO(updated));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -333,7 +343,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
         // Create PR using PRService
         const pr = await prService.openPR(updatedWorkItem, project);
 
-        return reply.status(201).send(pr);
+        return reply.status(201).send(pullRequestToDTO(pr));
       } catch (error) {
         return reply.status(400).send({
           error: true,
@@ -354,7 +364,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
     }
 
     const pr = await pullRequestsRepository.findByWorkItemId(request.params.id);
-    return pr ? [pr] : [];
+    return pr ? [pullRequestToDTO(pr)] : [];
   });
 
   // GET /api/workitems/:id/tasks - Get all agent tasks for a WorkItem
@@ -368,7 +378,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
     }
 
     const tasks = await agentService.getWorkItemTasks(request.params.id);
-    return tasks;
+    return tasks.map(agentRunToDTO);
   });
 
   // POST /api/workitems/:id/tasks/:taskId/cancel - Cancel a running task
@@ -412,7 +422,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
       try {
         const agentRun = await agentService.restartTask(request.params.taskId);
-        return reply.status(201).send(agentRun);
+        return reply.status(201).send(agentRunToDTO(agentRun));
       } catch (error) {
         return reply.status(404).send({
           error: true,
@@ -468,7 +478,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
         }
 
         const agentRun = await agentService.resumeTask(request.params.taskId, prompt);
-        return reply.status(201).send(agentRun);
+        return reply.status(201).send(agentRunToDTO(agentRun));
       } catch (error) {
         return reply.status(400).send({
           error: true,
@@ -515,7 +525,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
         workItem.body || undefined
       );
 
-      return reply.status(201).send(result);
+      return reply.status(201).send(agentRunToDTO(result.agentRun));
     } catch (error) {
       return reply.status(400).send({
         error: true,
@@ -545,7 +555,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
     try {
       // Refresh head_sha using workspace service
       const updatedWorkItem = await workspaceService.refreshHeadSha(workItem);
-      return reply.status(200).send(updatedWorkItem);
+      return reply.status(200).send(workItemToDTO(updatedWorkItem));
     } catch (error) {
       return reply.status(500).send({
         error: true,

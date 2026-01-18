@@ -23,11 +23,11 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { agentRunsApi } from '../lib/api';
-import { AgentRun } from '../types';
+import type { AgentRunDTO } from 'git-vibe-shared';
 
 interface UseAgentRunPollingResult {
   /** The current agent run data */
-  agentRun: AgentRun | undefined;
+  agentRun: AgentRunDTO | undefined;
   /** Whether the query is loading */
   isLoading: boolean;
   /** Any error that occurred during polling */
@@ -51,7 +51,7 @@ export function useAgentRunPolling(agentRunId: string): UseAgentRunPollingResult
     queryKey: ['agent-run', agentRunId],
     queryFn: async () => {
       const response = await agentRunsApi.get(agentRunId);
-      return response.data as AgentRun;
+      return response.data;
     },
     refetchInterval: (data) => {
       // Only poll if status is queued or running
@@ -67,7 +67,7 @@ export function useAgentRunPolling(agentRunId: string): UseAgentRunPollingResult
   });
 
   const stopPolling = () => {
-    queryClient.setQueryData(['agent-run', agentRunId], (oldData: AgentRun | undefined) => {
+    queryClient.setQueryData(['agent-run', agentRunId], (oldData: AgentRunDTO | undefined) => {
       if (oldData && (oldData.status === 'queued' || oldData.status === 'running')) {
         // Keep the data but mark it so polling will stop
         return { ...oldData };

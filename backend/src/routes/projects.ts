@@ -20,6 +20,8 @@ import { STORAGE_CONFIG } from '../config/storage.js';
 import { cleanupDirectory } from '../utils/storage.js';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { toDTO as projectToDTO } from '../mappers/projects.js';
+import { toDTO as workItemToDTO } from '../mappers/workItems.js';
 
 export async function projectsRoutes(server: FastifyInstance) {
   server.post('/api/projects', async (request, reply) => {
@@ -57,7 +59,7 @@ export async function projectsRoutes(server: FastifyInstance) {
         agentParams: body.agentParams ? JSON.stringify(body.agentParams) : undefined,
       });
 
-      return reply.status(201).send(project);
+      return reply.status(201).send(projectToDTO(project));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -83,7 +85,7 @@ export async function projectsRoutes(server: FastifyInstance) {
       const projects = allProjects.slice(offset, offset + limit);
 
       return {
-        data: projects,
+        data: projects.map(projectToDTO),
         pagination: {
           page,
           limit,
@@ -104,7 +106,7 @@ export async function projectsRoutes(server: FastifyInstance) {
       });
     }
 
-    return project;
+    return projectToDTO(project);
   });
 
   server.get<{ Params: { name: string } }>('/api/projects/name/:name', async (request, reply) => {
@@ -117,7 +119,7 @@ export async function projectsRoutes(server: FastifyInstance) {
       });
     }
 
-    return project;
+    return projectToDTO(project);
   });
 
   server.patch<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
@@ -140,7 +142,14 @@ export async function projectsRoutes(server: FastifyInstance) {
         agentParams: body.agentParams ? JSON.stringify(body.agentParams) : undefined,
       });
 
-      return reply.status(200).send(updatedProject);
+      if (!updatedProject) {
+        return reply.status(404).send({
+          error: true,
+          message: 'Project not found',
+        });
+      }
+
+      return reply.status(200).send(projectToDTO(updatedProject));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -362,7 +371,7 @@ export async function projectsRoutes(server: FastifyInstance) {
         body: body.body,
       });
 
-      return reply.status(201).send(workItem);
+      return reply.status(201).send(workItemToDTO(workItem));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({

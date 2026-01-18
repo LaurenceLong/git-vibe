@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { GitPullRequest, GitBranch, Hash, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { useWorkItem } from '@/hooks/useWorkItem';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface PRStatusTabProps {
   workItemId: string;
@@ -231,15 +232,13 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
               )}
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <span>
-                  <span className="font-medium">Created:</span>{' '}
-                  {new Date(pr.createdAt).toLocaleString()}
+                  <span className="font-medium">Created:</span> {formatDateTime(pr.createdAt)}
                 </span>
               </div>
               {pr.mergedAt && (
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <span>
-                    <span className="font-medium">Merged:</span>{' '}
-                    {new Date(pr.mergedAt).toLocaleString()}
+                    <span className="font-medium">Merged:</span> {formatDateTime(pr.mergedAt)}
                   </span>
                 </div>
               )}

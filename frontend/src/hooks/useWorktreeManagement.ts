@@ -55,9 +55,9 @@ export interface UseWorktreeManagementOptions {
 
 export interface UseWorktreeManagementResult {
   /** Function to remove the worktree */
-  removeWorktree: () => Promise<void>;
+  removeWorktree: () => Promise<import('git-vibe-shared').WorkItemDTO>;
   /** Function to recreate the worktree */
-  recreateWorktree: () => Promise<void>;
+  recreateWorktree: () => Promise<import('git-vibe-shared').WorkItemDTO>;
   /** Whether any operation is in progress */
   isLoading: boolean;
   /** Whether remove operation is in progress */
@@ -66,6 +66,8 @@ export interface UseWorktreeManagementResult {
   isRecreating: boolean;
   /** Any error that occurred during operations */
   error: Error | null;
+  /** Updated WorkItem data after operation */
+  workItem?: import('git-vibe-shared').WorkItemDTO;
 }
 
 /**
@@ -135,5 +137,6 @@ export function useWorktreeManagement(
     isRemoving: removeMutation.isPending,
     isRecreating: recreateMutation.isPending,
     error: (removeMutation.error || recreateMutation.error) as Error | null,
+    workItem: removeMutation.data || recreateMutation.data,
   };
 }

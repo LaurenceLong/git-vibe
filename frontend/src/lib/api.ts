@@ -1,16 +1,28 @@
 import axios from 'axios';
+import { z } from 'zod';
 import type {
   AgentModel,
   CreateProjectDTO,
   UpdateProjectDTO,
   TriggerAgentRunDTO,
-  CreateImportDTO,
   CreateThreadDTO,
   AddressWithAgentDTO,
   CreateCommentDTO,
   CreateTargetRepoDTO,
   CreateWorkItemDTO,
   UpdateWorkItemDTO,
+} from 'git-vibe-shared';
+import {
+  PullRequestSchema,
+  AgentRunSchema,
+  WorkItemSchema,
+  ProjectSchema,
+  ReviewThreadSchema,
+  ReviewCommentSchema,
+  TargetRepoSchema,
+  AgentModelSchema,
+  CommitSchema,
+  CommitWithTaskSchema,
 } from 'git-vibe-shared';
 
 const API_BASE_URL = '/api';
@@ -22,15 +34,49 @@ export const api = axios.create({
   },
 });
 
+// Helper to create paginated response schema
+const createPaginatedSchema = <T>(itemSchema: z.ZodType<T>) =>
+  z.object({
+    data: z.array(itemSchema),
+    pagination: z.object({
+      page: z.number(),
+      limit: z.number(),
+      total: z.number(),
+      totalPages: z.number(),
+    }),
+  });
+
 export const projectsApi = {
-  list: (page?: number, limit?: number) => api.get('/projects', { params: { page, limit } }),
-  get: (id: string) => api.get(`/projects/${id}`),
-  getByName: (name: string) => api.get(`/projects/name/${name}`),
-  getModels: (agent?: string) => api.get<{ data: AgentModel[] }>('/models', { params: { agent } }),
-  refreshModels: (agent?: string) =>
-    api.post<{ data: AgentModel[] }>('/models/refresh', undefined, { params: { agent } }),
-  create: (data: CreateProjectDTO) => api.post('/projects', data),
-  update: (id: string, data: UpdateProjectDTO) => api.patch(`/projects/${id}`, data),
+  list: async (page?: number, limit?: number) => {
+    const response = await api.get('/projects', { params: { page, limit } });
+    return { ...response, data: createPaginatedSchema(ProjectSchema).parse(response.data) };
+  },
+  get: async (id: string) => {
+    const response = await api.get(`/projects/${id}`);
+    return { ...response, data: ProjectSchema.parse(response.data) };
+  },
+  getByName: async (name: string) => {
+    const response = await api.get(`/projects/name/${name}`);
+    return { ...response, data: ProjectSchema.parse(response.data) };
+  },
+  getModels: async (agent?: string) => {
+    const response = await api.get<{ data: AgentModel[] }>('/models', { params: { agent } });
+    return { ...response, data: { data: z.array(AgentModelSchema).parse(response.data.data) } };
+  },
+  refreshModels: async (agent?: string) => {
+    const response = await api.post<{ data: AgentModel[] }>('/models/refresh', undefined, {
+      params: { agent },
+    });
+    return { ...response, data: { data: z.array(AgentModelSchema).parse(response.data.data) } };
+  },
+  create: async (data: CreateProjectDTO) => {
+    const response = await api.post('/projects', data);
+    return { ...response, data: ProjectSchema.parse(response.data) };
+  },
+  update: async (id: string, data: UpdateProjectDTO) => {
+    const response = await api.patch(`/projects/${id}`, data);
+    return { ...response, data: ProjectSchema.parse(response.data) };
+  },
   delete: (id: string) => api.delete(`/projects/${id}`),
   sync: (id: string) => api.post(`/projects/${id}/sync`),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),
@@ -41,35 +87,68 @@ export const projectsApi = {
 };
 
 export const targetReposApi = {
-  list: () => api.get('/target-repos'),
-  get: (id: string) => api.get(`/target-repos/${id}`),
-  create: (data: CreateTargetRepoDTO) => api.post('/target-repos', data),
+  list: async () => {
+    const response = await api.get('/target-repos');
+    return { ...response, data: z.array(TargetRepoSchema).parse(response.data) };
+  },
+  get: async (id: string) => {
+    const response = await api.get(`/target-repos/${id}`);
+    return { ...response, data: TargetRepoSchema.parse(response.data) };
+  },
+  create: async (data: CreateTargetRepoDTO) => {
+    const response = await api.post('/target-repos', data);
+    return { ...response, data: TargetRepoSchema.parse(response.data) };
+  },
 };
 
 export const pullRequestsApi = {
-  list: (projectId?: string, page?: number, limit?: number) =>
-    api.get('/pull-requests', { params: { projectId, page, limit } }),
-  get: (id: string) => api.get(`/pull-requests/${id}`),
+  list: async (projectId?: string, page?: number, limit?: number) => {
+    const response = await api.get('/pull-requests', { params: { projectId, page, limit } });
+    return { ...response, data: createPaginatedSchema(PullRequestSchema).parse(response.data) };
+  },
+  get: async (id: string) => {
+    const response = await api.get(`/pull-requests/${id}`);
+    return { ...response, data: PullRequestSchema.parse(response.data) };
+  },
   getDiff: (id: string) => api.get(`/pull-requests/${id}/diff`),
-  getCommits: (id: string) => api.get(`/pull-requests/${id}/commits`),
-  getCommitsWithTasks: (id: string) => api.get(`/pull-requests/${id}/commits-with-tasks`),
+  getCommits: async (id: string) => {
+    const response = await api.get(`/pull-requests/${id}/commits`);
+    return { ...response, data: z.array(CommitSchema).parse(response.data) };
+  },
+  getCommitsWithTasks: async (id: string) => {
+    const response = await api.get(`/pull-requests/${id}/commits-with-tasks`);
+    return { ...response, data: z.array(CommitWithTaskSchema).parse(response.data) };
+  },
   getStatistics: (id: string) => api.get(`/pull-requests/${id}/statistics`),
-  merge: (id: string, strategy?: 'merge' | 'squash' | 'rebase') =>
-    api.post(`/pull-requests/${id}/merge`, { strategy }),
-  close: (id: string) => api.post(`/pull-requests/${id}/close`),
+  merge: async (id: string, strategy?: 'merge' | 'squash' | 'rebase') => {
+    const response = await api.post(`/pull-requests/${id}/merge`, { strategy });
+    return { ...response, data: PullRequestSchema.parse(response.data) };
+  },
+  close: async (id: string) => {
+    const response = await api.post(`/pull-requests/${id}/close`);
+    return { ...response, data: PullRequestSchema.parse(response.data) };
+  },
   updateBase: (id: string, rebase?: boolean) =>
     api.post(`/pull-requests/${id}/update-base`, { rebase }),
   getPatch: (id: string) => api.get(`/pull-requests/${id}/patch`),
 };
 
 export const agentRunsApi = {
-  get: (id: string) => api.get(`/agent-runs/${id}`),
-  listByWorkItem: (workItemId: string) => api.get(`/workitems/${workItemId}/tasks`),
-  trigger: (workItemId: string, data: TriggerAgentRunDTO) =>
-    api.post(`/workitems/${workItemId}/start`, {
+  get: async (id: string) => {
+    const response = await api.get(`/agent-runs/${id}`);
+    return { ...response, data: AgentRunSchema.parse(response.data) };
+  },
+  listByWorkItem: async (workItemId: string) => {
+    const response = await api.get(`/workitems/${workItemId}/tasks`);
+    return { ...response, data: z.array(AgentRunSchema).parse(response.data) };
+  },
+  trigger: async (workItemId: string, data: TriggerAgentRunDTO) => {
+    const response = await api.post(`/workitems/${workItemId}/start`, {
       ...data,
       inputSummary: data.inputSummary || undefined,
-    }),
+    });
+    return { ...response, data: AgentRunSchema.parse(response.data) };
+  },
   cancel: (id: string) => api.post(`/agent-runs/${id}/cancel`),
   // Get stdout log for an agent run
   getStdout: async (id: string): Promise<string> => {
@@ -102,67 +181,111 @@ export const agentRunsApi = {
   },
 };
 
-export const importsApi = {
-  list: (pullRequestId: string) => api.get(`/pull-requests/${pullRequestId}/imports`),
-  get: (id: string) => api.get(`/imports/${id}`),
-  start: (pullRequestId: string, data: CreateImportDTO) =>
-    api.post(`/pull-requests/${pullRequestId}/imports`, data),
-};
-
 export const reviewsApi = {
-  getThreads: (pullRequestId: string) => api.get(`/pull-requests/${pullRequestId}/reviews/threads`),
-  getThread: (pullRequestId: string, threadId: string) =>
-    api.get(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}`),
-  createThread: (pullRequestId: string, data: CreateThreadDTO) =>
-    api.post(`/pull-requests/${pullRequestId}/reviews/threads`, data),
-  resolveThread: (pullRequestId: string, threadId: string) =>
-    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/resolve`),
-  unresolveThread: (pullRequestId: string, threadId: string) =>
-    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/unresolve`),
-  addressWithAgent: (pullRequestId: string, threadId: string, data: AddressWithAgentDTO) =>
-    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/address`, data),
-  resumeTaskFromThread: (pullRequestId: string, threadId: string, prompt: string) =>
-    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/resume`, { prompt }),
-  addComment: (pullRequestId: string, threadId: string, data: CreateCommentDTO) =>
-    api.post(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}/comments`, data),
+  getThreads: async (pullRequestId: string) => {
+    const response = await api.get(`/pull-requests/${pullRequestId}/reviews/threads`);
+    return { ...response, data: z.array(ReviewThreadSchema).parse(response.data) };
+  },
+  getThread: async (pullRequestId: string, threadId: string) => {
+    const response = await api.get(`/pull-requests/${pullRequestId}/reviews/threads/${threadId}`);
+    return { ...response, data: ReviewThreadSchema.parse(response.data) };
+  },
+  createThread: async (pullRequestId: string, data: CreateThreadDTO) => {
+    const response = await api.post(`/pull-requests/${pullRequestId}/reviews/threads`, data);
+    return { ...response, data: ReviewThreadSchema.parse(response.data) };
+  },
+  resolveThread: async (pullRequestId: string, threadId: string) => {
+    const response = await api.post(
+      `/pull-requests/${pullRequestId}/reviews/threads/${threadId}/resolve`
+    );
+    return { ...response, data: ReviewThreadSchema.parse(response.data) };
+  },
+  unresolveThread: async (pullRequestId: string, threadId: string) => {
+    const response = await api.post(
+      `/pull-requests/${pullRequestId}/reviews/threads/${threadId}/unresolve`
+    );
+    return { ...response, data: ReviewThreadSchema.parse(response.data) };
+  },
+  addressWithAgent: async (pullRequestId: string, threadId: string, data: AddressWithAgentDTO) => {
+    const response = await api.post(
+      `/pull-requests/${pullRequestId}/reviews/threads/${threadId}/address`,
+      data
+    );
+    return { ...response, data: AgentRunSchema.parse(response.data) };
+  },
+  resumeTaskFromThread: async (pullRequestId: string, threadId: string, prompt: string) => {
+    const response = await api.post(
+      `/pull-requests/${pullRequestId}/reviews/threads/${threadId}/resume`,
+      { prompt }
+    );
+    return { ...response, data: AgentRunSchema.parse(response.data) };
+  },
+  addComment: async (pullRequestId: string, threadId: string, data: CreateCommentDTO) => {
+    const response = await api.post(
+      `/pull-requests/${pullRequestId}/reviews/threads/${threadId}/comments`,
+      data
+    );
+    return { ...response, data: ReviewCommentSchema.parse(response.data) };
+  },
 };
 
 export const workItemsApi = {
   // List WorkItems with optional project filter and pagination
-  list: (projectId?: string, page?: number, limit?: number) =>
-    api.get('/workitems', { params: { projectId, page, limit } }),
+  list: async (projectId?: string, page?: number, limit?: number) => {
+    const response = await api.get('/workitems', { params: { projectId, page, limit } });
+    return { ...response, data: createPaginatedSchema(WorkItemSchema).parse(response.data) };
+  },
   // Create new WorkItem
-  create: (projectId: string, data: CreateWorkItemDTO) =>
-    api.post(`/projects/${projectId}/work-items`, {
+  create: async (projectId: string, data: CreateWorkItemDTO) => {
+    const response = await api.post(`/projects/${projectId}/work-items`, {
       ...data,
       body: data.body || undefined,
-    }),
+    });
+    return { ...response, data: WorkItemSchema.parse(response.data) };
+  },
   // Initialize workspace for WorkItem
   initWorkspace: (id: string) => api.post(`/work-items/${id}/init-workspace`),
   // Get WorkItem by ID
-  get: (id: string) => api.get(`/workitems/${id}`),
+  get: async (id: string) => {
+    const response = await api.get(`/workitems/${id}`);
+    return { ...response, data: WorkItemSchema.parse(response.data) };
+  },
   // Update WorkItem
-  update: (id: string, data: UpdateWorkItemDTO) => api.patch(`/workitems/${id}`, data),
+  update: async (id: string, data: UpdateWorkItemDTO) => {
+    const response = await api.patch(`/workitems/${id}`, data);
+    return { ...response, data: WorkItemSchema.parse(response.data) };
+  },
   // Delete WorkItem
   delete: (id: string) => api.delete(`/workitems/${id}`),
   // Start agent run for WorkItem
-  startAgentRun: (id: string, data: TriggerAgentRunDTO) =>
-    api.post(`/workitems/${id}/start`, {
+  startAgentRun: async (id: string, data: TriggerAgentRunDTO) => {
+    const response = await api.post(`/workitems/${id}/start`, {
       ...data,
       inputSummary: data.inputSummary || undefined,
-    }),
+    });
+    return { ...response, data: AgentRunSchema.parse(response.data) };
+  },
   // Resume task for WorkItem
   resume: (id: string, data: { prompt: string }) => api.post(`/work-items/${id}/resume`, data),
   // Refresh WorkItem head SHA
   refresh: (id: string) => api.post(`/workitems/${id}/refresh`),
   // Get PRs for WorkItem
-  getPRs: (id: string) => api.get(`/workitems/${id}/prs`),
+  getPRs: async (id: string) => {
+    const response = await api.get(`/workitems/${id}/prs`);
+    return { ...response, data: z.array(PullRequestSchema).parse(response.data) };
+  },
   // Create PR from WorkItem
-  createPR: (id: string) => api.post(`/workitems/${id}/create-pr`),
+  createPR: async (id: string) => {
+    const response = await api.post(`/workitems/${id}/create-pr`);
+    return { ...response, data: PullRequestSchema.parse(response.data) };
+  },
   // Start task for WorkItem
   startTask: (id: string) => api.post(`/workitems/${id}/start`),
   // Get tasks for WorkItem
-  getTasks: (id: string) => api.get(`/workitems/${id}/tasks`),
+  getTasks: async (id: string) => {
+    const response = await api.get(`/workitems/${id}/tasks`);
+    return { ...response, data: z.array(AgentRunSchema).parse(response.data) };
+  },
   // Cancel task
   cancelTask: (id: string, taskId: string) => api.post(`/workitems/${id}/tasks/${taskId}/cancel`),
   // Restart task

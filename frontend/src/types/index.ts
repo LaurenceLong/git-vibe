@@ -1,18 +1,10 @@
 /**
  * Shared TypeScript types for the Git Vibe frontend
- * These types are imported from the shared package and adapted for frontend use
+ * These types are imported from the shared package
+ *
+ * Note: All date fields are ISO 8601 strings (not Date objects)
+ * The HTTP client is the parsing boundary, validating responses with Zod schemas
  */
-
-import type {
-  WorkItem as SharedWorkItem,
-  Project as SharedProject,
-  TargetRepo as SharedTargetRepo,
-  PullRequest as SharedPullRequest,
-  ReviewThread as SharedReviewThread,
-  ReviewComment as SharedReviewComment,
-  AgentRun as SharedAgentRun,
-  Import as SharedImport,
-} from 'git-vibe-shared';
 
 // ============================================================================
 // Re-export shared types for backward compatibility
@@ -24,97 +16,46 @@ export type {
   WorkspaceStatus,
   PullRequestStatus,
   AgentRunStatus,
-  ImportStatus,
-  ImportStrategy,
   ReviewThreadStatus,
   ReviewThreadSeverity,
   RepoFile,
+  Commit,
+  CommitWithTask,
   AgentModel,
   AgentParams,
   AgentKey,
 } from 'git-vibe-shared';
 
+// Type alias for backward compatibility
+export type PRStatus = import('git-vibe-shared').PullRequestStatus;
+
 // ============================================================================
-// Model Types (with Date conversion for frontend)
+// Re-export DTO types (validated by shared Zod schemas)
 // ============================================================================
 
-/**
- * WorkItem represents an Issue or Feature Request
- * WorkItems own workspaces (worktree + branch) for agent execution
- */
-export interface WorkItem extends Omit<SharedWorkItem, 'createdAt' | 'updatedAt'> {
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type {
+  WorkItemDTO,
+  ProjectDTO,
+  TargetRepoDTO,
+  PullRequestDTO,
+  ReviewThreadDTO,
+  ReviewCommentDTO,
+  AgentRunDTO,
+} from 'git-vibe-shared';
 
-/**
- * PullRequest represents a pull request for a WorkItem
- */
-export interface PullRequest extends Omit<
-  SharedPullRequest,
-  'mergedAt' | 'createdAt' | 'updatedAt'
-> {
-  mergedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
+// ============================================================================
+// Type aliases for backward compatibility
+// ============================================================================
 
-/**
- * AgentRun represents an AI agent execution on a work item
- */
-export interface AgentRun extends Omit<
-  SharedAgentRun,
-  'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'
-> {
-  startedAt: Date | null;
-  finishedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * Import represents importing changes from a pull request to a target repository
- */
-export interface Import extends Omit<
-  SharedImport,
-  'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'
-> {
-  startedAt: Date | null;
-  finishedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * ReviewThread represents a review thread on a pull request
- */
-export interface ReviewThread extends Omit<SharedReviewThread, 'createdAt' | 'updatedAt'> {
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * ReviewComment represents a comment within a review thread
- */
-export interface ReviewComment extends Omit<SharedReviewComment, 'createdAt'> {
-  createdAt: Date;
-}
-
-/**
- * Project represents a source project
- */
-export interface Project extends Omit<SharedProject, 'createdAt' | 'updatedAt'> {
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * TargetRepo represents a target repository for imports
- */
-export interface TargetRepo extends Omit<SharedTargetRepo, 'createdAt' | 'updatedAt'> {
-  createdAt: Date;
-  updatedAt: Date;
-}
+// Type aliases for components that still use the old names
+// These will be phased out in favor of DTO types
+export type WorkItem = import('git-vibe-shared').WorkItemDTO;
+export type Project = import('git-vibe-shared').ProjectDTO;
+export type TargetRepo = import('git-vibe-shared').TargetRepoDTO;
+export type PullRequest = import('git-vibe-shared').PullRequestDTO;
+export type ReviewThread = import('git-vibe-shared').ReviewThreadDTO;
+export type ReviewComment = import('git-vibe-shared').ReviewCommentDTO;
+export type AgentRun = import('git-vibe-shared').AgentRunDTO;
 
 // ============================================================================
 // Frontend-Specific Types

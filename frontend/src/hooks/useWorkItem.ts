@@ -28,7 +28,8 @@
 
 import { useQuery, useMutation, useQueryClient, UseQueryResult } from '@tanstack/react-query';
 import { workItemsApi } from '../lib/api';
-import { WorkItem, CreateWorkItemInput, UpdateWorkItemInput } from '../types';
+import type { WorkItemDTO } from 'git-vibe-shared';
+import { CreateWorkItemInput, UpdateWorkItemInput } from '../types';
 import { useToast } from '../components/Toast';
 
 /**
@@ -37,12 +38,12 @@ import { useToast } from '../components/Toast';
  * @param id - The ID of WorkItem to fetch
  * @returns Query result with WorkItem data
  */
-export function useWorkItem(id: string): UseQueryResult<WorkItem, Error> {
+export function useWorkItem(id: string): UseQueryResult<WorkItemDTO, Error> {
   return useQuery({
     queryKey: ['workitem', id],
     queryFn: async () => {
       const response = await workItemsApi.get(id);
-      return response.data as WorkItem;
+      return response.data;
     },
     enabled: !!id,
   });
@@ -54,13 +55,13 @@ export function useWorkItem(id: string): UseQueryResult<WorkItem, Error> {
  * @param projectId - Optional project ID to filter WorkItems
  * @returns Query result with WorkItem array
  */
-export function useWorkItems(projectId?: string): UseQueryResult<WorkItem[], Error> {
+export function useWorkItems(projectId?: string): UseQueryResult<WorkItemDTO[], Error> {
   return useQuery({
     queryKey: ['workitems', projectId],
     queryFn: async () => {
       const response = await workItemsApi.list(projectId);
-      // Backend returns { data: WorkItem[], pagination: {...} }
-      return response.data.data as WorkItem[];
+      // Backend returns { data: WorkItem[], total, page, pageSize }
+      return response.data.data;
     },
   });
 }
@@ -81,7 +82,7 @@ export function useCreateWorkItem() {
         projectId,
         ...workItemData,
       });
-      return response.data as WorkItem;
+      return response.data;
     },
     onSuccess: (_, variables) => {
       // Invalidate WorkItems list for project
@@ -115,7 +116,7 @@ export function useUpdateWorkItem(id: string) {
   const mutation = useMutation({
     mutationFn: async (data: UpdateWorkItemInput) => {
       const response = await workItemsApi.update(id, data);
-      return response.data as WorkItem;
+      return response.data;
     },
     onSuccess: () => {
       // Invalidate specific WorkItem query
@@ -188,7 +189,7 @@ export function useCloseWorkItem(id: string) {
   const mutation = useMutation({
     mutationFn: async () => {
       const response = await workItemsApi.update(id, { status: 'closed' });
-      return response.data as WorkItem;
+      return response.data;
     },
     onSuccess: () => {
       // Invalidate specific WorkItem query

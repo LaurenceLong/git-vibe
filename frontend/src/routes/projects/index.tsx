@@ -38,28 +38,38 @@ function ProjectsIndex() {
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['projects', currentPage, itemsPerPage],
-    queryFn: () => projectsApi.list(currentPage, itemsPerPage).then((res) => res.data),
+    queryFn: () => projectsApi.list(currentPage, itemsPerPage),
   });
 
-  const projects = response?.data || [];
-  const pagination = response?.pagination;
+  const projects = response?.data?.data || [];
+  const pagination = response?.data?.pagination
+    ? {
+        page: response.data.pagination.page,
+        totalPages: response.data.pagination.totalPages,
+        total: response.data.pagination.total,
+        limit: response.data.pagination.limit,
+      }
+    : undefined;
 
   // Fetch statistics for all projects
   const { data: allWorkItems } = useQuery({
     queryKey: ['all-workitems'],
-    queryFn: () => workItemsApi.list().then((res) => res.data.data),
+    queryFn: () => workItemsApi.list(),
   });
 
   const { data: allPullRequestsResponse } = useQuery({
     queryKey: ['all-pull-requests'],
-    queryFn: () => pullRequestsApi.list().then((res) => res.data),
+    queryFn: () => pullRequestsApi.list(),
   });
 
   const getProjectStats = (projectId: string) => {
-    const workItems = allWorkItems?.filter((wi: WorkItem) => wi.projectId === projectId) || [];
+    const workItems =
+      allWorkItems?.data?.data?.filter((wi: WorkItem) => wi.projectId === projectId) || [];
 
     const pullRequests =
-      allPullRequestsResponse?.data?.filter((pr: PullRequest) => pr.projectId === projectId) || [];
+      allPullRequestsResponse?.data?.data?.filter(
+        (pr: PullRequest) => pr.projectId === projectId
+      ) || [];
     return {
       workItems: workItems.length,
       openWorkItems: workItems.filter((wi: WorkItem) => wi.status === 'open').length,

@@ -24,6 +24,7 @@ import { AgentConfigTab } from './AgentConfigTab';
 import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
 import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
 import { workItemsApi } from '@/lib/api';
+import { formatDateTime, sortDates } from '@/lib/datetime';
 
 export interface WorkItemDetailProps {
   workItemId: string;
@@ -71,11 +72,9 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
     try {
       const response = await workItemsApi.getTasks(workItemId);
       // Sort tasks by createdAt descending to get the latest first
-      const sortedTasks = [...(response.data || [])].sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0).getTime();
-        const dateB = new Date(b.createdAt || 0).getTime();
-        return dateB - dateA; // Descending order (newest first)
-      });
+      const sortedTasks = [...(response.data || [])].sort((a, b) =>
+        sortDates(a.createdAt || '', b.createdAt || '', 'desc')
+      );
       setTasks(sortedTasks);
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
@@ -227,7 +226,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
         </span>
         {latestTask.startedAt && (
           <span className="text-xs text-gray-500">
-            Started: {new Date(latestTask.startedAt).toLocaleString()}
+            Started: {formatDateTime(latestTask.startedAt)}
           </span>
         )}
       </div>
@@ -337,15 +336,13 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <Calendar className="h-4 w-4" />
             <span>
-              <span className="font-medium">Created:</span>{' '}
-              {new Date(workItem.createdAt).toLocaleString()}
+              <span className="font-medium">Created:</span> {formatDateTime(workItem.createdAt)}
             </span>
           </div>
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <Calendar className="h-4 w-4" />
             <span>
-              <span className="font-medium">Updated:</span>{' '}
-              {new Date(workItem.updatedAt).toLocaleString()}
+              <span className="font-medium">Updated:</span> {formatDateTime(workItem.updatedAt)}
             </span>
           </div>
         </div>

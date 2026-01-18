@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { CreateTargetRepoDTOSchema } from 'git-vibe-shared';
 import { targetReposRepository } from '../repositories/TargetReposRepository.js';
 import { gitService } from '../services/GitService.js';
+import { toDTO as targetRepoToDTO } from '../mappers/targetRepos.js';
 
 export async function targetReposRoutes(server: FastifyInstance) {
   server.post('/api/target-repos', async (request, reply) => {
@@ -21,7 +22,7 @@ export async function targetReposRoutes(server: FastifyInstance) {
         defaultBranch,
       });
 
-      return reply.status(201).send(targetRepo);
+      return reply.status(201).send(targetRepoToDTO(targetRepo));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -36,7 +37,8 @@ export async function targetReposRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/target-repos', async () => {
-    return await targetReposRepository.findAll();
+    const targetRepos = await targetReposRepository.findAll();
+    return targetRepos.map(targetRepoToDTO);
   });
 
   server.get<{ Params: { id: string } }>('/api/target-repos/:id', async (request) => {
@@ -50,6 +52,6 @@ export async function targetReposRoutes(server: FastifyInstance) {
       };
     }
 
-    return targetRepo;
+    return targetRepoToDTO(targetRepo);
   });
 }

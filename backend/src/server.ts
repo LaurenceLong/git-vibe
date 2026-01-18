@@ -4,7 +4,6 @@ import { projectsRoutes } from './routes/projects.js';
 import { targetReposRoutes } from './routes/targetRepos.js';
 import { pullRequestsRoutes } from './routes/pullRequests.js';
 import { agentRunsRoutes } from './routes/agentRuns.js';
-import { importsRoutes } from './routes/imports.js';
 import { reviewRoutes } from './routes/reviews.js';
 import { workitemsRoutes } from './routes/workitems.js';
 import { runMigrations } from './db/migrations.js';
@@ -34,7 +33,6 @@ async function start() {
   await server.register(targetReposRoutes);
   await server.register(pullRequestsRoutes);
   await server.register(agentRunsRoutes);
-  await server.register(importsRoutes);
   await server.register(reviewRoutes);
   await server.register(workitemsRoutes);
 

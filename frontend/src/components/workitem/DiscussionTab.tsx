@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/Toast';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface DiscussionTabProps {
   workItemId: string;
@@ -121,7 +122,7 @@ export function DiscussionTab({ workItemId }: DiscussionTabProps) {
                 </div>
                 <div className="flex items-center space-x-1 text-xs text-gray-500">
                   <Clock className="h-3 w-3" />
-                  <span>{new Date(comment.createdAt).toLocaleString()}</span>
+                  <span>{formatDateTime(comment.createdAt)}</span>
                 </div>
               </div>
               <p className="whitespace-pre-wrap text-gray-700">{comment.body}</p>

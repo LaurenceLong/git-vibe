@@ -8,6 +8,12 @@
  */
 
 // ============================================================================
+// Codec Schemas
+// ============================================================================
+
+export { zIsoDateTimeString, zIsoDateTimeNullable } from './codec/datetime.js';
+
+// ============================================================================
 // Common Types
 // ============================================================================
 
@@ -40,12 +46,19 @@ export type {
   AgentRun,
   AgentRunStatus,
   AgentKey,
-  Import,
-  ImportStatus,
-  ImportStrategy,
   RepoFile,
+  Commit,
+  CommitWithTask,
   AgentModel,
   AgentParams,
+  // Schema-first DTO types (inferred from Zod schemas)
+  WorkItemDTO,
+  ProjectDTO,
+  TargetRepoDTO,
+  PullRequestDTO,
+  ReviewThreadDTO,
+  ReviewCommentDTO,
+  AgentRunDTO,
 } from './types/models.js';
 
 export {
@@ -55,8 +68,6 @@ export {
   PullRequestStatusSchema,
   MergeStrategySchema,
   AgentRunStatusSchema,
-  ImportStatusSchema,
-  ImportStrategySchema,
   ReviewThreadStatusSchema,
   ReviewThreadSeveritySchema,
   AgentKeySchema,
@@ -67,8 +78,9 @@ export {
   ReviewThreadSchema,
   ReviewCommentSchema,
   AgentRunSchema,
-  ImportSchema,
   RepoFileSchema,
+  CommitSchema,
+  CommitWithTaskSchema,
   AgentModelSchema,
   AgentParamsSchema,
 } from './types/models.js';
@@ -81,7 +93,6 @@ export type {
   CreateProjectDTO,
   UpdateProjectDTO,
   TriggerAgentRunDTO,
-  CreateImportDTO,
   CreateThreadDTO,
   AddressWithAgentDTO,
   CreateCommentDTO,
@@ -95,7 +106,6 @@ export {
   CreateProjectDTOSchema,
   UpdateProjectDTOSchema,
   TriggerAgentRunDTOSchema,
-  CreateImportDTOSchema,
   CreateThreadDTOSchema,
   AddressWithAgentDTOSchema,
   CreateCommentDTOSchema,
@@ -116,7 +126,6 @@ export type {
   BranchesResponse,
   SyncResponse,
   DiffResponse,
-  ImportResponse,
   CancelAgentRunResponse,
   RemoveWorktreeResponse,
   DeleteProjectResponse,
@@ -131,7 +140,6 @@ export {
   BranchesResponseSchema,
   SyncResponseSchema,
   DiffResponseSchema,
-  ImportResponseSchema,
   CancelAgentRunResponseSchema,
   RemoveWorktreeResponseSchema,
   DeleteProjectResponseSchema,

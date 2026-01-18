@@ -8,6 +8,7 @@ import { agentService } from '../services/AgentService.js';
 import { promises as fs } from 'node:fs';
 import { watch } from 'node:fs';
 import path from 'node:path';
+import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
 
 export async function agentRunsRoutes(server: FastifyInstance) {
   // POST /api/work-items/:id/agent-runs - Start agent run for a WorkItem
@@ -46,7 +47,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
           undefined // No work item body needed for manual agent run
         );
 
-        return reply.status(201).send(result.agentRun);
+        return reply.status(201).send(agentRunToDTO(result.agentRun));
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({
@@ -77,7 +78,8 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         });
       }
 
-      return await agentRunsRepository.findByWorkItemId(request.params.id);
+      const agentRuns = await agentRunsRepository.findByWorkItemId(request.params.id);
+      return agentRuns.map(agentRunToDTO);
     }
   );
 
@@ -92,7 +94,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
       });
     }
 
-    return agentRun;
+    return agentRunToDTO(agentRun);
   });
 
   // POST /api/agent-runs/:id/cancel - Cancel agent run
@@ -114,7 +116,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
     const response = CancelAgentRunResponseSchema.parse({
       message: 'Agent run cancelled',
       id: request.params.id,
-      agentRun: updated ?? agentRun,
+      agentRun: agentRunToDTO(updated ?? agentRun),
     });
     return reply.status(200).send(response);
   });

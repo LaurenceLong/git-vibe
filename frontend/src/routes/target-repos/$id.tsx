@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { targetReposApi } from '@/lib/api';
+import { formatDateTime, formatDate } from '@/lib/datetime';
 
 interface ImportRecord {
   id: string;
@@ -101,8 +102,7 @@ function TargetRepoDetail() {
             <span className="font-medium">Default Branch:</span> {targetRepo.defaultBranch}
           </div>
           <div>
-            <span className="font-medium">Created:</span>{' '}
-            {new Date(targetRepo.createdAt).toLocaleDateString()}
+            <span className="font-medium">Created:</span> {formatDate(targetRepo.createdAt)}
           </div>
         </div>
       </div>
@@ -135,7 +135,7 @@ function TargetRepoDetail() {
                       </span>
                       <span className="text-sm text-gray-600">
                         {importRecord.finishedAt
-                          ? new Date(importRecord.finishedAt).toLocaleString()
+                          ? formatDateTime(importRecord.finishedAt)
                           : 'In progress'}
                       </span>
                     </div>

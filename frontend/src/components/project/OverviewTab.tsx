@@ -22,6 +22,7 @@ import {
   FileCode,
   RefreshCw,
 } from 'lucide-react';
+import { formatDateTime, formatDate } from '@/lib/datetime';
 
 export interface OverviewTabProps {
   project: Project;
@@ -288,7 +289,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
                         </Badge>
                       </div>
                       <div className="mt-2 text-sm text-gray-600">
-                        Created {new Date(workItem.createdAt).toLocaleDateString()}
+                        Created {formatDate(workItem.createdAt)}
                       </div>
                     </div>
                   </div>
@@ -347,7 +348,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
                         {pr.branchName} → {pr.baseBranch}
                       </div>
                       <div className="mt-1 text-sm text-gray-600">
-                        Created {new Date(pr.createdAt).toLocaleDateString()}
+                        Created {formatDate(pr.createdAt)}
                       </div>
                     </div>
                   </div>
@@ -398,15 +399,11 @@ export function OverviewTab({ project }: OverviewTabProps) {
               <h3 className="font-medium text-gray-900">Timeline</h3>
               <div>
                 <span className="text-gray-600">Created:</span>
-                <div className="mt-1 text-gray-900">
-                  {new Date(project.createdAt).toLocaleString()}
-                </div>
+                <div className="mt-1 text-gray-900">{formatDateTime(project.createdAt)}</div>
               </div>
               <div>
                 <span className="text-gray-600">Last Updated:</span>
-                <div className="mt-1 text-gray-900">
-                  {new Date(project.updatedAt).toLocaleString()}
-                </div>
+                <div className="mt-1 text-gray-900">{formatDateTime(project.updatedAt)}</div>
               </div>
               <div>
                 <span className="text-gray-600">Project ID:</span>

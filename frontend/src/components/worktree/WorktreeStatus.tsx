@@ -9,6 +9,7 @@ import { WorktreeStatus } from '@/types';
 import { WorktreeStatusBadge } from './WorktreeStatusBadge';
 import { Button } from '@/components/ui/Button';
 import { AlertCircle, RefreshCw, Trash2, GitBranch, Calendar } from 'lucide-react';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface WorktreeStatusProps {
   /** The worktree status */
@@ -125,8 +126,7 @@ export function WorktreeStatusComponent({
                 <div className="flex items-center space-x-1">
                   <Calendar className="h-3 w-3" />
                   <span>
-                    <span className="font-medium">Created:</span>{' '}
-                    {new Date(createdAt).toLocaleString()}
+                    <span className="font-medium">Created:</span> {formatDateTime(createdAt)}
                   </span>
                 </div>
               )}
@@ -134,8 +134,7 @@ export function WorktreeStatusComponent({
                 <div className="flex items-center space-x-1">
                   <Calendar className="h-3 w-3" />
                   <span>
-                    <span className="font-medium">Updated:</span>{' '}
-                    {new Date(updatedAt).toLocaleString()}
+                    <span className="font-medium">Updated:</span> {formatDateTime(updatedAt)}
                   </span>
                 </div>
               )}

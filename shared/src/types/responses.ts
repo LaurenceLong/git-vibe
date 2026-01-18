@@ -130,54 +130,6 @@ export const DiffResponseSchema = z.object({
 });
 
 // ============================================================================
-// Import Response
-// ============================================================================
-
-/**
- * Response for import operation
- */
-export interface ImportResponse {
-  message: string;
-  import: {
-    id: string;
-    pullRequestId: string;
-    targetRepoId: string;
-    status: string;
-    sourceBaseSha: string;
-    sourceHeadSha: string;
-    targetBaseSha: string | null;
-    targetResultSha: string | null;
-    log: string | null;
-    startedAt: string | null;
-    finishedAt: string | null;
-    createdAt: string;
-    updatedAt: string;
-  };
-}
-
-/**
- * Zod schema for ImportResponse validation
- */
-export const ImportResponseSchema = z.object({
-  message: z.string(),
-  import: z.object({
-    id: z.string(),
-    pullRequestId: z.string(),
-    targetRepoId: z.string(),
-    status: z.string(),
-    sourceBaseSha: z.string(),
-    sourceHeadSha: z.string(),
-    targetBaseSha: z.string().nullable(),
-    targetResultSha: z.string().nullable(),
-    log: z.string().nullable(),
-    startedAt: z.string().nullable(),
-    finishedAt: z.string().nullable(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  }),
-});
-
-// ============================================================================
 // Cancel Agent Run Response
 // ============================================================================
 

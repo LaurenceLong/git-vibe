@@ -195,38 +195,3 @@ export const agentRuns = sqliteTable(
     statusIdx: index('idx_agent_runs_status').on(table.status),
   })
 );
-
-export const imports = sqliteTable(
-  'imports',
-  {
-    id: text('id').primaryKey(),
-    pullRequestId: text('pull_request_id')
-      .notNull()
-      .references(() => pullRequests.id, { onDelete: 'cascade' }),
-    targetRepoId: text('target_repo_id')
-      .notNull()
-      .references(() => targetRepos.id, { onDelete: 'cascade' }),
-    strategy: text('strategy', { enum: ['patch'] }).notNull(),
-    status: text('status', {
-      enum: ['pending', 'running', 'succeeded', 'failed'],
-    })
-      .notNull()
-      .default('pending'),
-    sourceBaseSha: text('source_base_sha').notNull(),
-    sourceHeadSha: text('source_head_sha').notNull(),
-    targetBaseSha: text('target_base_sha'),
-    targetResultSha: text('target_result_sha'),
-    log: text('log'),
-    startedAt: integer('started_at', { mode: 'timestamp' }),
-    finishedAt: integer('finished_at', { mode: 'timestamp' }),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
-  },
-  (table) => ({
-    pullRequestIdIdx: index('idx_imports_pull_request_id').on(table.pullRequestId),
-  })
-);

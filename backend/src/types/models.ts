@@ -18,15 +18,12 @@ import type {
   ReviewThread as SharedReviewThread,
   ReviewComment as SharedReviewComment,
   AgentRun as SharedAgentRun,
-  Import as SharedImport,
   AgentParams as SharedAgentParams,
   WorkItemType,
   WorkItemStatus,
   WorkspaceStatus,
   PullRequestStatus,
   AgentRunStatus,
-  ImportStatus,
-  ImportStrategy,
   ReviewThreadStatus,
   ReviewThreadSeverity,
   AgentKey,
@@ -36,9 +33,10 @@ import type {
 // Backend Types (with Date objects for internal use)
 // ============================================================================
 
-export type WorkItem = Omit<SharedWorkItem, 'createdAt' | 'updatedAt'> & {
+export type WorkItem = Omit<SharedWorkItem, 'createdAt' | 'updatedAt' | 'lockExpiresAt'> & {
   createdAt: Date;
   updatedAt: Date;
+  lockExpiresAt: Date | null;
 };
 
 export type AgentParams = SharedAgentParams;
@@ -78,13 +76,6 @@ export type AgentRun = Omit<
   finishedAt: Date | null;
 };
 
-export type Import = Omit<SharedImport, 'createdAt' | 'updatedAt' | 'startedAt' | 'finishedAt'> & {
-  createdAt: Date;
-  updatedAt: Date;
-  startedAt: Date | null;
-  finishedAt: Date | null;
-};
-
 // ============================================================================
 // Re-export Enums from shared package
 // ============================================================================
@@ -95,8 +86,6 @@ export type {
   WorkspaceStatus,
   PullRequestStatus,
   AgentRunStatus,
-  ImportStatus,
-  ImportStrategy,
   ReviewThreadStatus,
   ReviewThreadSeverity,
   AgentKey,

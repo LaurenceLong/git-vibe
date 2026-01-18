@@ -14,6 +14,8 @@ import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { agentService } from '../services/AgentService.js';
+import { reviewThreadToDTO, reviewCommentToDTO } from '../mappers/reviews.js';
+import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
 
 export async function reviewRoutes(server: FastifyInstance) {
   // POST /api/pull-requests/:id/reviews/threads - Create review thread
@@ -39,7 +41,7 @@ export async function reviewRoutes(server: FastifyInstance) {
           status: 'open',
         });
 
-        return reply.status(201).send(thread);
+        return reply.status(201).send(reviewThreadToDTO(thread));
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({
@@ -58,7 +60,8 @@ export async function reviewRoutes(server: FastifyInstance) {
   server.get<{ Params: { id: string } }>(
     '/api/pull-requests/:id/reviews/threads',
     async (request) => {
-      return await reviewThreadsRepository.findByPullRequestId(request.params.id);
+      const threads = await reviewThreadsRepository.findByPullRequestId(request.params.id);
+      return threads.map(reviewThreadToDTO);
     }
   );
 
@@ -76,7 +79,7 @@ export async function reviewRoutes(server: FastifyInstance) {
         });
       }
 
-      return thread;
+      return reviewThreadToDTO(thread);
     }
   );
 
@@ -96,7 +99,7 @@ export async function reviewRoutes(server: FastifyInstance) {
 
       const updated = await reviewThreadsRepository.resolveThread(request.params.threadId);
 
-      const response = ResolveThreadResponseSchema.parse(updated ?? thread);
+      const response = ResolveThreadResponseSchema.parse(reviewThreadToDTO(updated ?? thread));
       return reply.status(200).send(response);
     }
   );
@@ -117,7 +120,7 @@ export async function reviewRoutes(server: FastifyInstance) {
 
       const updated = await reviewThreadsRepository.unresolveThread(request.params.threadId);
 
-      const response = UnresolveThreadResponseSchema.parse(updated ?? thread);
+      const response = UnresolveThreadResponseSchema.parse(reviewThreadToDTO(updated ?? thread));
       return reply.status(200).send(response);
     }
   );
@@ -162,7 +165,7 @@ export async function reviewRoutes(server: FastifyInstance) {
         // Create agent run for the WorkItem to address the review thread
         const agentRun = await agentService.correctWithReviewComments(pr.id, body.prompt);
 
-        return reply.status(201).send(agentRun);
+        return reply.status(201).send(agentRunToDTO(agentRun));
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({
@@ -200,7 +203,7 @@ export async function reviewRoutes(server: FastifyInstance) {
           body: body.body,
         });
 
-        return reply.status(201).send(comment);
+        return reply.status(201).send(reviewCommentToDTO(comment));
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({
@@ -270,7 +273,7 @@ export async function reviewRoutes(server: FastifyInstance) {
         // Resume the task using the same session
         const newAgentRun = await agentService.resumeTask(latestRunWithSession.id, prompt);
 
-        return reply.status(201).send(newAgentRun);
+        return reply.status(201).send(agentRunToDTO(newAgentRun));
       } catch (error) {
         return reply.status(400).send({
           error: true,

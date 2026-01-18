@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { useModels } from '@/hooks/useModels';
 import { useToast } from '@/components/Toast';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface SettingsTabProps {
   project: Project;
@@ -326,11 +327,11 @@ export function SettingsTab({ project }: SettingsTabProps) {
             </div>
             <div>
               <span className="font-medium text-gray-700">Created:</span>{' '}
-              <span className="text-gray-900">{new Date(project.createdAt).toLocaleString()}</span>
+              <span className="text-gray-900">{formatDateTime(project.createdAt)}</span>
             </div>
             <div>
               <span className="font-medium text-gray-700">Last Updated:</span>{' '}
-              <span className="text-gray-900">{new Date(project.updatedAt).toLocaleString()}</span>
+              <span className="text-gray-900">{formatDateTime(project.updatedAt)}</span>
             </div>
           </div>
         </div>

@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface TaskManagementTabProps {
   workItemId: string;
@@ -283,10 +284,9 @@ export function TaskManagementTab({ workItemId }: TaskManagementTabProps) {
     }
   };
 
-  // Format date
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleString();
+  // Format date (using datetime helper)
+  const formatTaskDate = (dateString: string | null) => {
+    return formatDateTime(dateString);
   };
 
   // Loading state
@@ -369,10 +369,11 @@ export function TaskManagementTab({ workItemId }: TaskManagementTabProps) {
                   {/* Metadata */}
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 sm:grid-cols-4">
                     <div>
-                      <span className="font-medium">Started:</span> {formatDate(task.startedAt)}
+                      <span className="font-medium">Started:</span> {formatTaskDate(task.startedAt)}
                     </div>
                     <div>
-                      <span className="font-medium">Finished:</span> {formatDate(task.finishedAt)}
+                      <span className="font-medium">Finished:</span>{' '}
+                      {formatTaskDate(task.finishedAt)}
                     </div>
                     <div>
                       <span className="font-medium">Agent:</span> {task.agentKey}

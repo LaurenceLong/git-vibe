@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/Toast';
 import { workItemsApi, agentRunsApi } from '@/lib/api';
 import { useWorkItem } from '@/hooks/useWorkItem';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface ConversationTabProps {
   prId: string;
@@ -182,7 +183,7 @@ export function ConversationTab({ prId, workItemId }: ConversationTabProps) {
                       <span className="text-sm font-medium text-gray-900">You</span>
                       <div className="flex items-center space-x-1 text-xs text-gray-500">
                         <Clock className="h-3 w-3" />
-                        <span>{new Date(task.createdAt).toLocaleString()}</span>
+                        <span>{formatDateTime(task.createdAt)}</span>
                       </div>
                     </div>
                     <p className="whitespace-pre-wrap text-gray-700">{task.inputSummary}</p>
@@ -208,7 +209,7 @@ export function ConversationTab({ prId, workItemId }: ConversationTabProps) {
                         {task.finishedAt && (
                           <div className="flex items-center space-x-1 text-xs text-gray-500">
                             <Clock className="h-3 w-3" />
-                            <span>{new Date(task.finishedAt).toLocaleString()}</span>
+                            <span>{formatDateTime(task.finishedAt)}</span>
                           </div>
                         )}
                       </div>

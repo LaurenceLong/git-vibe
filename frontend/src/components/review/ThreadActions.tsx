@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ThreadStatusBadge } from './ThreadStatusBadge';
 import { Bot, CheckCircle2, RotateCcw, ChevronDown } from 'lucide-react';
+import { formatDateTime } from '@/lib/datetime';
 
 /**
  * Props for the ThreadActions component
@@ -67,7 +68,7 @@ export function ThreadActions({
   };
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleString();
+    return formatDateTime(date);
   };
 
   return (

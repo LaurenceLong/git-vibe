@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { zIsoDateTimeString, zIsoDateTimeNullable } from '../codec/datetime.js';
 
 // ============================================================================
 // Enums
@@ -40,24 +41,6 @@ export type MergeStrategy = 'merge' | 'squash' | 'rebase';
 export type AgentRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 /**
- * Import status
- */
-export type ImportStatus =
-  | 'pending'
-  | 'running'
-  | 'succeeded'
-  | 'succeeded_noop'
-  | 'failed'
-  | 'failed_dirty'
-  | 'failed_conflict'
-  | 'failed_other';
-
-/**
- * Import strategy
- */
-export type ImportStrategy = 'patch';
-
-/**
  * ReviewThread status
  */
 export type ReviewThreadStatus = 'open' | 'resolved' | 'outdated';
@@ -88,17 +71,6 @@ export const AgentRunStatusSchema = z.enum([
   'failed',
   'cancelled',
 ]);
-export const ImportStatusSchema = z.enum([
-  'pending',
-  'running',
-  'succeeded',
-  'succeeded_noop',
-  'failed',
-  'failed_dirty',
-  'failed_conflict',
-  'failed_other',
-]);
-export const ImportStrategySchema = z.enum(['patch']);
 export const ReviewThreadStatusSchema = z.enum(['open', 'resolved', 'outdated']);
 export const ReviewThreadSeveritySchema = z.enum(['info', 'warning', 'error']);
 export const AgentKeySchema = z.enum(['opencode', 'claudcode']);
@@ -149,9 +121,9 @@ export const WorkItemSchema = z.object({
   baseSha: z.string().nullable(),
   headSha: z.string().nullable(),
   lockOwnerRunId: z.string().nullable(),
-  lockExpiresAt: z.string().nullable(),
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
+  lockExpiresAt: zIsoDateTimeNullable,
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
 });
 
 /**
@@ -184,8 +156,8 @@ export const ProjectSchema = z.object({
   defaultAgent: AgentKeySchema,
   agentParams: z.string().nullable(), // JSON stringified
   maxAgentConcurrency: z.number(), // Maximum concurrent agent tasks
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
 });
 
 /**
@@ -208,8 +180,8 @@ export const TargetRepoSchema = z.object({
   name: z.string(),
   repoPath: z.string(),
   defaultBranch: z.string(),
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
 });
 
 /**
@@ -245,9 +217,9 @@ export const PullRequestSchema = z.object({
   sourceBranch: z.string(),
   targetBranch: z.string(),
   mergeStrategy: MergeStrategySchema,
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
-  mergedAt: z.string().nullable(),
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
+  mergedAt: zIsoDateTimeNullable,
   mergedBy: z.string().nullable(),
   mergeCommitSha: z.string().nullable(),
 });
@@ -274,8 +246,8 @@ export const ReviewThreadSchema = z.object({
   status: ReviewThreadStatusSchema,
   severity: ReviewThreadSeveritySchema,
   anchor: z.string(), // JSON stringified
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
 });
 
 /**
@@ -295,7 +267,7 @@ export const ReviewCommentSchema = z.object({
   id: z.string().uuid(),
   threadId: z.string().uuid(),
   body: z.string(),
-  createdAt: z.string(), // ISO 8601
+  createdAt: zIsoDateTimeString,
 });
 
 /**
@@ -311,7 +283,6 @@ export interface AgentRun {
   inputJson: string; // JSON stringified
   sessionId: string; // Agent session ID for resuming (required)
   linkedAgentRunId: string | null; // ID of the original agent run if this is a resumed task
-  resumeCount: number | null; // Number of times this task has been resumed
   log: string | null;
   logPath: string | null;
   stdoutPath: string | null; // Path to stdout log file
@@ -338,7 +309,6 @@ export const AgentRunSchema = z.object({
   inputJson: z.string(), // JSON stringified
   sessionId: z.string(), // Agent session ID for resuming (required)
   linkedAgentRunId: z.string().uuid().nullable(), // ID of the original agent run if this is a resumed task
-  resumeCount: z.number().nullable(), // Number of times this task has been resumed
   log: z.string().nullable(),
   logPath: z.string().nullable(),
   stdoutPath: z.string().nullable(), // Path to stdout log file
@@ -346,50 +316,10 @@ export const AgentRunSchema = z.object({
   headShaBefore: z.string().nullable(),
   headShaAfter: z.string().nullable(),
   commitSha: z.string().nullable(), // The auto-commit SHA if created
-  startedAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
-});
-
-/**
- * Import represents importing changes to a target repository
- */
-export interface Import {
-  id: string;
-  pullRequestId: string;
-  targetRepoId: string;
-  strategy: ImportStrategy;
-  status: ImportStatus;
-  sourceBaseSha: string;
-  sourceHeadSha: string;
-  targetBaseSha: string | null;
-  targetResultSha: string | null;
-  log: string | null;
-  startedAt: string | null; // ISO 8601
-  finishedAt: string | null; // ISO 8601
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
-}
-
-/**
- * Zod schema for Import validation
- */
-export const ImportSchema = z.object({
-  id: z.string().uuid(),
-  pullRequestId: z.string().uuid(),
-  targetRepoId: z.string().uuid(),
-  strategy: ImportStrategySchema,
-  status: ImportStatusSchema,
-  sourceBaseSha: z.string(),
-  sourceHeadSha: z.string(),
-  targetBaseSha: z.string().nullable(),
-  targetResultSha: z.string().nullable(),
-  log: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
-  createdAt: z.string(), // ISO 8601
-  updatedAt: z.string(), // ISO 8601
+  startedAt: zIsoDateTimeNullable,
+  finishedAt: zIsoDateTimeNullable,
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
 });
 
 /**
@@ -410,6 +340,44 @@ export const RepoFileSchema = z.object({
   path: z.string(),
   type: z.enum(['file', 'directory']),
   size: z.number().optional(),
+});
+
+/**
+ * Commit represents a git commit
+ */
+export interface Commit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string; // ISO 8601 or git date format
+  filesChanged: string[];
+}
+
+/**
+ * Zod schema for Commit validation
+ */
+export const CommitSchema = z.object({
+  sha: z.string(),
+  message: z.string(),
+  author: z.string(),
+  date: z.string(),
+  filesChanged: z.array(z.string()),
+});
+
+/**
+ * CommitWithTask represents a group of commits associated with a task
+ */
+export interface CommitWithTask {
+  task: AgentRun | null;
+  commits: Commit[];
+}
+
+/**
+ * Zod schema for CommitWithTask validation
+ */
+export const CommitWithTaskSchema = z.object({
+  task: AgentRunSchema.nullable(),
+  commits: z.array(CommitSchema),
 });
 
 /**
@@ -443,3 +411,49 @@ export interface AgentParams {
  * Zod schema for AgentParams validation
  */
 export const AgentParamsSchema = z.record(z.unknown());
+
+// ============================================================================
+// Schema-First Inferred Types
+// ============================================================================
+
+/**
+ * Inferred type from WorkItemSchema
+ * Use this for type-safe data validated against WorkItemSchema
+ */
+export type WorkItemDTO = z.infer<typeof WorkItemSchema>;
+
+/**
+ * Inferred type from ProjectSchema
+ * Use this for type-safe data validated against ProjectSchema
+ */
+export type ProjectDTO = z.infer<typeof ProjectSchema>;
+
+/**
+ * Inferred type from TargetRepoSchema
+ * Use this for type-safe data validated against TargetRepoSchema
+ */
+export type TargetRepoDTO = z.infer<typeof TargetRepoSchema>;
+
+/**
+ * Inferred type from PullRequestSchema
+ * Use this for type-safe data validated against PullRequestSchema
+ */
+export type PullRequestDTO = z.infer<typeof PullRequestSchema>;
+
+/**
+ * Inferred type from ReviewThreadSchema
+ * Use this for type-safe data validated against ReviewThreadSchema
+ */
+export type ReviewThreadDTO = z.infer<typeof ReviewThreadSchema>;
+
+/**
+ * Inferred type from ReviewCommentSchema
+ * Use this for type-safe data validated against ReviewCommentSchema
+ */
+export type ReviewCommentDTO = z.infer<typeof ReviewCommentSchema>;
+
+/**
+ * Inferred type from AgentRunSchema
+ * Use this for type-safe data validated against AgentRunSchema
+ */
+export type AgentRunDTO = z.infer<typeof AgentRunSchema>;

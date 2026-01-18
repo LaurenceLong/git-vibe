@@ -76,7 +76,6 @@ export async function runMigrations() {
       'review_threads',
       'review_comments',
       'agent_runs',
-      'imports',
       'target_repos',
     ];
     const existingTables = sqlite

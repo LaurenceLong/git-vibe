@@ -91,24 +91,6 @@ export const TriggerAgentRunDTOSchema = z.object({
 });
 
 // ============================================================================
-// Import Request DTOs
-// ============================================================================
-
-/**
- * DTO for creating a new import
- */
-export interface CreateImportDTO {
-  targetRepoId: string;
-}
-
-/**
- * Zod schema for CreateImportDTO validation
- */
-export const CreateImportDTOSchema = z.object({
-  targetRepoId: z.string().uuid(),
-});
-
-// ============================================================================
 // Review Request DTOs
 // ============================================================================
 

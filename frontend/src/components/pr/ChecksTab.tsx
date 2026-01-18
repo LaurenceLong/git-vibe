@@ -22,6 +22,7 @@ import { Modal } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Bot, AlertTriangle } from 'lucide-react';
+import { formatDateTime, formatDuration } from '@/lib/datetime';
 
 /**
  * Props for the ChecksTab component
@@ -161,14 +162,10 @@ export function ChecksTab({
     }
   };
 
-  // Calculate run duration
+  // Calculate run duration (using datetime helper)
   const getDuration = (run: AgentRun): string => {
     if (!run.startedAt) return 'N/A';
-    const end = run.finishedAt ? new Date(run.finishedAt) : new Date();
-    const start = new Date(run.startedAt);
-    const duration = Math.floor((end.getTime() - start.getTime()) / 1000);
-    if (duration < 60) return `${duration}s`;
-    return `${Math.floor(duration / 60)}m ${duration % 60}s`;
+    return formatDuration(run.startedAt, run.finishedAt);
   };
 
   // Check if worktree is present
@@ -226,7 +223,7 @@ export function ChecksTab({
                         <span className="font-semibold text-gray-900">{run.agentKey}</span>
                       </div>
                       <div className="text-sm text-gray-600">
-                        {run.startedAt ? new Date(run.startedAt).toLocaleString() : 'Not started'}
+                        {run.startedAt ? formatDateTime(run.startedAt) : 'Not started'}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">

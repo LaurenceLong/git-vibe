@@ -36,7 +36,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewsApi } from '../lib/api';
 import { useToast } from '../components/Toast';
-import { ReviewThread } from '../types';
+import type { ReviewThreadDTO, ReviewCommentDTO, AgentRunDTO } from 'git-vibe-shared';
 
 interface CreateThreadData {
   severity: 'info' | 'warning' | 'error';
@@ -58,21 +58,21 @@ interface AddressWithAgentData {
 
 interface UseReviewThreadsResult {
   /** The list of review threads */
-  threads: ReviewThread[] | undefined;
+  threads: ReviewThreadDTO[] | undefined;
   /** Whether the threads are loading */
   isLoading: boolean;
   /** Any error that occurred while fetching threads */
   error: Error | null;
   /** Function to create a new review thread */
-  createThread: (data: CreateThreadData) => Promise<void>;
+  createThread: (data: CreateThreadData) => Promise<ReviewThreadDTO>;
   /** Function to add a comment to a thread */
-  addComment: (threadId: string, data: AddCommentData) => Promise<void>;
+  addComment: (threadId: string, data: AddCommentData) => Promise<ReviewCommentDTO>;
   /** Function to resolve a thread */
-  resolveThread: (threadId: string) => Promise<void>;
+  resolveThread: (threadId: string) => Promise<ReviewThreadDTO>;
   /** Function to unresolve a thread */
-  unresolveThread: (threadId: string) => Promise<void>;
+  unresolveThread: (threadId: string) => Promise<ReviewThreadDTO>;
   /** Function to address thread with agent */
-  addressWithAgent: (threadId: string, data: AddressWithAgentData) => Promise<void>;
+  addressWithAgent: (threadId: string, data: AddressWithAgentData) => Promise<AgentRunDTO>;
   /** Whether address with agent is in progress */
   isAddressingWithAgent: boolean;
 }
@@ -92,7 +92,7 @@ export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult 
     queryKey: ['review-threads', pullRequestId],
     queryFn: async () => {
       const response = await reviewsApi.getThreads(pullRequestId);
-      return response.data as ReviewThread[];
+      return response.data;
     },
     enabled: !!pullRequestId,
     retry: 2,

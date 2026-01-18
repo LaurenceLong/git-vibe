@@ -12,7 +12,9 @@
     "db:migrate": "tsx src/db/migrate-cli.ts",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
@@ -37,7 +39,8 @@
     "eslint-plugin-prettier": "^5.2.1",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "keywords": [
     "git",

@@ -17,6 +17,7 @@ import { CreateWorkItemModal } from '@/components/workitem/CreateWorkItemModal';
 import { useCreateWorkItem } from '@/hooks/useWorkItem';
 import { WorkItemDetail } from '@/components/workitem/WorkItemDetail';
 import { ArrowLeft, Terminal, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatDate, sortDates } from '@/lib/datetime';
 
 /**
  * StatusBadge component for displaying agent run status
@@ -135,11 +136,18 @@ export function WorkItemsTab({
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['workitems', project.id, currentPage, itemsPerPage],
-    queryFn: () => workItemsApi.list(project.id, currentPage, itemsPerPage).then((res) => res.data),
+    queryFn: () => workItemsApi.list(project.id, currentPage, itemsPerPage),
   });
 
-  const workItems = response?.data || [];
-  const pagination = response?.pagination;
+  const workItems = response?.data?.data || [];
+  const pagination = response?.data?.pagination
+    ? {
+        page: response.data.pagination.page,
+        totalPages: response.data.pagination.totalPages,
+        total: response.data.pagination.total,
+        limit: response.data.pagination.limit,
+      }
+    : undefined;
 
   // Track expanded work items for log previews
   const [expandedWorkItems, setExpandedWorkItems] = useState<Set<string>>(new Set());
@@ -170,9 +178,7 @@ export function WorkItemsTab({
     const runs = agentRunsMap?.get(workItemId) || [];
     if (runs.length === 0) return null;
     // Sort by createdAt descending to get the most recent run
-    return runs.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )[0];
+    return runs.sort((a, b) => sortDates(a.createdAt, b.createdAt, 'desc'))[0];
   };
 
   const toggleExpanded = (workItemId: string) => {
@@ -308,10 +314,10 @@ export function WorkItemsTab({
                         {latestAgentRun && <AgentRunStatusBadge status={latestAgentRun.status} />}
                       </div>
                       <div className="mt-2 text-sm text-gray-600">
-                        Created {new Date(workItem.createdAt).toLocaleDateString()}
+                        Created {formatDate(workItem.createdAt)}
                         {latestAgentRun && (
                           <span className="ml-3">
-                            Agent run: {new Date(latestAgentRun.createdAt).toLocaleDateString()}
+                            Agent run: {formatDate(latestAgentRun.createdAt)}
                           </span>
                         )}
                       </div>

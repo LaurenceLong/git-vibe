@@ -5,33 +5,21 @@
  *
  * Features:
  * - List commits grouped by task
- * - Each task name links/jumps to its task
  * - Show files changed per commit/task
  * - Display commit details (SHA, message, author, date)
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { pullRequestsApi } from '@/lib/api';
 import { useWorkItem } from '@/hooks/useWorkItem';
 import { GitCommit, FileText, Hash, User, Clock, ListTodo } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { AgentRun } from '@/types';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface CommitsTabProps {
   prId: string;
   workItemId: string;
-}
-
-interface CommitWithTask {
-  task: AgentRun | null;
-  commits: Array<{
-    sha: string;
-    message: string;
-    author: string;
-    date: string;
-    filesChanged: string[];
-  }>;
 }
 
 /**
@@ -49,82 +37,8 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
   } = useQuery({
     queryKey: ['pr-commits-with-tasks', prId],
     queryFn: async () => {
-      try {
-        const response = await pullRequestsApi.getCommitsWithTasks(prId);
-
-        // Log the response for debugging
-        console.log('Commits API response:', {
-          response,
-          data: response.data,
-          type: typeof response.data,
-        });
-
-        // Extract data from response
-        // Backend returns { data: commitsWithTasks[] }
-        // Axios unwraps it, so response.data = { data: [...] }
-        let data: unknown = response.data;
-
-        // Handle nested data structure - backend returns { data: commitsWithTasks }
-        if (data && typeof data === 'object' && data !== null) {
-          // Check if it has a 'data' property that is an array
-          if ('data' in data) {
-            const nestedData = (data as { data: unknown }).data;
-            if (Array.isArray(nestedData)) {
-              data = nestedData;
-            }
-          }
-          // If response.data is already an array, use it directly
-          else if (Array.isArray(data)) {
-            // Already an array, use as-is
-          }
-        }
-
-        // Ensure we have an array
-        if (Array.isArray(data)) {
-          // Validate and transform the data
-          const validated = data
-            .filter((group) => {
-              // Keep groups that have the correct structure
-              return (
-                group &&
-                typeof group === 'object' &&
-                'commits' in group &&
-                Array.isArray(group.commits)
-              );
-            })
-            .map((group) => {
-              // Ensure commits is an array (even if empty)
-              const commits = Array.isArray(group.commits) ? group.commits : [];
-              return {
-                task: group.task || null,
-                commits: commits,
-              } as CommitWithTask;
-            });
-
-          console.log('Processed commits:', {
-            original: data.length,
-            validated: validated.length,
-            totalCommits: validated.reduce((sum, g) => sum + g.commits.length, 0),
-            sample: validated[0],
-          });
-
-          // Return all groups, even if some have empty commits arrays
-          // (they might be valid groups that just haven't committed yet)
-          return validated;
-        }
-
-        console.warn('Unexpected commits response structure:', {
-          data,
-          response,
-          isArray: Array.isArray(data),
-          type: typeof data,
-        });
-        return [];
-      } catch (error) {
-        console.error('Failed to fetch commits with tasks:', error);
-        // Don't throw - return empty array so UI can show error state
-        return [];
-      }
+      const response = await pullRequestsApi.getCommitsWithTasks(prId);
+      return response.data;
     },
   });
 
@@ -190,15 +104,10 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
               <div className="mb-4 flex items-center justify-between border-b border-gray-200 pb-3">
                 <div className="flex items-center space-x-2">
                   <ListTodo className="h-5 w-5 text-blue-600" />
-                  <Link
-                    to="/workitems/$workItemId"
-                    params={{ workItemId }}
-                    search={{ taskId: (group.task as AgentRun).id }}
-                    className="text-lg font-semibold text-blue-600 hover:text-blue-800 hover:underline"
-                  >
+                  <span className="text-lg font-semibold text-gray-900">
                     {(group.task as AgentRun).inputSummary ||
                       `Task ${(group.task as AgentRun).id.slice(0, 8)}`}
-                  </Link>
+                  </span>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
                   <span className="rounded-md bg-gray-100 px-2 py-1">
@@ -236,7 +145,7 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="h-3 w-3" />
-                      <span>{new Date(commit.date).toLocaleString()}</span>
+                      <span>{formatDateTime(commit.date)}</span>
                     </div>
                   </div>
 
