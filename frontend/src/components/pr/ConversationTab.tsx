@@ -79,7 +79,10 @@ export function ConversationTab({ prId, workItemId }: ConversationTabProps) {
     refetchInterval: (data) => {
       // Stop polling if task is finished
       const task = tasks?.find((t) => t.id === activeTaskId);
-      if (task && (task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled')) {
+      if (
+        task &&
+        (task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled')
+      ) {
         return false;
       }
       return 2000; // Poll every 2 seconds

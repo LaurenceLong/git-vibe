@@ -397,7 +397,10 @@ export class GitService {
    * Get detailed commit log with SHA, message, author, date
    * Returns array of commit objects
    */
-  getLogDetailed(repoPath: string, range: string): Array<{
+  getLogDetailed(
+    repoPath: string,
+    range: string
+  ): Array<{
     sha: string;
     message: string;
     author: string;
@@ -411,22 +414,28 @@ export class GitService {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    
+
     if (result.error) {
-      throw new Error(`Git command failed: git log --format=${format} ${range}\nError: ${result.error.message}`);
+      throw new Error(
+        `Git command failed: git log --format=${format} ${range}\nError: ${result.error.message}`
+      );
     }
-    
+
     if (result.status !== 0) {
       const stderr = (result.stderr || '').toString();
       // If the error is about no commits found or invalid range, return empty array
-      if (stderr.includes('does not have any commits') || 
-          stderr.includes('unknown revision') ||
-          stderr.includes('bad revision')) {
+      if (
+        stderr.includes('does not have any commits') ||
+        stderr.includes('unknown revision') ||
+        stderr.includes('bad revision')
+      ) {
         return [];
       }
-      throw new Error(`Git command failed: git log --format=${format} ${range}\nStderr: ${stderr || 'No error details'}`);
+      throw new Error(
+        `Git command failed: git log --format=${format} ${range}\nStderr: ${stderr || 'No error details'}`
+      );
     }
-    
+
     const output = (result.stdout || '').toString().trim();
     if (!output) {
       return [];
@@ -441,16 +450,17 @@ export class GitService {
   /**
    * Get diff statistics (files changed, additions, deletions)
    */
-  getDiffStats(baseSha: string, headSha: string, repoPath: string): {
+  getDiffStats(
+    baseSha: string,
+    headSha: string,
+    repoPath: string
+  ): {
     filesChanged: number;
     additions: number;
     deletions: number;
   } {
     try {
-      const output = this.execCommand(
-        `git diff --numstat ${baseSha}..${headSha}`,
-        repoPath
-      ).trim();
+      const output = this.execCommand(`git diff --numstat ${baseSha}..${headSha}`, repoPath).trim();
 
       if (!output) {
         return { filesChanged: 0, additions: 0, deletions: 0 };

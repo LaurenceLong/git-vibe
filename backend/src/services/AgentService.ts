@@ -442,9 +442,12 @@ export class AgentService {
     // Extract original prompt from the original run
     let originalPrompt = '';
     try {
-      const originalInputJson = JSON.parse(agentRun.inputJson) as { prompt?: string; config?: AgentConfig };
+      const originalInputJson = JSON.parse(agentRun.inputJson) as {
+        prompt?: string;
+        config?: AgentConfig;
+      };
       originalPrompt = originalInputJson.prompt || '';
-      
+
       // Fallback to inputSummary if prompt is not available
       if (!originalPrompt && agentRun.inputSummary) {
         originalPrompt = agentRun.inputSummary;
@@ -535,17 +538,17 @@ export class AgentService {
       const inputJson = JSON.parse(agentRun.inputJson) as { prompt?: string; config?: AgentConfig };
       // Try to get prompt from inputJson
       prompt = inputJson.prompt || '';
-      
+
       // Fallback to inputSummary if prompt is not available
       if (!prompt && agentRun.inputSummary) {
         prompt = agentRun.inputSummary;
       }
-      
+
       // Final fallback to workItem title
       if (!prompt && workItem.title) {
         prompt = workItem.title;
       }
-      
+
       // If still no prompt, throw an error
       if (!prompt) {
         throw new Error('Cannot restart task: original prompt not found');
@@ -762,7 +765,8 @@ export class AgentService {
         } else {
           // No actual changes in diff - close any existing PR and update agent run log
           await this.closeExistingPRIfNoDiff(workItem, headShaAfter);
-          const noChangesMessage = '\n\n[Finalization] No changes detected in diff - PR creation skipped.';
+          const noChangesMessage =
+            '\n\n[Finalization] No changes detected in diff - PR creation skipped.';
           await agentRunsRepository.update(agentRunId, {
             log: (agentRun.log ?? '') + noChangesMessage,
           });

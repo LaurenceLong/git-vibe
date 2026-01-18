@@ -30,7 +30,11 @@ export interface FilesChangedTabProps {
  */
 export function FilesChangedTab({ prId }: FilesChangedTabProps) {
   // Load diff
-  const { data: diff, isLoading, error } = useQuery({
+  const {
+    data: diff,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['diff', prId],
     queryFn: async () => {
       try {

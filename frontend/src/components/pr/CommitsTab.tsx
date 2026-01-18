@@ -42,20 +42,28 @@ interface CommitWithTask {
  */
 export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
   // Fetch commits with task grouping
-  const { data: commitsWithTasks, isLoading, error: queryError } = useQuery({
+  const {
+    data: commitsWithTasks,
+    isLoading,
+    error: queryError,
+  } = useQuery({
     queryKey: ['pr-commits-with-tasks', prId],
     queryFn: async () => {
       try {
         const response = await pullRequestsApi.getCommitsWithTasks(prId);
-        
+
         // Log the response for debugging
-        console.log('Commits API response:', { response, data: response.data, type: typeof response.data });
-        
+        console.log('Commits API response:', {
+          response,
+          data: response.data,
+          type: typeof response.data,
+        });
+
         // Extract data from response
         // Backend returns { data: commitsWithTasks[] }
         // Axios unwraps it, so response.data = { data: [...] }
         let data: unknown = response.data;
-        
+
         // Handle nested data structure - backend returns { data: commitsWithTasks }
         if (data && typeof data === 'object' && data !== null) {
           // Check if it has a 'data' property that is an array
@@ -70,7 +78,7 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
             // Already an array, use as-is
           }
         }
-        
+
         // Ensure we have an array
         if (Array.isArray(data)) {
           // Validate and transform the data
@@ -92,24 +100,24 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
                 commits: commits,
               } as CommitWithTask;
             });
-          
-          console.log('Processed commits:', { 
-            original: data.length, 
+
+          console.log('Processed commits:', {
+            original: data.length,
             validated: validated.length,
             totalCommits: validated.reduce((sum, g) => sum + g.commits.length, 0),
-            sample: validated[0] 
+            sample: validated[0],
           });
-          
+
           // Return all groups, even if some have empty commits arrays
           // (they might be valid groups that just haven't committed yet)
           return validated;
         }
-        
-        console.warn('Unexpected commits response structure:', { 
-          data, 
-          response, 
+
+        console.warn('Unexpected commits response structure:', {
+          data,
+          response,
           isArray: Array.isArray(data),
-          type: typeof data 
+          type: typeof data,
         });
         return [];
       } catch (error) {
@@ -149,10 +157,11 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
 
   // No commits or invalid data
   // Check if we have any groups with commits
-  const hasCommits = Array.isArray(commitsWithTasks) && 
-    commitsWithTasks.length > 0 && 
-    commitsWithTasks.some(group => group.commits && group.commits.length > 0);
-  
+  const hasCommits =
+    Array.isArray(commitsWithTasks) &&
+    commitsWithTasks.length > 0 &&
+    commitsWithTasks.some((group) => group.commits && group.commits.length > 0);
+
   if (!hasCommits) {
     return (
       <div className="rounded-lg border bg-white p-6 shadow-sm">
@@ -187,7 +196,8 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
                     search={{ taskId: (group.task as AgentRun).id }}
                     className="text-lg font-semibold text-blue-600 hover:text-blue-800 hover:underline"
                   >
-                    {(group.task as AgentRun).inputSummary || `Task ${(group.task as AgentRun).id.slice(0, 8)}`}
+                    {(group.task as AgentRun).inputSummary ||
+                      `Task ${(group.task as AgentRun).id.slice(0, 8)}`}
                   </Link>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
@@ -211,7 +221,7 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
                     <div className="flex-1">
                       <div className="mb-1 flex items-center space-x-2">
                         <Hash className="h-4 w-4 text-gray-500" />
-                        <code className="rounded bg-white px-2 py-0.5 text-xs font-mono text-gray-700">
+                        <code className="rounded bg-white px-2 py-0.5 font-mono text-xs text-gray-700">
                           {commit.sha.slice(0, 8)}
                         </code>
                       </div>
@@ -243,7 +253,7 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
                         {commit.filesChanged.map((file, idx) => (
                           <span
                             key={idx}
-                            className="rounded-md bg-white px-2 py-1 text-xs font-mono text-gray-700"
+                            className="rounded-md bg-white px-2 py-1 font-mono text-xs text-gray-700"
                           >
                             {file}
                           </span>

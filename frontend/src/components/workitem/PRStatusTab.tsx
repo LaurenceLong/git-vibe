@@ -153,9 +153,7 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">
-          Pull Requests ({prs.length})
-        </h2>
+        <h2 className="text-xl font-semibold text-gray-900">Pull Requests ({prs.length})</h2>
       </div>
 
       {/* PRs List */}

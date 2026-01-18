@@ -88,16 +88,18 @@ export class PRService {
     pr: PullRequest,
     workItem: WorkItem,
     project: Project
-  ): Promise<Array<{
-    task: AgentRun | null;
-    commits: Array<{
-      sha: string;
-      message: string;
-      author: string;
-      date: string;
-      filesChanged: string[];
-    }>;
-  }>> {
+  ): Promise<
+    Array<{
+      task: AgentRun | null;
+      commits: Array<{
+        sha: string;
+        message: string;
+        author: string;
+        date: string;
+        filesChanged: string[];
+      }>;
+    }>
+  > {
     if (!workItem.baseSha || !workItem.headSha) {
       throw new Error(`WorkItem ${workItem.id} has missing SHAs`);
     }
@@ -127,9 +129,14 @@ export class PRService {
         if (workItem.headBranch) {
           try {
             allCommits = gitService.getLogDetailed(workItem.worktreePath, workItem.headBranch);
-            console.log(`Got ${allCommits.length} commits from worktree branch ${workItem.headBranch}`);
+            console.log(
+              `Got ${allCommits.length} commits from worktree branch ${workItem.headBranch}`
+            );
           } catch (branchError) {
-            console.warn(`Failed to get commits from branch ${workItem.headBranch}, trying HEAD:`, branchError);
+            console.warn(
+              `Failed to get commits from branch ${workItem.headBranch}, trying HEAD:`,
+              branchError
+            );
             // Strategy 2: Try HEAD (all commits in worktree)
             try {
               allCommits = gitService.getLogDetailed(workItem.worktreePath, 'HEAD');
@@ -137,8 +144,13 @@ export class PRService {
             } catch (headError) {
               console.warn(`Failed to get commits from HEAD, trying range:`, headError);
               // Strategy 3: Try range from baseSha to HEAD
-              allCommits = gitService.getLogDetailed(workItem.worktreePath, `${workItem.baseSha}..HEAD`);
-              console.log(`Got ${allCommits.length} commits from worktree range ${workItem.baseSha}..HEAD`);
+              allCommits = gitService.getLogDetailed(
+                workItem.worktreePath,
+                `${workItem.baseSha}..HEAD`
+              );
+              console.log(
+                `Got ${allCommits.length} commits from worktree range ${workItem.baseSha}..HEAD`
+              );
             }
           }
         } else {
@@ -148,15 +160,24 @@ export class PRService {
             console.log(`Got ${allCommits.length} commits from worktree HEAD (no branch name)`);
           } catch (headError) {
             console.warn(`Failed to get commits from HEAD, trying range:`, headError);
-            allCommits = gitService.getLogDetailed(workItem.worktreePath, `${workItem.baseSha}..HEAD`);
+            allCommits = gitService.getLogDetailed(
+              workItem.worktreePath,
+              `${workItem.baseSha}..HEAD`
+            );
             console.log(`Got ${allCommits.length} commits from worktree range`);
           }
         }
       } catch (error) {
         // If all worktree strategies fail, fall back to main repo
-        console.warn(`All worktree strategies failed for ${workItem.worktreePath}, using main repo:`, error);
+        console.warn(
+          `All worktree strategies failed for ${workItem.worktreePath}, using main repo:`,
+          error
+        );
         try {
-          allCommits = gitService.getLogDetailed(repoPath, `${workItem.baseSha}..${workItem.headSha}`);
+          allCommits = gitService.getLogDetailed(
+            repoPath,
+            `${workItem.baseSha}..${workItem.headSha}`
+          );
           console.log(`Got ${allCommits.length} commits from main repo range`);
         } catch (mainRepoError) {
           console.error(`Failed to get commits from main repo:`, mainRepoError);
@@ -166,7 +187,10 @@ export class PRService {
     } else {
       // Use main repo with SHA range
       try {
-        allCommits = gitService.getLogDetailed(repoPath, `${workItem.baseSha}..${workItem.headSha}`);
+        allCommits = gitService.getLogDetailed(
+          repoPath,
+          `${workItem.baseSha}..${workItem.headSha}`
+        );
         console.log(`Got ${allCommits.length} commits from main repo (no worktree)`);
       } catch (error) {
         console.error(`Failed to get commits from main repo:`, error);
@@ -175,7 +199,7 @@ export class PRService {
     }
 
     console.log(`Total commits found: ${allCommits.length} for WorkItem ${workItem.id}`);
-    
+
     // If we got commits but they're all before baseSha, we might need to include them anyway
     // For now, we'll use all commits we found
 

@@ -9,8 +9,7 @@ export const Route = createFileRoute('/projects/$projectName/pullrequests')({
   validateSearch: (search: Record<string, unknown>) => {
     const prId = search.prId;
     // Handle string "null", actual null, undefined, or empty string
-    const normalizedPrId =
-      !prId || prId === 'null' || prId === '' ? null : (prId as string);
+    const normalizedPrId = !prId || prId === 'null' || prId === '' ? null : (prId as string);
     return {
       status: (search.status as PRStatus | 'all') || 'all',
       prId: normalizedPrId,

@@ -187,9 +187,9 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
         });
 
         const commitsWithTasks = await prService.getCommitsWithTasks(pr, workItem, project);
-        
+
         console.log(`Returning ${commitsWithTasks.length} commit groups for PR ${pr.id}`);
-        
+
         return { data: commitsWithTasks };
       } catch (error) {
         console.error(`Error getting commits for PR ${pr.id}:`, error);

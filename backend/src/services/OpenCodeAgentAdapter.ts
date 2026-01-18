@@ -80,7 +80,7 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       const stdoutPath = await this.getStdoutPath(runId);
       const stderrPath = await this.getStderrPath(runId);
       console.log(`[OpenCodeAgent] Log files created: stdout=${stdoutPath}, stderr=${stderrPath}`);
-      
+
       // Update database with log file paths immediately so SSE streaming can work
       const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
       await agentRunsRepository.update(runId, {
@@ -88,7 +88,7 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
         stderrPath,
       });
       console.log(`[OpenCodeAgent] Log file paths saved to database for real-time streaming`);
-      
+
       const { stdoutBuffer, stderrBuffer, appendStdout, appendStderr } =
         this.createStdoutStderrHandlers(stdoutFile, stderrFile);
 
@@ -165,7 +165,8 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
                 this.cacheSession(runId, latestSession);
                 await this.saveSessionToDatabase(runId, latestSession);
                 // Update the sessionId field in the database with the actual opencode session ID
-                const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+                const { agentRunsRepository } =
+                  await import('../repositories/AgentRunsRepository.js');
                 await agentRunsRepository.update(runId, {
                   sessionId: latestSession.id,
                 });
@@ -207,7 +208,7 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       const stdoutPath = await this.getStdoutPath(runId);
       const stderrPath = await this.getStderrPath(runId);
       console.log(`[OpenCodeAgent] Log files created: stdout=${stdoutPath}, stderr=${stderrPath}`);
-      
+
       // Update database with log file paths immediately so SSE streaming can work
       const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
       await agentRunsRepository.update(runId, {
@@ -215,7 +216,7 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
         stderrPath,
       });
       console.log(`[OpenCodeAgent] Log file paths saved to database for real-time streaming`);
-      
+
       const { stdoutBuffer, stderrBuffer, appendStdout, appendStderr } =
         this.createStdoutStderrHandlers(stdoutFile, stderrFile);
 

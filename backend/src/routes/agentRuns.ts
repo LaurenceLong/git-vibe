@@ -289,11 +289,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         try {
           stdoutWatcher = watch(agentRun.stdoutPath, async (eventType) => {
             if (eventType === 'change') {
-              stdoutPosition = await readAndSendLogs(
-                agentRun.stdoutPath,
-                'stdout',
-                stdoutPosition
-              );
+              stdoutPosition = await readAndSendLogs(agentRun.stdoutPath, 'stdout', stdoutPosition);
             }
           });
         } catch (error) {
@@ -305,11 +301,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         try {
           stderrWatcher = watch(agentRun.stderrPath, async (eventType) => {
             if (eventType === 'change') {
-              stderrPosition = await readAndSendLogs(
-                agentRun.stderrPath,
-                'stderr',
-                stderrPosition
-              );
+              stderrPosition = await readAndSendLogs(agentRun.stderrPath, 'stderr', stderrPosition);
             }
           });
         } catch (error) {

@@ -186,7 +186,10 @@ export function LogDetailTab({ workItemId: _workItemId, agentRunId }: LogDetailT
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // If SSE is connected and we've received logs, skip the fetch
-      if (sseConnected && (hasReceivedLogsRef.current.stdout || hasReceivedLogsRef.current.stderr)) {
+      if (
+        sseConnected &&
+        (hasReceivedLogsRef.current.stdout || hasReceivedLogsRef.current.stderr)
+      ) {
         setIsLoading(false);
         return;
       }

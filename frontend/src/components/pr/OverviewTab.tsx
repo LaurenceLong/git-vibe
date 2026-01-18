@@ -62,7 +62,10 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
 
   // Calculate total commits count
   const commitsCount = Array.isArray(commitsWithTasks)
-    ? commitsWithTasks.reduce((total, group) => total + (Array.isArray(group.commits) ? group.commits.length : 0), 0)
+    ? commitsWithTasks.reduce(
+        (total, group) => total + (Array.isArray(group.commits) ? group.commits.length : 0),
+        0
+      )
     : 0;
 
   return (
@@ -152,24 +155,25 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
               <div className="flex-1">
                 <p className="text-sm text-gray-900">PR closed</p>
                 {pr.updatedAt && pr.updatedAt !== pr.createdAt && (
-                  <p className="text-xs text-gray-500">
-                    {new Date(pr.updatedAt).toLocaleString()}
-                  </p>
+                  <p className="text-xs text-gray-500">{new Date(pr.updatedAt).toLocaleString()}</p>
                 )}
               </div>
             </div>
           )}
-          {pr.updatedAt && pr.updatedAt !== pr.createdAt && !pr.mergedAt && pr.status !== 'closed' && (
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0">
-                <div className="h-2 w-2 rounded-full bg-gray-400"></div>
+          {pr.updatedAt &&
+            pr.updatedAt !== pr.createdAt &&
+            !pr.mergedAt &&
+            pr.status !== 'closed' && (
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  <div className="h-2 w-2 rounded-full bg-gray-400"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">PR updated</p>
+                  <p className="text-xs text-gray-500">{new Date(pr.updatedAt).toLocaleString()}</p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-900">PR updated</p>
-                <p className="text-xs text-gray-500">{new Date(pr.updatedAt).toLocaleString()}</p>
-              </div>
-            </div>
-          )}
+            )}
         </div>
       </div>
     </div>
