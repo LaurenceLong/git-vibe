@@ -280,7 +280,8 @@ export const workItemsApi = {
     return { ...response, data: PullRequestSchema.parse(response.data) };
   },
   // Start task for WorkItem
-  startTask: (id: string) => api.post(`/workitems/${id}/start`),
+  startTask: (id: string, message?: string) =>
+    api.post(`/workitems/${id}/start`, message ? { message } : undefined),
   // Get tasks for WorkItem
   getTasks: async (id: string) => {
     const response = await api.get(`/workitems/${id}/tasks`);

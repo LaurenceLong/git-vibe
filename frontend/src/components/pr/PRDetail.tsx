@@ -21,8 +21,9 @@ import { FilesChangedTab } from '@/components/pr/FilesChangedTab';
 import { ChecksTab } from '@/components/pr/ChecksTab';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { GitMerge, X as GitClose } from 'lucide-react';
+import { GitMerge, X as GitClose, CheckCircle, Clock } from 'lucide-react';
 import { formatDateTime } from '@/lib/datetime';
+import { Badge } from '@/components/ui/badge';
 
 // Import tabs components directly
 import { Tab, TabPanel, TabList, TabPanels } from '@/components/ui/Tabs';
@@ -217,6 +218,32 @@ export function PRDetail({ prId }: PRDetailProps) {
             <div>
               <span className="font-medium text-gray-700">Merged:</span>{' '}
               <span className="text-gray-900">{formatDateTime(pr.mergedAt)}</span>
+            </div>
+          )}
+          {pr.status === 'merged' && (
+            <div>
+              <span className="font-medium text-gray-700">Sync Status:</span>{' '}
+              <Badge
+                variant={pr.syncedCommitSha ? 'success' : 'warning'}
+                className="ml-1 inline-flex items-center gap-1"
+              >
+                {pr.syncedCommitSha ? (
+                  <>
+                    <CheckCircle className="h-3 w-3" />
+                    Synced
+                  </>
+                ) : (
+                  <>
+                    <Clock className="h-3 w-3" />
+                    Pending Sync
+                  </>
+                )}
+              </Badge>
+              {pr.syncedCommitSha && (
+                <span className="ml-2 text-xs text-gray-500">
+                  (Commit: {pr.syncedCommitSha.slice(0, 8)})
+                </span>
+              )}
             </div>
           )}
         </div>

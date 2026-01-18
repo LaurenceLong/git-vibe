@@ -24,6 +24,7 @@ export function toDTO(domain: PullRequestDomain): PullRequestDTO {
     mergedAt: domain.mergedAt?.toISOString() ?? null,
     mergedBy: domain.mergedBy,
     mergeCommitSha: domain.mergeCommitSha,
+    syncedCommitSha: domain.syncedCommitSha,
   };
 }
 
@@ -46,5 +47,6 @@ export function toDomain(dto: PullRequestDTO): PullRequestDomain {
     mergedAt: dto.mergedAt ? new Date(dto.mergedAt) : null,
     mergedBy: dto.mergedBy,
     mergeCommitSha: dto.mergeCommitSha,
+    syncedCommitSha: dto.syncedCommitSha,
   };
 }

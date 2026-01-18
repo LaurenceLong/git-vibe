@@ -40,11 +40,13 @@ export async function agentRunsRoutes(server: FastifyInstance) {
 
         // Use AgentService to start the agent run
         // This will handle workspace initialization, locking, and agent execution
+        // Pass the prompt as userMessage so it uses "User: {prompt}" format
         const result = await agentService.executeTask(
           project.id,
           workItem.id,
-          prompt,
-          undefined // No work item body needed for manual agent run
+          workItem.title,
+          workItem.body || undefined,
+          prompt // Pass prompt as userMessage
         );
 
         return reply.status(201).send(agentRunToDTO(result.agentRun));

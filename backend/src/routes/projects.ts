@@ -14,6 +14,7 @@ import {
 } from 'git-vibe-shared';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
+import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { gitService } from '../services/GitService.js';
 import { modelsCache } from '../services/ModelsCache.js';
 import { STORAGE_CONFIG } from '../config/storage.js';
@@ -324,15 +325,36 @@ export async function projectsRoutes(server: FastifyInstance) {
         });
       }
 
-      await gitService.syncRelayToSource(
+      const syncCommitSha = await gitService.syncRelayToSource(
         project.relayRepoPath,
         project.sourceRepoPath,
         project.name
       );
 
-      // Note: PRs don't need syncedAt tracking like changesets did
-      // The sync operation updates the relay repo, and PRs reference branches
-      // which are automatically updated when the relay repo is synced
+      // Get the commit SHA to use for marking PRs as synced
+      // If a new commit was created, use that SHA; otherwise use current HEAD of relay branch
+      // (if no changes, it means everything is already synced)
+      const relayBranch = `relay-${project.name}`;
+      const commitShaToUse =
+        syncCommitSha || gitService.getRefSha(project.sourceRepoPath, relayBranch);
+
+      // Mark all merged PRs as synced
+      const mergedPRs = await pullRequestsRepository.findByProjectId(project.id);
+      const unsyncedMergedPRs = mergedPRs.filter(
+        (pr) => pr.status === 'merged' && !pr.syncedCommitSha
+      );
+
+      // Update all unsynced merged PRs with the sync commit SHA
+      if (unsyncedMergedPRs.length > 0) {
+        for (const pr of unsyncedMergedPRs) {
+          await pullRequestsRepository.update(pr.id, {
+            syncedCommitSha: commitShaToUse,
+          });
+        }
+        request.log.info(
+          `Marked ${unsyncedMergedPRs.length} PR(s) as synced with commit ${commitShaToUse}`
+        );
+      }
 
       const response = SyncResponseSchema.parse({
         success: true,

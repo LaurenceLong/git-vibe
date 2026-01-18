@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import path from 'node:path';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
@@ -83,6 +84,7 @@ export class PRService {
 
   /**
    * Get commits with task grouping and file information
+   * Optimized to only fetch commits that belong to this workitem
    */
   async getCommitsWithTasks(
     pr: PullRequest,
@@ -105,6 +107,7 @@ export class PRService {
     }
 
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
+    const gitRepoPath = workItem.worktreePath || repoPath;
 
     // Get all agent runs (tasks) for this work item, ordered by creation time
     const tasks = await agentRunsRepository.findByWorkItemId(workItem.id);
@@ -112,104 +115,95 @@ export class PRService {
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
 
-    // Get all commits in the range
-    // If worktree exists, use worktree path to get commits from the worktree branch
-    // Otherwise, use the main repo path with the SHA range
-    let allCommits: Array<{
-      sha: string;
-      message: string;
-      author: string;
-      date: string;
-    }> = [];
+    // Collect commit SHAs that belong to tasks
+    const taskCommitShas = sortedTasks
+      .map((task) => task.commitSha)
+      .filter((sha): sha is string => sha !== null && sha !== undefined);
 
-    if (workItem.worktreePath) {
-      // Get commits from worktree directly - try multiple strategies
-      try {
-        // Strategy 1: Try using branch name if available
-        if (workItem.headBranch) {
-          try {
-            allCommits = gitService.getLogDetailed(workItem.worktreePath, workItem.headBranch);
-            console.log(
-              `Got ${allCommits.length} commits from worktree branch ${workItem.headBranch}`
-            );
-          } catch (branchError) {
-            console.warn(
-              `Failed to get commits from branch ${workItem.headBranch}, trying HEAD:`,
-              branchError
-            );
-            // Strategy 2: Try HEAD (all commits in worktree)
-            try {
-              allCommits = gitService.getLogDetailed(workItem.worktreePath, 'HEAD');
-              console.log(`Got ${allCommits.length} commits from worktree HEAD`);
-            } catch (headError) {
-              console.warn(`Failed to get commits from HEAD, trying range:`, headError);
-              // Strategy 3: Try range from baseSha to HEAD
-              allCommits = gitService.getLogDetailed(
-                workItem.worktreePath,
-                `${workItem.baseSha}..HEAD`
-              );
-              console.log(
-                `Got ${allCommits.length} commits from worktree range ${workItem.baseSha}..HEAD`
-              );
-            }
-          }
-        } else {
-          // No branch name, try HEAD or range
-          try {
-            allCommits = gitService.getLogDetailed(workItem.worktreePath, 'HEAD');
-            console.log(`Got ${allCommits.length} commits from worktree HEAD (no branch name)`);
-          } catch (headError) {
-            console.warn(`Failed to get commits from HEAD, trying range:`, headError);
-            allCommits = gitService.getLogDetailed(
-              workItem.worktreePath,
-              `${workItem.baseSha}..HEAD`
-            );
-            console.log(`Got ${allCommits.length} commits from worktree range`);
-          }
-        }
-      } catch (error) {
-        // If all worktree strategies fail, fall back to main repo
-        console.warn(
-          `All worktree strategies failed for ${workItem.worktreePath}, using main repo:`,
-          error
-        );
-        try {
-          allCommits = gitService.getLogDetailed(
-            repoPath,
-            `${workItem.baseSha}..${workItem.headSha}`
-          );
-          console.log(`Got ${allCommits.length} commits from main repo range`);
-        } catch (mainRepoError) {
-          console.error(`Failed to get commits from main repo:`, mainRepoError);
-          allCommits = [];
-        }
-      }
-    } else {
-      // Use main repo with SHA range
-      try {
-        allCommits = gitService.getLogDetailed(
-          repoPath,
-          `${workItem.baseSha}..${workItem.headSha}`
-        );
-        console.log(`Got ${allCommits.length} commits from main repo (no worktree)`);
-      } catch (error) {
-        console.error(`Failed to get commits from main repo:`, error);
-        allCommits = [];
-      }
-    }
+    console.log(
+      `WorkItem ${workItem.id}: Found ${taskCommitShas.length} task commits out of ${sortedTasks.length} tasks`
+    );
 
-    console.log(`Total commits found: ${allCommits.length} for WorkItem ${workItem.id}`);
-
-    // If we got commits but they're all before baseSha, we might need to include them anyway
-    // For now, we'll use all commits we found
-
-    // Group commits by task based on commit SHA
-    // Each task has a commitSha field that links to the commit it created
+    // Get commits that belong to tasks (optimized: only fetch these specific commits)
     const taskCommitsMap = new Map<string, AgentRun>();
     for (const task of sortedTasks) {
       if (task.commitSha) {
         taskCommitsMap.set(task.commitSha, task);
       }
+    }
+
+    // Get task commits with file changes in a single optimized call
+    let taskCommits: Array<{
+      sha: string;
+      message: string;
+      author: string;
+      date: string;
+      filesChanged: string[];
+    }> = [];
+
+    if (taskCommitShas.length > 0) {
+      try {
+        // Use optimized method to get commits by their SHAs with file changes
+        taskCommits = gitService.getCommitsByShas(gitRepoPath, taskCommitShas);
+        console.log(`Got ${taskCommits.length} task commits with file changes`);
+      } catch (error) {
+        console.warn(`Failed to get task commits by SHAs, falling back:`, error);
+        // Fallback: get commits individually
+        taskCommits = [];
+        for (const sha of taskCommitShas) {
+          try {
+            const commitDetails = gitService.getLogDetailed(gitRepoPath, sha);
+            if (commitDetails.length > 0) {
+              const commit = commitDetails[0];
+              const filesChanged = gitService.getFilesChangedForCommit(sha, gitRepoPath);
+              taskCommits.push({
+                ...commit,
+                filesChanged,
+              });
+            }
+          } catch (err) {
+            console.warn(`Failed to get commit ${sha}:`, err);
+          }
+        }
+      }
+    }
+
+    // Get unassigned commits (commits in range that don't belong to any task)
+    // Only get commits in the workitem range that are not already in taskCommits
+    const taskCommitShaSet = new Set(taskCommitShas);
+    let unassignedCommits: Array<{
+      sha: string;
+      message: string;
+      author: string;
+      date: string;
+      filesChanged: string[];
+    }> = [];
+
+    try {
+      // Determine the range to query
+      let range: string;
+      if (workItem.worktreePath) {
+        // Use worktree range
+        if (workItem.headBranch) {
+          range = `${workItem.baseSha}..${workItem.headBranch}`;
+        } else {
+          range = `${workItem.baseSha}..HEAD`;
+        }
+      } else {
+        range = `${workItem.baseSha}..${workItem.headSha}`;
+      }
+
+      // Get all commits in range with file changes in a single call
+      const allCommitsInRange = gitService.getCommitsWithFiles(gitRepoPath, range);
+      console.log(`Got ${allCommitsInRange.length} total commits in range`);
+
+      // Filter to only commits that don't belong to tasks
+      unassignedCommits = allCommitsInRange.filter((commit) => !taskCommitShaSet.has(commit.sha));
+      console.log(`Found ${unassignedCommits.length} unassigned commits`);
+    } catch (error) {
+      console.warn(`Failed to get unassigned commits:`, error);
+      // If getting all commits fails, we'll just return task commits
+      unassignedCommits = [];
     }
 
     // Group commits by task
@@ -224,58 +218,40 @@ export class PRService {
       }>;
     }> = [];
 
-    // Use worktree path for git operations if available, otherwise use main repo path
-    const gitRepoPath = workItem.worktreePath || repoPath;
-
-    // First, group commits that belong to tasks
-    const processedCommits = new Set<string>();
-    for (const task of sortedTasks) {
-      if (task.commitSha) {
-        const commit = allCommits.find((c) => c.sha === task.commitSha);
-        if (commit) {
-          processedCommits.add(commit.sha);
-          const filesChanged = gitService.getFilesChanged(
-            workItem.baseSha || '',
-            commit.sha,
-            gitRepoPath
-          );
-          result.push({
-            task,
-            commits: [
-              {
-                sha: commit.sha,
-                message: commit.message,
-                author: commit.author,
-                date: commit.date,
-                filesChanged,
-              },
-            ],
-          });
+    // Group task commits by their associated task
+    const commitsByTask = new Map<AgentRun, Array<typeof taskCommits[0]>>();
+    for (const commit of taskCommits) {
+      const task = taskCommitsMap.get(commit.sha);
+      if (task) {
+        if (!commitsByTask.has(task)) {
+          commitsByTask.set(task, []);
         }
+        commitsByTask.get(task)!.push(commit);
       }
     }
 
-    // Add any remaining commits that don't belong to a task
-    const unassignedCommits = allCommits.filter((c) => !processedCommits.has(c.sha));
+    // Add task groups in creation order
+    for (const task of sortedTasks) {
+      const commits = commitsByTask.get(task);
+      if (commits && commits.length > 0) {
+        result.push({
+          task,
+          commits,
+        });
+      }
+    }
+
+    // Add unassigned commits group if any
     if (unassignedCommits.length > 0) {
       result.push({
         task: null,
-        commits: unassignedCommits.map((commit) => {
-          const filesChanged = gitService.getFilesChanged(
-            workItem.baseSha || '',
-            commit.sha,
-            gitRepoPath
-          );
-          return {
-            sha: commit.sha,
-            message: commit.message,
-            author: commit.author,
-            date: commit.date,
-            filesChanged,
-          };
-        }),
+        commits: unassignedCommits,
       });
     }
+
+    console.log(
+      `Returning ${result.length} commit groups (${taskCommits.length} task commits, ${unassignedCommits.length} unassigned) for WorkItem ${workItem.id}`
+    );
 
     return result;
   }
@@ -306,7 +282,8 @@ export class PRService {
    */
   async checkMergeability(
     pr: PullRequest,
-    workItem: WorkItem
+    workItem: WorkItem,
+    repoPath?: string
   ): Promise<{
     canMerge: boolean;
     reasons: string[];
@@ -332,13 +309,35 @@ export class PRService {
     }
 
     // Check 4: No conflicts when merging head into base
-    const repoPath = workItem.worktreePath || '';
+    // Use provided repoPath or try to derive it from worktreePath
+    let mainRepoPath = repoPath;
+    if (!mainRepoPath && workItem.worktreePath) {
+      // Extract main repo path from worktree path (worktrees are typically in a subdirectory)
+      const worktreeDir = workItem.worktreePath.substring(0, workItem.worktreePath.lastIndexOf(path.sep));
+      const worktreesIndex = worktreeDir.lastIndexOf(path.sep + 'worktrees');
+      if (worktreesIndex !== -1) {
+        mainRepoPath = worktreeDir.substring(0, worktreesIndex);
+      } else {
+        // Fallback: use worktree path itself (might be the main repo)
+        mainRepoPath = workItem.worktreePath;
+      }
+    }
+    
+    if (!mainRepoPath) {
+      reasons.push('Cannot determine repository path for merge check');
+      return { canMerge: false, reasons };
+    }
+    
+    // Find if target branch is checked out in a worktree
+    const targetBranchWorktree = gitService.findWorktreeForBranch(mainRepoPath, pr.targetBranch);
+    const testMergePath = targetBranchWorktree || mainRepoPath;
+    
     try {
       // Test merge to check for conflicts
-      gitService.checkoutBranch(repoPath, pr.targetBranch);
-      gitService.testMergeNoCommit(repoPath, pr.sourceBranch);
+      gitService.checkoutBranch(testMergePath, pr.targetBranch);
+      gitService.testMergeNoCommit(testMergePath, pr.sourceBranch);
       // If we get here, no conflicts
-      gitService.abortMerge(repoPath);
+      gitService.abortMerge(testMergePath);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('conflict') || errorMessage.includes('CONFLICT')) {
@@ -366,36 +365,45 @@ export class PRService {
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
 
     // Check mergeability first
-    const { canMerge, reasons } = await this.checkMergeability(pr, workItem);
+    const { canMerge, reasons } = await this.checkMergeability(pr, workItem, repoPath);
     if (!canMerge) {
       throw new Error(`Cannot merge PR: ${reasons.join(', ')}`);
     }
+
+    // Find if target branch is checked out in a worktree
+    // If so, use that worktree path for merge operations
+    const targetBranchWorktree = gitService.findWorktreeForBranch(repoPath, pr.targetBranch);
+    const mergePath = targetBranchWorktree || repoPath;
 
     let mergeCommitSha: string;
 
     switch (strategy) {
       case 'merge':
         // Strategy: merge commit
-        gitService.checkoutBranch(repoPath, pr.targetBranch);
-        gitService.mergeBranch(repoPath, pr.sourceBranch, `Merge PR #${pr.id}: ${pr.title}`);
-        mergeCommitSha = gitService.getHeadSha(repoPath);
+        gitService.checkoutBranch(mergePath, pr.targetBranch);
+        gitService.mergeBranch(mergePath, pr.sourceBranch, `Merge PR #${pr.id}: ${pr.title}`);
+        mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
 
       case 'squash':
         // Strategy: squash
-        gitService.checkoutBranch(repoPath, pr.targetBranch);
-        gitService.mergeSquashBranch(repoPath, pr.sourceBranch);
-        gitService.commitChanges(repoPath, `Squash PR #${pr.id}: ${pr.title}`);
-        mergeCommitSha = gitService.getHeadSha(repoPath);
+        gitService.checkoutBranch(mergePath, pr.targetBranch);
+        gitService.mergeSquashBranch(mergePath, pr.sourceBranch);
+        gitService.commitChanges(mergePath, `Squash PR #${pr.id}: ${pr.title}`);
+        mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
 
       case 'rebase':
         // Strategy: rebase
-        gitService.checkoutBranch(repoPath, pr.sourceBranch);
-        gitService.rebaseBranch(repoPath, pr.targetBranch);
-        gitService.checkoutBranch(repoPath, pr.targetBranch);
-        gitService.mergeFFOnly(repoPath, pr.sourceBranch);
-        mergeCommitSha = gitService.getHeadSha(repoPath);
+        // For rebase, source branch might also be in a worktree
+        const sourceBranchWorktree = gitService.findWorktreeForBranch(repoPath, pr.sourceBranch);
+        const rebaseSourcePath = sourceBranchWorktree || repoPath;
+        
+        gitService.checkoutBranch(rebaseSourcePath, pr.sourceBranch);
+        gitService.rebaseBranch(rebaseSourcePath, pr.targetBranch);
+        gitService.checkoutBranch(mergePath, pr.targetBranch);
+        gitService.mergeFFOnly(mergePath, pr.sourceBranch);
+        mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
 
       default:

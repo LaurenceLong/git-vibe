@@ -85,6 +85,7 @@ export class PullRequestsRepository {
       mergedAt?: Date;
       mergedBy?: string;
       mergeCommitSha?: string;
+      syncedCommitSha?: string | null;
     }
   ): Promise<PullRequest | undefined> {
     const db = await this.getDbInstance();

@@ -4,7 +4,7 @@
  * Items are clickable and navigate to detail view
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { pullRequestsApi } from '@/lib/api';
 import { Project, PullRequest, PullRequestStatus } from '@/types';
@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { PRDetail } from '@/components/pr/PRDetail';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Clock } from 'lucide-react';
 
 export interface PullRequestsTabProps {
   project: Project;
@@ -115,6 +115,24 @@ export function PullRequestsTab({
                     >
                       {pr.status}
                     </Badge>
+                    {pr.status === 'merged' && (
+                      <Badge
+                        variant={pr.syncedCommitSha ? 'success' : 'warning'}
+                        className="flex items-center gap-1"
+                      >
+                        {pr.syncedCommitSha ? (
+                          <>
+                            <CheckCircle className="h-3 w-3" />
+                            Synced
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="h-3 w-3" />
+                            Pending Sync
+                          </>
+                        )}
+                      </Badge>
+                    )}
                   </div>
                   <div className="mt-2 text-sm text-gray-600">
                     {pr.sourceBranch} → {pr.targetBranch}

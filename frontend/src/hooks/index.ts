@@ -22,3 +22,4 @@ export {
   useCreatePRFromWorkItem,
 } from './useWorkItem';
 export { usePR, useMergePR, useClosePR } from './usePR';
+export { useStreamingLogs } from './useStreamingLogs';

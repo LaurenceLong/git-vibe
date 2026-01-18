@@ -389,6 +389,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
           <TabList className="px-6">
             <Tab
               value="tasks"
+              onClick={() => setActiveTab('tasks')}
               className={
                 activeTab === 'tasks'
                   ? 'border-blue-500 text-blue-600'
@@ -403,6 +404,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
             </Tab>
             <Tab
               value="logs"
+              onClick={() => setActiveTab('logs')}
               className={
                 activeTab === 'logs'
                   ? 'border-blue-500 text-blue-600'
@@ -417,6 +419,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
             </Tab>
             <Tab
               value="agent-config"
+              onClick={() => setActiveTab('agent-config')}
               className={
                 activeTab === 'agent-config'
                   ? 'border-blue-500 text-blue-600'
@@ -428,6 +431,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
             </Tab>
             <Tab
               value="pr-status"
+              onClick={() => setActiveTab('pr-status')}
               className={
                 activeTab === 'pr-status'
                   ? 'border-blue-500 text-blue-600'

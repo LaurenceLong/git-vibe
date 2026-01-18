@@ -103,6 +103,7 @@ export const pullRequests = sqliteTable(
     mergedAt: integer('merged_at', { mode: 'timestamp' }),
     mergedBy: text('merged_by'),
     mergeCommitSha: text('merge_commit_sha'),
+    syncedCommitSha: text('synced_commit_sha'), // Commit SHA in source repo after sync
   },
   (table) => ({
     workItemIdIdx: index('idx_pull_requests_work_item_id').on(table.workItemId),

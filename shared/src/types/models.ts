@@ -202,6 +202,7 @@ export interface PullRequest {
   mergedAt: string | null; // ISO 8601
   mergedBy: string | null;
   mergeCommitSha: string | null;
+  syncedCommitSha: string | null; // Commit SHA in source repo after sync
 }
 
 /**
@@ -222,6 +223,7 @@ export const PullRequestSchema = z.object({
   mergedAt: zIsoDateTimeNullable,
   mergedBy: z.string().nullable(),
   mergeCommitSha: z.string().nullable(),
+  syncedCommitSha: z.string().nullable(),
 });
 
 /**

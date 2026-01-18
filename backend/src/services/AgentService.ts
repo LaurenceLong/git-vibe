@@ -8,6 +8,7 @@ import { workspaceService } from './WorkspaceService.js';
 import { prService } from './PRService.js';
 import { openCodeAgentAdapter } from './OpenCodeAgentAdapter.js';
 import { claudeCodeAgentAdapter } from './ClaudeCodeAgentAdapter.js';
+import { PromptBuilder } from './PromptBuilder.js';
 import type { Project, WorkItem, AgentRun, PullRequest } from '../types/models.js';
 
 export type AgentType = 'opencode' | 'claudecode';
@@ -269,7 +270,7 @@ export class AgentService {
         workItemId: updatedWorkItem.id,
         projectId: project.id,
         agentKey: agentType,
-        inputSummary: prompt ? prompt.substring(0, 200) : null,
+        inputSummary: prompt ? prompt.substring(0, 200) : undefined,
         inputJson: JSON.stringify({
           prompt,
           config,
@@ -322,7 +323,8 @@ export class AgentService {
     projectId: string,
     workItemId: string,
     workItemTitle: string,
-    workItemBody?: string
+    workItemBody?: string,
+    userMessage?: string
   ): Promise<TaskExecutionResult> {
     try {
       // Get project to retrieve agent settings
@@ -343,12 +345,16 @@ export class AgentService {
       // Ensure workspace is initialized (needed for agent run, but don't create PR yet)
       await workspaceService.ensureWorkspace(workItem, project);
 
-      // Build prompt from work item (use workItem.body from database to ensure we have the latest description)
-      // workItem.body can be null, so we need to check explicitly
-      const description = workItem.body ?? workItemBody ?? '';
-      const prompt = description.trim()
-        ? `Task: ${workItemTitle}\n\nDescription: ${description}`
-        : `Task: ${workItemTitle}`;
+      // Build prompt from work item or user message
+      let prompt: string;
+      if (userMessage && userMessage.trim()) {
+        // For conversation messages, use markdown format
+        prompt = PromptBuilder.buildConversationPrompt(userMessage);
+      } else {
+        // For regular task execution, use markdown format
+        const description = workItem.body ?? workItemBody ?? '';
+        prompt = PromptBuilder.buildTaskPrompt(workItemTitle, description);
+      }
 
       console.log(`[AgentService] Building prompt for work item ${workItemId}`);
       console.log(`[AgentService] Title: ${workItemTitle}`);
@@ -459,10 +465,12 @@ export class AgentService {
       }
     }
 
-    // Combine original prompt with new prompt
-    const combinedPrompt = originalPrompt
-      ? `${originalPrompt}\n\nAdditional instructions: ${prompt}`
-      : prompt;
+    // Build resume prompt using markdown format
+    const combinedPrompt = PromptBuilder.buildResumePrompt(
+      originalPrompt || '',
+      prompt,
+      workItem.title
+    );
 
     // Create new agent run record linked to the original
     const newRunId = uuidv4();
@@ -471,7 +479,7 @@ export class AgentService {
       workItemId: workItem.id,
       projectId: project.id,
       agentKey: agentType,
-      inputSummary: combinedPrompt ? combinedPrompt.substring(0, 200) : null,
+      inputSummary: combinedPrompt ? combinedPrompt.substring(0, 200) : undefined,
       inputJson: JSON.stringify({
         prompt: combinedPrompt,
         originalPrompt,

@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { workItemsApi, projectsApi } from '@/lib/api';
+import { workItemsApi, projectsApi, pullRequestsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -37,15 +37,17 @@ export function OverviewTab({ project }: OverviewTabProps) {
     queryFn: () => workItemsApi.list(project.id).then((res) => res.data.data),
   });
 
-  // Note: PR listing API not yet implemented - using placeholder
-  const { data: pullRequests } = useQuery({
+  // Fetch pull requests for statistics
+  const { data: pullRequestsResponse } = useQuery({
     queryKey: ['pull-requests', project.id],
     queryFn: async () => {
-      // Placeholder: Return empty array for now
-      // TODO: Implement actual API call when backend is ready
-      return [];
+      // Fetch with a large limit to get all PRs for statistics
+      const response = await pullRequestsApi.list(project.id, 1, 1000);
+      return response.data.data;
     },
   });
+
+  const pullRequests = pullRequestsResponse || [];
 
   const syncMutation = useMutation({
     mutationFn: () => projectsApi.sync(project.id),
@@ -90,8 +92,12 @@ export function OverviewTab({ project }: OverviewTabProps) {
   const draftPRs = 0;
 
   // Pending Sync Statistics (merged PRs that haven't been synced to source repo yet)
-  // Note: This feature is not yet implemented in PR-centric model
-  const pendingSyncTotal = 0;
+  // Count merged PRs that don't have a syncedCommitSha
+  const pendingSyncTotal =
+    pullRequests?.filter(
+      (pr: { status: string; syncedCommitSha: string | null }) =>
+        pr.status === 'merged' && !pr.syncedCommitSha
+    ).length || 0;
 
   const recentWorkItems = workItems?.slice(0, 5) || [];
   const recentPRs = pullRequests?.slice(0, 5) || [];
@@ -316,10 +322,11 @@ export function OverviewTab({ project }: OverviewTabProps) {
               (pr: {
                 id: string;
                 title: string;
-                prStatus: string;
-                branchName: string;
-                baseBranch: string;
+                status: string;
+                sourceBranch: string;
+                targetBranch: string;
                 createdAt: string;
+                syncedCommitSha: string | null;
               }) => (
                 <Link
                   key={pr.id}
@@ -334,18 +341,36 @@ export function OverviewTab({ project }: OverviewTabProps) {
                       <div className="mt-2 flex items-center space-x-2">
                         <Badge
                           variant={
-                            pr.prStatus === 'open'
+                            pr.status === 'open'
                               ? 'success'
-                              : pr.prStatus === 'merged'
+                              : pr.status === 'merged'
                                 ? 'info'
                                 : 'neutral'
                           }
                         >
-                          {pr.prStatus}
+                          {pr.status}
                         </Badge>
+                        {pr.status === 'merged' && (
+                          <Badge
+                            variant={pr.syncedCommitSha ? 'success' : 'warning'}
+                            className="flex items-center gap-1"
+                          >
+                            {pr.syncedCommitSha ? (
+                              <>
+                                <CheckCircle className="h-3 w-3" />
+                                Synced
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="h-3 w-3" />
+                                Pending Sync
+                              </>
+                            )}
+                          </Badge>
+                        )}
                       </div>
                       <div className="mt-2 text-sm text-gray-600">
-                        {pr.branchName} → {pr.baseBranch}
+                        {pr.sourceBranch} → {pr.targetBranch}
                       </div>
                       <div className="mt-1 text-sm text-gray-600">
                         Created {formatDate(pr.createdAt)}

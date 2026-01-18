@@ -489,50 +489,57 @@ export async function workitemsRoutes(server: FastifyInstance) {
   );
 
   // POST /api/workitems/:id/start - Start agent task for a WorkItem
-  server.post<{ Params: { id: string } }>('/api/workitems/:id/start', async (request, reply) => {
-    const workItem = await workItemsRepository.findById(request.params.id);
-    if (!workItem) {
-      return reply.status(404).send({
-        error: true,
-        message: 'WorkItem not found',
-      });
-    }
+  server.post<{ Params: { id: string }; Body?: { message?: string } }>(
+    '/api/workitems/:id/start',
+    async (request, reply) => {
+      const workItem = await workItemsRepository.findById(request.params.id);
+      if (!workItem) {
+        return reply.status(404).send({
+          error: true,
+          message: 'WorkItem not found',
+        });
+      }
 
-    // Check if WorkItem is already closed
-    if (workItem.status === 'closed') {
-      return reply.status(400).send({
-        error: true,
-        message: 'Cannot start task for a closed WorkItem',
-      });
-    }
+      // Check if WorkItem is already closed
+      if (workItem.status === 'closed') {
+        return reply.status(400).send({
+          error: true,
+          message: 'Cannot start task for a closed WorkItem',
+        });
+      }
 
-    // Check if there's already a running task for this WorkItem
-    const existingTasks = await agentService.getWorkItemTasks(request.params.id);
-    const runningTask = existingTasks.find((task) => task.status === 'running');
-    if (runningTask) {
-      return reply.status(400).send({
-        error: true,
-        message: 'A task is already running for this WorkItem',
-      });
-    }
+      // Check if there's already a running task for this WorkItem
+      const existingTasks = await agentService.getWorkItemTasks(request.params.id);
+      const runningTask = existingTasks.find((task) => task.status === 'running');
+      if (runningTask) {
+        return reply.status(400).send({
+          error: true,
+          message: 'A task is already running for this WorkItem',
+        });
+      }
 
-    try {
-      // Execute task: initialize workspace and start agent
-      const result = await agentService.executeTask(
-        workItem.projectId,
-        workItem.id,
-        workItem.title,
-        workItem.body || undefined
-      );
+      try {
+        // Get user message from request body if provided (for conversation messages)
+        const userMessage = request.body?.message;
 
-      return reply.status(201).send(agentRunToDTO(result.agentRun));
-    } catch (error) {
-      return reply.status(400).send({
-        error: true,
-        message: error instanceof Error ? error.message : 'Failed to start task',
-      });
+        // Execute task: initialize workspace and start agent
+        const result = await agentService.executeTask(
+          workItem.projectId,
+          workItem.id,
+          workItem.title,
+          workItem.body || undefined,
+          userMessage
+        );
+
+        return reply.status(201).send(agentRunToDTO(result.agentRun));
+      } catch (error) {
+        return reply.status(400).send({
+          error: true,
+          message: error instanceof Error ? error.message : 'Failed to start task',
+        });
+      }
     }
-  });
+  );
 
   // POST /api/workitems/:id/refresh - Refresh WorkItem head_sha
   server.post<{ Params: { id: string } }>('/api/workitems/:id/refresh', async (request, reply) => {
