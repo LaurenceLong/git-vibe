@@ -1,10 +1,9 @@
-```markdown
 # GitVibe — PLAN.md (Refactored, PR-centric, WorkItem Workspace)
 
-> **Status**: Implementation complete for MVP scope. This document describes the architecture and design principles.  
-> **Audience**: engineers maintaining or extending GitVibe.  
-> Goal: a GitHub-like agent coding management system where **each WorkItem owns a single persistent workspace** (git worktree + branch), **agent runs are serialized**, **backend auto-commits after each run**, and **merge is controlled via a first-class Pull Request model**.  
-> Terminology note: we **do not** use “ChangeSet”. Patch export (optional) is a PR feature.
+> **Status**: Implementation complete for MVP scope. This document describes the architecture and design principles.
+> **Audience**: engineers maintaining or extending GitVibe.
+> **Version**: 0.1.0
+> **Goal**: a GitHub-like agent coding management system where **each WorkItem owns a single persistent workspace** (git worktree + branch), **agent runs are serialized**, **backend auto-commits after each run**, and **merge is controlled via a first-class Pull Request model**.
 
 ---
 
@@ -31,7 +30,7 @@
    - For Claude Code (and similar), we pass `--session-id=<session_id>` at launch.
    - Resume is implemented by re-launching with the same session_id (agent-specific semantics).
 
-6. **Single source of truth for “running state”**
+6. **Single source of truth for "running state"**
    - Running state is driven by `agent_runs.status`.
    - WorkItem/PR statuses represent lifecycle, not execution.
 
@@ -65,6 +64,13 @@ An immutable-ish execution record per run attempt.
 - Persist `session_id` (required)
 - Associate to a WorkItem (and indirectly to its PR)
 
+### 1.4 TargetRepo
+A destination repository for importing patches.
+
+**Key responsibilities**
+- Store target repository path and default branch
+- Track import history from PRs
+
 ---
 
 ## 2) High-level User Workflow
@@ -76,6 +82,7 @@ An immutable-ish execution record per run attempt.
 5. Review PR diff/commits, optionally approve
 6. Merge PR (squash/merge/rebase)
 7. Close WorkItem / PR lifecycle completed
+8. (Optional) Import patch to target repository
 
 ---
 
@@ -83,7 +90,7 @@ An immutable-ish execution record per run attempt.
 
 ### 3.1 Repositories
 GitVibe uses a **relay repository** (local or server-side) as the execution environment:
-- Holds a clone of the “project repo” (or a managed repo)
+- Holds a clone of the "project repo" (or a managed repo)
 - Creates worktrees for WorkItems
 - Runs agents in worktrees
 - Performs merges in the relay repo
@@ -94,20 +101,20 @@ GitVibe uses a **relay repository** (local or server-side) as the execution envi
 ### 3.2 Branch Strategy
 - Base branch: typically `main` (configurable per project via `default_branch`)
 - WorkItem head branch: `wi/<work_item_id>` (deterministic, same WorkItem always gets same branch)
-- Worktree directory: `<storage_base_dir>/worktrees/<work_item_id>/` (simplified from original plan)
+- Worktree directory: `<storage_base_dir>/worktrees/<work_item_id>/`
 
 ### 3.3 Base SHA Strategy
 PR diff correctness depends on base selection.
 
 Recommended:
 - On PR creation, store a **frozen `base_sha`** from `base_branch`.
-- Allow explicit “Update base” action later if desired.
+- Allow explicit "Update base" action later if desired.
 
 ---
 
 ## 4) Persistence Model (Tables)
 
-> Names are suggestions; adjust to your stack.  
+> Names are suggestions; adjust to your stack.
 > Use UUIDs if preferred; examples use integer IDs for readability.
 
 ### 4.1 projects
@@ -158,6 +165,7 @@ Constraints:
 - `merged_at` (nullable)
 - `merged_by` (nullable, currently 'system')
 - `merge_commit_sha` (nullable)
+- `synced_commit_sha` (nullable, for source repo sync)
 - timestamps
 
 Constraints:
@@ -191,28 +199,28 @@ Indexes:
 - `(session_id)` (for session-based queries)
 - `(status)` (for filtering by status)
 
-### 4.5 review_threads (implemented)
+### 4.5 review_threads
 - `id` (UUID)
 - `pull_request_id` (foreign key)
 - `status` (`open` | `resolved` | `outdated`)
 - `severity` (`info` | `warning` | `error`)
-- `anchor` (file path and line reference)
+- `anchor` (file path and line reference, JSON stringified)
 - timestamps
 
-### 4.6 review_comments (implemented)
+### 4.6 review_comments
 - `id` (UUID)
 - `thread_id` (foreign key)
 - `body` (comment text)
 - timestamps
 
-### 4.7 target_repos (implemented)
+### 4.7 target_repos
 - `id` (UUID)
 - `name`
 - `repo_path` (unique, path to target repository)
 - `default_branch`
 - timestamps
 
-### 4.8 imports (implemented)
+### 4.8 imports
 - `id` (UUID)
 - `pull_request_id` (foreign key)
 - `target_repo_id` (foreign key)
@@ -238,48 +246,67 @@ Indexes:
 
 ## 5) API Surface (Minimal)
 
-### 5.1 WorkItems
-- `POST /projects/:projectId/work-items`
-  - creates WorkItem (no workspace yet)
-- `POST /work-items/:id/init-workspace` (optional; can be implicit)
-  - creates branch + worktree + sets workspace fields
-- `GET /work-items/:id`
-  - returns WorkItem + latest PR summary + latest run summary
+### 5.1 Projects
+- `GET /api/projects` - List all projects with pagination
+- `POST /api/projects` - Create a project
+- `GET /api/projects/:id` - Get project details
+- `PATCH /api/projects/:id` - Update project settings
+- `DELETE /api/projects/:id` - Delete a project
+- `POST /api/projects/:id/sync` - Sync relay repo with source repo
+- `GET /api/projects/:id/branches` - List branches
+- `GET /api/projects/:id/files` - List repository files
+- `GET /api/models` - List available agent models
+- `POST /api/models/refresh` - Refresh model cache
 
-### 5.2 Pull Requests
-- `POST /work-items/:id/open-pr`
-  - creates PR for WorkItem (often auto-run on work item creation)
-- `GET /pull-requests/:id`
-  - PR details + computed mergeability + latest runs
-- `GET /pull-requests/:id/diff`
-  - returns diff between `base_sha..head_sha`
-- `GET /pull-requests/:id/commits`
-  - returns commits reachable in head not in base (implementation-specific)
-- `POST /pull-requests/:id/update-base` (optional)
-  - refreshes base_sha to latest base_branch and optionally rebases head
+### 5.2 Target Repos
+- `GET /api/target-repos` - List all target repos
+- `POST /api/target-repos` - Create a target repo
+- `GET /api/target-repos/:id` - Get target repo details
 
-### 5.3 Agent Runs
-- `POST /work-items/:id/agent-runs`
-  - starts a run (will init workspace if needed)
-  - request includes:
-    - `agent_key`
-    - optional `session_id` override (otherwise deterministic default)
-    - optional prompt/instructions
-- `GET /agent-runs/:id`
-  - status, logs pointer, shas, commit_sha
-- `POST /agent-runs/:id/cancel` (optional; agent-dependent)
-- `POST /work-items/:id/resume`
-  - convenience wrapper that starts a new run using last known `session_id` (or work item session policy)
+### 5.3 WorkItems
+- `GET /api/workitems` - List work items with optional project filter and pagination
+- `POST /api/projects/:projectId/work-items` - Create a work item
+- `GET /api/workitems/:id` - Get work item details
+- `PATCH /api/workitems/:id` - Update work item
+- `DELETE /api/workitems/:id` - Delete work item
+- `POST /api/work-items/:id/init-workspace` - Initialize workspace (optional)
+- `POST /api/workitems/:id/start` - Start agent run
+- `POST /api/workitems/:id/resume` - Resume task with same session_id
+- `GET /api/workitems/:id/tasks` - List all runs for work item
+- `POST /api/workitems/:id/tasks/:taskId/cancel` - Cancel running task
+- `POST /api/workitems/:id/tasks/:taskId/restart` - Restart task with same prompt
+- `GET /api/workitems/:id/tasks/:taskId/status` - Get task status
+- `GET /api/workitems/:id/prs` - Get PRs for work item
+- `POST /api/workitems/:id/create-pr` - Create PR from work item
 
-### 5.4 Merge
-- `POST /pull-requests/:id/merge`
-  - checks merge gates and performs merge into base_branch
-- `POST /pull-requests/:id/close`
-  - closes PR without merge
+### 5.4 Pull Requests
+- `GET /api/pull-requests` - List PRs (with optional project filter and pagination)
+- `GET /api/pull-requests/:id` - Get PR details
+- `GET /api/pull-requests/:id/diff` - Get PR diff
+- `GET /api/pull-requests/:id/commits` - Get PR commits
+- `GET /api/pull-requests/:id/commits-with-tasks` - Get PR commits grouped by tasks
+- `GET /api/pull-requests/:id/statistics` - Get PR statistics
+- `POST /api/pull-requests/:id/merge` - Merge PR
+- `POST /api/pull-requests/:id/close` - Close PR without merge
+- `POST /api/pull-requests/:id/update-base` - Update base branch and optionally rebase
+- `GET /api/pull-requests/:id/patch` - Export patch (optional)
 
-### 5.5 Optional: Patch Export (No ChangeSet)
-- `GET /pull-requests/:id/patch`
-  - returns `git diff base_sha..head_sha` (or format-patch if preferred)
+### 5.5 Agent Runs
+- `GET /api/agent-runs/:id` - Get run status and logs
+- `POST /api/agent-runs/:id/cancel` - Cancel running agent
+- `GET /api/agent-runs/:id/stdout` - Get stdout log
+- `GET /api/agent-runs/:id/stderr` - Get stderr log
+- `GET /api/agent-runs/:id/logs` - Get both stdout and stderr logs
+
+### 5.6 Reviews
+- `GET /api/pull-requests/:id/reviews/threads` - List review threads
+- `POST /api/pull-requests/:id/reviews/threads` - Create thread
+- `GET /api/pull-requests/:id/reviews/threads/:threadId` - Get thread details
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/resolve` - Resolve thread
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/unresolve` - Unresolve thread
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/comments` - Add comment
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/address` - Address with agent
+- `POST /api/pull-requests/:id/reviews/threads/:threadId/resume` - Resume from thread
 
 ---
 
@@ -327,7 +354,7 @@ Also enforce:
 session_id must be known before spawning the agent.
 
 Recommended default policy options (pick one and document it):
-- **WorkItem-scoped session** (best for “continuous conversation”):
+- **WorkItem-scoped session** (best for "continuous conversation"):
   - `session_id = "wi-" + work_item_id`
 - **Run-scoped session** (best for strict audit isolation):
   - `session_id = "run-" + agent_run_id`
@@ -485,7 +512,7 @@ sequenceDiagram
   participant R as Agent Runner
   participant WT as Worktree
 
-  UI->>API: POST /work-items/:id/agent-runs {agent_key, prompt, session_id?}
+  UI->>API: POST /work-items/:id/start {agent_key, prompt, session_id?}
   API->>DB: Load WorkItem
   alt workspace not initialized
     API->>API: initWorkspace(workItem)
@@ -497,11 +524,11 @@ sequenceDiagram
   end
 
   API->>G: git -C WT rev-parse HEAD -> head_before
-  API->>DB: Create AgentRun(status=running, session_id, head_sha_before=head_before)
+  API->>DB: Create AgentRun(status=running, session_id, head_sha_before)
 
   API->>R: spawn agent (cwd=WT, --session-id session_id)
   R->>WT: agent edits files
-  R-->>API: stream logs (log_path)
+  R-->>API: stream logs (log_path, stdout_path, stderr_path)
 
   R-->>API: process exit (code)
   API->>G: git -C WT add -A
@@ -538,7 +565,7 @@ stateDiagram-v2
   Canceled --> Running: resume (new run, same session_id)
 ```
 
-> Note: “resume” creates a **new AgentRun** record but reuses the same session_id.  
+> Note: "resume" creates a **new AgentRun** record but reuses the same session_id.
 > This keeps execution history immutable and audit-friendly while enabling conversation continuity.
 
 ### 10.5 PR Lifecycle & Merge Gate
@@ -577,10 +604,10 @@ For auto-commits, use a consistent format:
 Where `input_summary` is the first 200 characters of the prompt. Full prompt and config stored in `input_json`.
 
 ### 11.2 Large logs
-Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
+Prefer `log_path`, `stdout_path`, and `stderr_path` on disk with rotation; store a small tail in DB if needed.
 
 ### 11.3 Lock TTL and crash recovery
-- Use a TTL on the WorkItem lock (default: 1 hour)
+- Use a TTL on the WorkItem lock (default: 6 hours)
 - Lock is released in `finally` block after agent completion
 - If TTL expires, new runs can acquire lock (previous run may be marked as failed if detected)
 - Current implementation: Lock released immediately after finalization, no heartbeat renewal (simplified)
@@ -589,6 +616,11 @@ Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
 - Run agents in a sandbox where possible
 - Validate prompts/instructions storage (PII/secret handling)
 - Restrict file system scope to worktree
+
+### 11.5 Storage Configuration
+Storage paths are configurable via environment variables:
+- `STORAGE_BASE_DIR`: Base directory for all GitVibe data
+- Defaults to system temp directory (`/tmp/git-vibe` on Unix, `%TEMP%\git-vibe` on Windows)
 
 ---
 
@@ -608,9 +640,10 @@ Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
 - ✅ Multiple agent adapters (OpenCode, ClaudeCode)
 - ✅ Session-based resume functionality
 - ✅ Review threads and comments
-- ✅ Patch import to target repositories
+- ✅ Patch import to source repositories
 - ✅ Agent run cancellation
 - ✅ Update base / rebase PR functionality
+- ✅ Patch export endpoint (GET /pull-requests/:id/patch)
 
 **Additional Features Implemented**
 - ✅ Models cache for agent adapters
@@ -618,13 +651,18 @@ Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
 - ✅ Import job tracking and history
 - ✅ Worktree cleanup on WorkItem deletion
 - ✅ Comprehensive error handling and logging
+- ✅ Separate stdout/stderr log files
+- ✅ Git relay repository support
+- ✅ Source repository sync functionality
 
 ### 🔄 Nice-to-have (Future Enhancements)
 - Approvals / required reviewers
-- Patch export endpoint (GET /pull-requests/:id/patch)
 - GitHub integration (sync PR / statuses)
 - Distributed runners across machines (job queue + remote workspace)
 - Multiple workspaces per WorkItem (non-goal for MVP)
+- Real-time log streaming via WebSocket
+- File browser in worktree
+- Inline code editing in UI
 
 ---
 
@@ -636,9 +674,34 @@ Prefer `log_path` on disk with rotation; store a small tail in DB if needed.
 - User authentication/authorization (single-user local-first design)
 - Webhooks or external integrations (can be added later)
 
+---
+
 ## 14) Current Implementation Details
 
-### 14.1 Agent Adapters
+### 14.1 Tech Stack
+
+**Backend**
+- Node.js 20+ + TypeScript
+- Fastify web framework
+- SQLite database with Drizzle ORM
+- Git CLI integration
+- Agent adapter system (OpenCode, ClaudeCode)
+- Zod for validation
+
+**Frontend**
+- React 18 + TypeScript
+- Vite build tool
+- TanStack Query for data fetching
+- TanStack Router for routing
+- Tailwind CSS for styling
+- React Hook Form for forms
+- Lucide React for icons
+
+**Shared**
+- TypeScript types and Zod schemas
+- Shared between backend and frontend
+
+### 14.2 Agent Adapters
 Two agent adapters are implemented:
 - **OpenCodeAgentAdapter**: For OpenCode CLI agent
 - **ClaudeCodeAgentAdapter**: For Claude Code agent
@@ -651,19 +714,168 @@ Both extend `AgentAdapter` base class and implement:
 - `cancel()`: Cancel running process
 - `getStatus()`: Check run status
 
-### 14.2 Project Concurrency
+### 14.3 Project Concurrency
 Projects have a `max_agent_concurrency` setting (default: 3) that limits concurrent agent runs across all WorkItems in a project. This is tracked in-memory by `AgentService`.
 
-### 14.3 Storage Configuration
+### 14.4 Storage Configuration
 Storage paths are configurable via environment variables:
 - `STORAGE_BASE_DIR`: Base directory for all GitVibe data
 - Defaults to system temp directory (`/tmp/git-vibe` on Unix, `%TEMP%\git-vibe` on Windows)
 
-### 14.4 Database Migrations
+Directory structure:
+```
+git-vibe/
+├── data/
+│   └── db.sqlite       # SQLite database
+├── logs/               # Agent run logs
+│   ├── agent-run-<id>.log
+│   ├── agent-run-<id>-stdout.log
+│   └── agent-run-<id>-stderr.log
+└── worktrees/          # Git worktrees for WorkItems
+    └── <work_item_id>/  # WorkItem workspace
+```
+
+### 14.5 Database Migrations
 Two migration systems supported:
 1. **Drizzle Kit migrations** (recommended): Uses `drizzle-kit generate` and `drizzle-orm/migrator`
 2. **Raw SQL migrations**: Fallback for `.sql` files in `drizzle/` directory
 
 Migration system auto-detects which to use based on presence of `drizzle/meta/_journal.json`.
 
+### 14.6 Git Service Architecture
+Git operations are organized into specialized services:
+- **GitService**: Main facade for all Git operations
+- **GitWorktreeService**: Worktree-specific operations
+- **GitCommitService**: Commit, log, and diff operations
+- **GitFileService**: File listing and content operations
+- **GitRelayService**: Relay repository operations
+
+This separation provides better organization and testability.
+
+### 14.7 Frontend Architecture
+The frontend is organized into:
+- **Routes**: TanStack Router routes for pages
+- **Components**: Reusable UI components organized by feature
+- **Hooks**: Custom React hooks for data fetching and state management
+- **Lib**: API client and utility functions
+
+Key components:
+- Project shell with tab navigation (Overview, Code, Pull Requests, WorkItems, Settings, Actions)
+- PR detail view with tabs (Overview, Diff, Commits, Files Changed, Checks, Reviews)
+- WorkItem detail view with tabs (Discussion, Log Detail, PR Status, Task Management, Agent Config)
+- Diff viewer for code changes
+- Review thread composer and management
+
 ---
+
+## 15) Development Workflow
+
+### 15.1 Setup
+```bash
+# Install dependencies
+npm run install:all
+
+# Run database migrations
+npm run db:migrate
+
+# Start development servers
+npm run dev
+```
+
+This starts:
+- Backend API server at `http://127.0.0.1:11031`
+- Frontend UI at `http://localhost:11990`
+
+### 15.2 Building
+```bash
+# Build all packages
+npm run build
+
+# Build individual packages
+npm run build:backend
+npm run build:frontend
+npm run build:shared
+```
+
+### 15.3 Testing
+```bash
+# Run tests (Vitest)
+cd backend && npm test
+
+# Run tests once
+cd backend && npm run test:run
+```
+
+### 15.4 Linting and Formatting
+```bash
+# Lint all packages
+npm run lint
+
+# Format all packages
+npm run format
+
+# Lint/format individual packages
+npm run lint:backend
+npm run format:backend
+# etc.
+```
+
+---
+
+## 16) API Reference
+
+See the separate API documentation or the frontend `api.ts` file for complete API reference.
+
+Key endpoints:
+- Projects: `/api/projects`
+- Target Repos: `/api/target-repos`
+- WorkItems: `/api/workitems`
+- Pull Requests: `/api/pull-requests`
+- Agent Runs: `/api/agent-runs`
+- Reviews: `/api/pull-requests/:id/reviews`
+
+---
+
+## 17) Troubleshooting
+
+### 17.1 Agent Not Found
+If you get "Executable not found" errors:
+1. Verify the agent executable is in your PATH
+2. Or provide the full path in project settings
+3. Check that the executable has execute permissions
+
+### 17.2 Workspace Lock Issues
+If a WorkItem is stuck in locked state:
+1. Check if an agent run is actually running
+2. If not, the lock TTL will expire (default: 6 hours)
+3. Or manually release the lock via database
+
+### 17.3 Git Worktree Errors
+If worktree operations fail:
+1. Ensure the relay repository path is correct
+2. Check that the repository is a valid Git repo
+3. Run `git worktree prune` to clean up stale worktrees
+
+### 17.4 Merge Conflicts
+If merge fails due to conflicts:
+1. Update the PR base to the latest base branch
+2. Rebase the head branch onto the new base
+3. Resolve conflicts manually in the worktree
+4. Try merge again
+
+---
+
+## 18) Contributing
+
+When contributing to GitVibe:
+1. Follow the existing code style (ESLint + Prettier)
+2. Add tests for new features
+3. Update this PLAN.md for architectural changes
+4. Update README.md for user-facing changes
+5. Ensure all packages build successfully
+
+---
+
+## 19) License
+
+MIT

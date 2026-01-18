@@ -9,7 +9,7 @@ import { workitemsRoutes } from './routes/workitems.js';
 import { runMigrations } from './db/migrations.js';
 import { modelsCache } from './services/ModelsCache.js';
 
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '11031', 10);
 const HOST = process.env.HOST || '127.0.0.1';
 
 async function start() {

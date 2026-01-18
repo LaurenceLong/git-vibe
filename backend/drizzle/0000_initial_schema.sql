@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS "pull_requests" (
 	"merged_at" integer,
 	"merged_by" text,
 	"merge_commit_sha" text,
+	"synced_commit_sha" text,
 	FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE,
 	FOREIGN KEY ("work_item_id") REFERENCES "work_items"("id") ON DELETE CASCADE
 );
