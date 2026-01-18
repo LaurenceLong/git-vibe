@@ -27,6 +27,8 @@ export interface OverviewTabProps {
   pr: PullRequest;
   /** Callback to navigate to a specific tab */
   onNavigateToTab?: (tab: string) => void;
+  /** Whether this tab is currently active */
+  isActive?: boolean;
 }
 
 /**
@@ -34,18 +36,28 @@ export interface OverviewTabProps {
  *
  * @param pr - The PR data
  * @param onNavigateToTab - Callback to navigate to a specific tab
+ * @param isActive - Whether this tab is currently active
  */
-export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
-  // Fetch PR statistics
+
+/**
+ * OverviewTab component for PRs
+ *
+ * @param pr - The PR data
+ * @param onNavigateToTab - Callback to navigate to a specific tab
+ * @param isActive - Whether this tab is currently active
+ */
+export function OverviewTab({ pr, onNavigateToTab, isActive = true }: OverviewTabProps) {
+  // Fetch PR statistics - only when tab is active
   const { data: statistics } = useQuery({
     queryKey: ['pr-statistics', pr.id],
     queryFn: async () => {
       const response = await pullRequestsApi.getStatistics(pr.id);
       return response.data as { filesChanged: number; additions: number; deletions: number };
     },
+    enabled: isActive,
   });
 
-  // Fetch commits to get count
+  // Fetch commits to get count - only when tab is active
   const { data: commitsWithTasks } = useQuery({
     queryKey: ['pr-commits-with-tasks', pr.id],
     queryFn: async () => {
@@ -59,6 +71,7 @@ export function OverviewTab({ pr, onNavigateToTab }: OverviewTabProps) {
         return [];
       }
     },
+    enabled: isActive,
   });
 
   // Calculate total commits count

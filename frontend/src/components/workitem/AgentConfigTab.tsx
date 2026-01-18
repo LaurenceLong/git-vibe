@@ -30,6 +30,7 @@ import { formatDateTime, formatDuration } from '@/lib/datetime';
 export interface AgentConfigTabProps {
   workItemId: string;
   worktreeStatus?: WorktreeStatus;
+  isActive?: boolean;
 }
 
 /**
@@ -37,7 +38,7 @@ export interface AgentConfigTabProps {
  *
  * @param workItemId - The ID of WorkItem to display agent runs for
  */
-export function AgentConfigTab({ workItemId, worktreeStatus = 'present' }: AgentConfigTabProps) {
+export function AgentConfigTab({ workItemId, worktreeStatus = 'present', isActive = true }: AgentConfigTabProps) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
@@ -46,14 +47,16 @@ export function AgentConfigTab({ workItemId, worktreeStatus = 'present' }: Agent
   // Track which runs are currently being polled
   const [pollingRuns, setPollingRuns] = useState<Set<string>>(new Set());
 
-  // Fetch agent runs for this WorkItem
+  // Fetch agent runs for this WorkItem - only when tab is active
   const { data: agentRuns, isLoading } = useQuery({
     queryKey: ['agent-runs', workItemId],
     queryFn: async () => {
       const response = await agentRunsApi.listByWorkItem(workItemId);
       return (response.data || []) as AgentRun[];
     },
+    enabled: isActive,
     refetchInterval: (data) => {
+      if (!isActive) return false;
       // Ensure data is an array before calling .some()
       if (!Array.isArray(data)) {
         return false;

@@ -12,7 +12,7 @@ import {
   useDeleteWorkItem,
   useStartWorkItemTask,
 } from '@/hooks/useWorkItem';
-import { ControlledTabs, Tab, TabPanel } from '@/components/ui/Tabs';
+import { Tabs, Tab, TabPanel, TabList, TabPanels } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +48,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
     }>
   >([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('tasks');
   const { data: workItem, isLoading, error } = useWorkItem(workItemId);
   const { closeWorkItem, isLoading: isClosing } = useCloseWorkItem(workItemId);
   const { deleteWorkItem, isLoading: isDeleting } = useDeleteWorkItem(workItemId, onDeleteSuccess);
@@ -67,7 +68,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
     return workItem?.worktreePath ? 'present' : 'missing';
   };
 
-  // Fetch tasks to check status
+  // Fetch tasks to check status - only when logs tab is active or when we need task status
   const fetchTasks = useCallback(async () => {
     try {
       const response = await workItemsApi.getTasks(workItemId);
@@ -84,11 +85,12 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
   // Get the latest task (first in sorted array, or last if not sorted)
   const latestTask = tasks.length > 0 ? tasks[0] : null;
 
-  // Initial fetch and refresh when workItem changes
-
+  // Only fetch tasks when logs tab is active
   useEffect(() => {
-    fetchTasks();
-  }, [workItemId, fetchTasks]);
+    if (activeTab === 'logs') {
+      fetchTasks();
+    }
+  }, [workItemId, activeTab, fetchTasks]);
 
   const handleClose = async () => {
     if (window.confirm('Are you sure you want to close this WorkItem?')) {
@@ -156,6 +158,21 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
       return null;
     }
 
+    // If tasks haven't been loaded yet (not on logs tab), show Start button
+    if (tasks.length === 0 && activeTab !== 'logs') {
+      return (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleStart}
+          loading={isStarting || actionLoading}
+        >
+          <Play className="mr-1 h-3 w-3" />
+          Start
+        </Button>
+      );
+    }
+
     if (!latestTask) {
       // No task yet, show Start button
       return (
@@ -203,8 +220,11 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
     }
   };
 
-  // Get task status display
+  // Get task status display - show "No tasks yet" if tasks haven't been loaded yet
   const getTaskStatusDisplay = () => {
+    if (tasks.length === 0 && activeTab !== 'logs') {
+      return <span className="text-sm text-gray-500">No tasks yet</span>;
+    }
     if (!latestTask) {
       return <span className="text-sm text-gray-500">No tasks yet</span>;
     }
@@ -365,52 +385,92 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
 
       {/* Tabs */}
       <div className="rounded-lg border bg-white shadow-sm">
-        <ControlledTabs defaultValue="tasks">
-          <Tab value="tasks">
-            <span className="flex items-center space-x-1">
-              <ListTodo className="h-4 w-4" />
-              <span>Tasks</span>
-            </span>
-          </Tab>
-          <Tab value="logs">
-            <span className="flex items-center space-x-1">
-              <Terminal className="h-4 w-4" />
-              <span>Logs</span>
-            </span>
-          </Tab>
-          <Tab value="agent-config">Agent Config</Tab>
-          <Tab value="pr-status">PR Status</Tab>
-          <TabPanel value="tasks">
-            <div className="p-6">
-              <TaskManagementTab workItemId={workItemId} />
-            </div>
-          </TabPanel>
-          <TabPanel value="logs">
-            <div className="p-6">
-              {latestTask ? (
-                <LogDetailTab workItemId={workItemId} agentRunId={latestTask.id} />
-              ) : (
-                <div className="py-12 text-center">
-                  <Terminal className="mx-auto mb-3 h-12 w-12 text-gray-400" />
-                  <h3 className="text-lg font-medium text-gray-900">No logs available</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Logs will appear here once a task is started
-                  </p>
-                </div>
-              )}
-            </div>
-          </TabPanel>
-          <TabPanel value="agent-config">
-            <div className="p-6">
-              <AgentConfigTab workItemId={workItemId} />
-            </div>
-          </TabPanel>
-          <TabPanel value="pr-status">
-            <div className="p-6">
-              <PRStatusTab workItemId={workItemId} />
-            </div>
-          </TabPanel>
-        </ControlledTabs>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabList className="px-6">
+            <Tab
+              value="tasks"
+              className={
+                activeTab === 'tasks'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }
+              aria-selected={activeTab === 'tasks'}
+            >
+              <span className="flex items-center space-x-1">
+                <ListTodo className="h-4 w-4" />
+                <span>Tasks</span>
+              </span>
+            </Tab>
+            <Tab
+              value="logs"
+              className={
+                activeTab === 'logs'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }
+              aria-selected={activeTab === 'logs'}
+            >
+              <span className="flex items-center space-x-1">
+                <Terminal className="h-4 w-4" />
+                <span>Logs</span>
+              </span>
+            </Tab>
+            <Tab
+              value="agent-config"
+              className={
+                activeTab === 'agent-config'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }
+              aria-selected={activeTab === 'agent-config'}
+            >
+              Agent Config
+            </Tab>
+            <Tab
+              value="pr-status"
+              className={
+                activeTab === 'pr-status'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }
+              aria-selected={activeTab === 'pr-status'}
+            >
+              PR Status
+            </Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel value="tasks" className={activeTab === 'tasks' ? '' : 'hidden'}>
+              <div className="p-6">
+                <TaskManagementTab workItemId={workItemId} isActive={activeTab === 'tasks'} />
+              </div>
+            </TabPanel>
+            <TabPanel value="logs" className={activeTab === 'logs' ? '' : 'hidden'}>
+              <div className="p-6">
+                {latestTask ? (
+                  <LogDetailTab workItemId={workItemId} agentRunId={latestTask.id} />
+                ) : (
+                  <div className="py-12 text-center">
+                    <Terminal className="mx-auto mb-3 h-12 w-12 text-gray-400" />
+                    <h3 className="text-lg font-medium text-gray-900">No logs available</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Logs will appear here once a task is started
+                    </p>
+                  </div>
+                )}
+              </div>
+            </TabPanel>
+            <TabPanel value="agent-config" className={activeTab === 'agent-config' ? '' : 'hidden'}>
+              <div className="p-6">
+                <AgentConfigTab workItemId={workItemId} isActive={activeTab === 'agent-config'} />
+              </div>
+            </TabPanel>
+            <TabPanel value="pr-status" className={activeTab === 'pr-status' ? '' : 'hidden'}>
+              <div className="p-6">
+                <PRStatusTab workItemId={workItemId} isActive={activeTab === 'pr-status'} />
+              </div>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </div>
     </div>
   );

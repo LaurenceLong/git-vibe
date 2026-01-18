@@ -21,6 +21,8 @@ import { FileCode } from 'lucide-react';
 export interface FilesChangedTabProps {
   /** The PR ID */
   prId: string;
+  /** Whether this tab is currently active */
+  isActive?: boolean;
 }
 
 /**
@@ -28,8 +30,8 @@ export interface FilesChangedTabProps {
  *
  * @param prId - The ID of PR to display file changes for
  */
-export function FilesChangedTab({ prId }: FilesChangedTabProps) {
-  // Load diff
+export function FilesChangedTab({ prId, isActive = true }: FilesChangedTabProps) {
+  // Load diff - only when tab is active
   const {
     data: diff,
     isLoading,
@@ -53,7 +55,7 @@ export function FilesChangedTab({ prId }: FilesChangedTabProps) {
         return '';
       }
     },
-    enabled: !!prId,
+    enabled: isActive && !!prId,
     retry: 2,
   });
 

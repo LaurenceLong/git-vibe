@@ -12,8 +12,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { pullRequestsApi } from '@/lib/api';
-import { useWorkItem } from '@/hooks/useWorkItem';
+import { pullRequestsApi, workItemsApi } from '@/lib/api';
 import { useMergePR, useClosePR } from '@/hooks/usePR';
 import { OverviewTab } from '@/components/pr/OverviewTab';
 import { ConversationTab } from '@/components/pr/ConversationTab';
@@ -57,11 +56,20 @@ export function PRDetail({ prId }: PRDetailProps) {
     queryFn: () => pullRequestsApi.get(prId).then((res) => res.data),
   });
 
-  // Fetch associated WorkItem
-  const { data: workItem } = useWorkItem(pr?.workItemId || '');
-
   // Tab state management
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Fetch associated WorkItem - only when needed (for header actions or when checks tab is active)
+  const shouldFetchWorkItem = activeTab === 'checks' || (pr?.status === 'open' && pr?.workItemId);
+  const { data: workItem } = useQuery({
+    queryKey: ['workitem', pr?.workItemId],
+    queryFn: async () => {
+      if (!pr?.workItemId) return null;
+      const response = await workItemsApi.get(pr.workItemId);
+      return response.data;
+    },
+    enabled: shouldFetchWorkItem && !!pr?.workItemId,
+  });
 
   // Loading state
   if (isLoading) {
@@ -103,8 +111,8 @@ export function PRDetail({ prId }: PRDetailProps) {
   // Get PR status
   const prStatus = pr.status;
 
-  // Determine worktree status for actions
-  const actionsDisabled = !workItem?.worktreePath;
+  // Determine worktree status for actions - only check if workItem is loaded
+  const actionsDisabled = workItem ? !workItem.worktreePath : false;
 
   const getStatusType = (status: string): 'success' | 'error' | 'info' | 'neutral' | 'warning' => {
     switch (status) {
@@ -280,19 +288,38 @@ export function PRDetail({ prId }: PRDetailProps) {
         </TabList>
         <TabPanels>
           <TabPanel value="overview" className={activeTab === 'overview' ? '' : 'hidden'}>
-            <OverviewTab pr={pr} onNavigateToTab={setActiveTab} />
+            {activeTab === 'overview' && (
+              <OverviewTab pr={pr} onNavigateToTab={setActiveTab} isActive={activeTab === 'overview'} />
+            )}
           </TabPanel>
           <TabPanel value="conversation" className={activeTab === 'conversation' ? '' : 'hidden'}>
-            <ConversationTab prId={prId} workItemId={pr.workItemId} />
+            {activeTab === 'conversation' && (
+              <ConversationTab
+                prId={prId}
+                workItemId={pr.workItemId}
+                isActive={activeTab === 'conversation'}
+              />
+            )}
           </TabPanel>
           <TabPanel value="commits" className={activeTab === 'commits' ? '' : 'hidden'}>
-            <CommitsTab prId={prId} workItemId={pr.workItemId} />
+            {activeTab === 'commits' && (
+              <CommitsTab prId={prId} workItemId={pr.workItemId} isActive={activeTab === 'commits'} />
+            )}
           </TabPanel>
           <TabPanel value="files" className={activeTab === 'files' ? '' : 'hidden'}>
-            <FilesChangedTab prId={prId} />
+            {activeTab === 'files' && (
+              <FilesChangedTab prId={prId} isActive={activeTab === 'files'} />
+            )}
           </TabPanel>
           <TabPanel value="checks" className={activeTab === 'checks' ? '' : 'hidden'}>
-            <ChecksTab prId={prId} agentRuns={[]} />
+            {activeTab === 'checks' && (
+              <ChecksTab
+                prId={prId}
+                workItemId={pr.workItemId}
+                agentRuns={[]}
+                worktreeStatus={workItem?.worktreePath ? 'present' : 'missing'}
+              />
+            )}
           </TabPanel>
         </TabPanels>
       </div>

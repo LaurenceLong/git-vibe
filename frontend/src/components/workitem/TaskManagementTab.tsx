@@ -30,6 +30,7 @@ import { formatDateTime } from '@/lib/datetime';
 
 export interface TaskManagementTabProps {
   workItemId: string;
+  isActive?: boolean;
 }
 
 type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
@@ -115,7 +116,7 @@ function LogPreview({
  *
  * @param workItemId - The ID of WorkItem to display tasks for
  */
-export function TaskManagementTab({ workItemId }: TaskManagementTabProps) {
+export function TaskManagementTab({ workItemId, isActive = true }: TaskManagementTabProps) {
   const [tasks, setTasks] = useState<AgentRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,10 +139,12 @@ export function TaskManagementTab({ workItemId }: TaskManagementTabProps) {
     }
   }, [workItemId]);
 
-  // Initial fetch
+  // Only fetch when tab is active
   useEffect(() => {
-    fetchTasks();
-  }, [workItemId, fetchTasks]);
+    if (isActive) {
+      fetchTasks();
+    }
+  }, [workItemId, isActive, fetchTasks]);
 
   // Poll for running tasks
   useEffect(() => {

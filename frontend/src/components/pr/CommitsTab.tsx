@@ -10,8 +10,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { pullRequestsApi } from '@/lib/api';
-import { useWorkItem } from '@/hooks/useWorkItem';
+import { pullRequestsApi, workItemsApi } from '@/lib/api';
 import { GitCommit, FileText, Hash, User, Clock, ListTodo } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { AgentRun } from '@/types';
@@ -20,6 +19,7 @@ import { formatDateTime } from '@/lib/datetime';
 export interface CommitsTabProps {
   prId: string;
   workItemId: string;
+  isActive?: boolean;
 }
 
 /**
@@ -28,8 +28,8 @@ export interface CommitsTabProps {
  * @param prId - The ID of PR to display commits for
  * @param workItemId - The ID of WorkItem associated with this PR
  */
-export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
-  // Fetch commits with task grouping
+export function CommitsTab({ prId, workItemId, isActive = true }: CommitsTabProps) {
+  // Fetch commits with task grouping - only when tab is active
   const {
     data: commitsWithTasks,
     isLoading,
@@ -40,10 +40,18 @@ export function CommitsTab({ prId, workItemId }: CommitsTabProps) {
       const response = await pullRequestsApi.getCommitsWithTasks(prId);
       return response.data;
     },
+    enabled: isActive,
   });
 
-  // Get workItem for navigation
-  const { data: workItem } = useWorkItem(workItemId);
+  // Get workItem for navigation - only when tab is active
+  const { data: workItem } = useQuery({
+    queryKey: ['workitem', workItemId],
+    queryFn: async () => {
+      const response = await workItemsApi.get(workItemId);
+      return response.data;
+    },
+    enabled: isActive && !!workItemId,
+  });
 
   // Loading state
   if (isLoading) {

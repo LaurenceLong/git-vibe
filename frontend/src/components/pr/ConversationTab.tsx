@@ -20,12 +20,12 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/Toast';
 import { workItemsApi, agentRunsApi } from '@/lib/api';
-import { useWorkItem } from '@/hooks/useWorkItem';
 import { formatDateTime } from '@/lib/datetime';
 
 export interface ConversationTabProps {
   prId: string;
   workItemId: string;
+  isActive?: boolean;
 }
 
 /**
@@ -34,7 +34,7 @@ export interface ConversationTabProps {
  * @param prId - The ID of PR to display comments for
  * @param workItemId - The ID of WorkItem associated with this PR
  */
-export function ConversationTab({ prId, workItemId }: ConversationTabProps) {
+export function ConversationTab({ prId, workItemId, isActive = true }: ConversationTabProps) {
   const [newMessage, setNewMessage] = useState('');
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [streamingLogs, setStreamingLogs] = useState<{ stdout: string; stderr: string }>({
@@ -45,10 +45,17 @@ export function ConversationTab({ prId, workItemId }: ConversationTabProps) {
   const { success, error: showError } = useToast();
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch workItem to get project info
-  const { data: workItem } = useWorkItem(workItemId);
+  // Fetch workItem to get project info - only when tab is active
+  const { data: workItem } = useQuery({
+    queryKey: ['workitem', workItemId],
+    queryFn: async () => {
+      const response = await workItemsApi.get(workItemId);
+      return response.data;
+    },
+    enabled: isActive && !!workItemId,
+  });
 
-  // Fetch tasks for this work item
+  // Fetch tasks for this work item - only when tab is active
   const { data: tasks } = useQuery({
     queryKey: ['workitem-tasks', workItemId],
     queryFn: async () => {
@@ -61,7 +68,7 @@ export function ConversationTab({ prId, workItemId }: ConversationTabProps) {
         finishedAt: string | null;
       }>;
     },
-    enabled: !!workItemId,
+    enabled: isActive && !!workItemId,
   });
 
   // Poll for logs when there's an active running task

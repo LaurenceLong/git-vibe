@@ -22,11 +22,11 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { GitPullRequest, GitBranch, Hash, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/components/Toast';
-import { useWorkItem } from '@/hooks/useWorkItem';
 import { formatDateTime } from '@/lib/datetime';
 
 export interface PRStatusTabProps {
   workItemId: string;
+  isActive?: boolean;
 }
 
 /**
@@ -34,12 +34,19 @@ export interface PRStatusTabProps {
  *
  * @param workItemId - The ID of WorkItem to display PR status for
  */
-export function PRStatusTab({ workItemId }: PRStatusTabProps) {
+export function PRStatusTab({ workItemId, isActive = true }: PRStatusTabProps) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
-  // Fetch workItem to get projectId
-  const { data: workItem } = useWorkItem(workItemId);
+  // Fetch workItem to get projectId - only when tab is active
+  const { data: workItem } = useQuery({
+    queryKey: ['workitem', workItemId],
+    queryFn: async () => {
+      const response = await workItemsApi.get(workItemId);
+      return response.data;
+    },
+    enabled: isActive && !!workItemId,
+  });
 
   // Fetch project to get project name for navigation
   const { data: project } = useQuery({
@@ -49,10 +56,10 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
       const response = await projectsApi.get(workItem.projectId);
       return response.data;
     },
-    enabled: !!workItem?.projectId,
+    enabled: isActive && !!workItem?.projectId,
   });
 
-  // Fetch all PRs for this WorkItem
+  // Fetch all PRs for this WorkItem - only when tab is active
   const { data: prs, isLoading } = useQuery({
     queryKey: ['workitem-prs', workItemId],
     queryFn: async () => {
@@ -60,6 +67,7 @@ export function PRStatusTab({ workItemId }: PRStatusTabProps) {
       const response = await workItemsApi.getPRs(workItemId);
       return (response.data || []) as PullRequest[];
     },
+    enabled: isActive,
   });
 
   // Merge PR mutation
