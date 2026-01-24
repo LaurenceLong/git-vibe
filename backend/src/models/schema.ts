@@ -47,6 +47,7 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull().unique(),
   sourceRepoPath: text('source_repo_path').notNull(),
   sourceRepoUrl: text('source_repo_url'),
+  mirrorRepoPath: text('mirror_repo_path').notNull(),
   relayRepoPath: text('relay_repo_path').notNull(),
   defaultBranch: text('default_branch').notNull(),
   defaultAgent: text('default_agent').notNull().default('opencode'),
@@ -60,18 +61,6 @@ export const projects = sqliteTable('projects', {
     .default(sql`(unixepoch())`),
 });
 
-export const targetRepos = sqliteTable('target_repos', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  repoPath: text('repo_path').notNull().unique(),
-  defaultBranch: text('default_branch').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(unixepoch())`),
-});
 
 export const pullRequests = sqliteTable(
   'pull_requests',
@@ -166,7 +155,7 @@ export const agentRuns = sqliteTable(
       .default('queued'),
     inputSummary: text('input_summary'),
     inputJson: text('input_json').notNull(),
-    sessionId: text('session_id').notNull(),
+    sessionId: text('session_id'), // Nullable: set to null if no session available (task cannot be resumed)
     linkedAgentRunId: text('linked_agent_run_id').references(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (): any => agentRuns.id,
@@ -181,6 +170,7 @@ export const agentRuns = sqliteTable(
     headShaBefore: text('head_sha_before'),
     headShaAfter: text('head_sha_after'),
     commitSha: text('commit_sha'),
+    pid: integer('pid'), // Process ID for tracking running processes
     startedAt: integer('started_at', { mode: 'timestamp' }),
     finishedAt: integer('finished_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' })
@@ -194,5 +184,84 @@ export const agentRuns = sqliteTable(
     workItemIdIdx: index('idx_agent_runs_work_item_id').on(table.workItemId),
     sessionIdIdx: index('idx_agent_runs_session_id').on(table.sessionId),
     statusIdx: index('idx_agent_runs_status').on(table.status),
+  })
+);
+
+
+export const workflows = sqliteTable(
+  'workflows',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    definition: text('definition').notNull(), // JSON stringified Workflow
+    isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_workflows_project_id').on(table.projectId),
+    projectNameUnique: index('idx_workflows_project_name_unique').on(table.projectId, table.name),
+  })
+);
+
+export const workflowRuns = sqliteTable(
+  'workflow_runs',
+  {
+    id: text('id').primaryKey(),
+    workflowId: text('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    workItemId: text('work_item_id')
+      .notNull()
+      .references(() => workItems.id, { onDelete: 'cascade' }),
+    status: text('status', {
+      enum: ['pending', 'running', 'succeeded', 'failed', 'blocked', 'skipped'],
+    })
+      .notNull()
+      .default('pending'),
+    currentStepId: text('current_step_id'),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    finishedAt: integer('finished_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    workflowIdIdx: index('idx_workflow_runs_workflow_id').on(table.workflowId),
+    workItemIdIdx: index('idx_workflow_runs_work_item_id').on(table.workItemId),
+    statusIdx: index('idx_workflow_runs_status').on(table.status),
+  })
+);
+
+export const stepExecutions = sqliteTable(
+  'step_executions',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: 'cascade' }),
+    nodeId: text('node_id').notNull(),
+    status: text('status', {
+      enum: ['pending', 'running', 'succeeded', 'failed', 'blocked', 'skipped'],
+    })
+      .notNull()
+      .default('pending'),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    finishedAt: integer('finished_at', { mode: 'timestamp' }),
+    errorMessage: text('error_message'),
+    outputs: text('outputs').notNull(), // JSON stringified outputs
+    artifacts: text('artifacts').notNull(), // JSON stringified artifacts array
+  },
+  (table) => ({
+    runIdIdx: index('idx_step_executions_run_id').on(table.runId),
+    nodeIdIdx: index('idx_step_executions_node_id').on(table.nodeId),
+    statusIdx: index('idx_step_executions_status').on(table.status),
   })
 );

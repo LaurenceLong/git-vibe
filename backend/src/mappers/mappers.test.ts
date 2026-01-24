@@ -14,7 +14,6 @@ import { toDTO as projectToDTO, toDomain as projectToDomain } from './projects.j
 import { toDTO as workItemToDTO, toDomain as workItemToDomain } from './workItems.js';
 import { toDTO as agentRunToDTO, toDomain as agentRunToDomain } from './agentRuns.js';
 import { toDTO as pullRequestToDTO, toDomain as pullRequestToDomain } from './pullRequests.js';
-import { toDTO as targetRepoToDTO, toDomain as targetRepoToDomain } from './targetRepos.js';
 import { reviewThreadToDTO, reviewThreadToDomain } from './reviews.js';
 import type { Project as ProjectDomain } from '../types/models.js';
 import {
@@ -22,7 +21,6 @@ import {
   WorkItemSchema,
   AgentRunSchema,
   PullRequestSchema,
-  TargetRepoSchema,
   ReviewThreadSchema,
 } from 'git-vibe-shared';
 
@@ -33,6 +31,7 @@ describe('Project mapper', () => {
       name: 'test-project',
       sourceRepoPath: '/path/to/source',
       sourceRepoUrl: 'https://github.com/test/repo',
+      mirrorRepoPath: '/path/to/mirror.git',
       relayRepoPath: '/path/to/relay',
       defaultBranch: 'main',
       defaultAgent: 'opencode',
@@ -59,6 +58,7 @@ describe('Project mapper', () => {
       name: 'test-project',
       sourceRepoPath: '/path/to/source',
       sourceRepoUrl: 'https://github.com/test/repo',
+      mirrorRepoPath: '/path/to/mirror.git',
       relayRepoPath: '/path/to/relay',
       defaultBranch: 'main',
       defaultAgent: 'opencode' as const,
@@ -222,6 +222,7 @@ describe('AgentRun mapper', () => {
       headShaBefore: 'abc123',
       headShaAfter: 'def456',
       commitSha: 'ghi789',
+      pid: 12345,
       startedAt: new Date('2024-01-15T10:30:00.000Z'),
       finishedAt: new Date('2024-01-15T11:00:00.000Z'),
       createdAt: new Date('2024-01-15T10:30:00.000Z'),
@@ -239,6 +240,8 @@ describe('AgentRun mapper', () => {
     expect(dto.updatedAt).toBe('2024-01-15T11:00:00.000Z');
     expect(dto.startedAt).toBe('2024-01-15T10:30:00.000Z');
     expect(dto.finishedAt).toBe('2024-01-15T11:00:00.000Z');
+    // Verify pid is included
+    expect(dto.pid).toBe(12345);
   });
 
   it('handles null optional date fields', () => {
@@ -259,6 +262,7 @@ describe('AgentRun mapper', () => {
       headShaBefore: null,
       headShaAfter: null,
       commitSha: null,
+      pid: null,
       startedAt: null,
       finishedAt: null,
       createdAt: new Date('2024-01-15T10:30:00.000Z'),
@@ -270,6 +274,7 @@ describe('AgentRun mapper', () => {
     expect(result.success).toBe(true);
     expect(dto.startedAt).toBeNull();
     expect(dto.finishedAt).toBeNull();
+    expect(dto.pid).toBeNull();
   });
 
   it('converts DTO to domain model', () => {
@@ -290,6 +295,7 @@ describe('AgentRun mapper', () => {
       headShaBefore: 'abc123',
       headShaAfter: 'def456',
       commitSha: 'ghi789',
+      pid: 12345,
       startedAt: '2024-01-15T10:30:00.000Z',
       finishedAt: '2024-01-15T11:00:00.000Z',
       createdAt: '2024-01-15T10:30:00.000Z',
@@ -301,6 +307,7 @@ describe('AgentRun mapper', () => {
     expect(domain.finishedAt).toEqual(new Date('2024-01-15T11:00:00.000Z'));
     expect(domain.createdAt).toEqual(new Date('2024-01-15T10:30:00.000Z'));
     expect(domain.updatedAt).toEqual(new Date('2024-01-15T11:00:00.000Z'));
+    expect(domain.pid).toBe(12345);
   });
 });
 
@@ -321,6 +328,7 @@ describe('PullRequest mapper', () => {
       mergedAt: new Date('2024-01-15T11:00:00.000Z'),
       mergedBy: 'user@example.com',
       mergeCommitSha: 'abc123',
+      syncedCommitSha: null,
     };
 
     const dto = pullRequestToDTO(domain);
@@ -351,6 +359,7 @@ describe('PullRequest mapper', () => {
       mergedAt: null,
       mergedBy: null,
       mergeCommitSha: null,
+      syncedCommitSha: null,
     };
 
     const dto = pullRequestToDTO(domain);
@@ -375,48 +384,11 @@ describe('PullRequest mapper', () => {
       mergedAt: '2024-01-15T11:00:00.000Z',
       mergedBy: 'user@example.com',
       mergeCommitSha: 'abc123',
+      syncedCommitSha: null,
     };
 
     const domain = pullRequestToDomain(dto);
     expect(domain.mergedAt).toEqual(new Date('2024-01-15T11:00:00.000Z'));
-    expect(domain.createdAt).toEqual(new Date('2024-01-15T10:30:00.000Z'));
-    expect(domain.updatedAt).toEqual(new Date('2024-01-15T10:30:00.000Z'));
-  });
-});
-
-describe('TargetRepo mapper', () => {
-  it('converts domain model to DTO matching shared schema', () => {
-    const domain = {
-      id: uuidv4(),
-      name: 'test-target',
-      repoPath: '/path/to/target',
-      defaultBranch: 'main',
-      createdAt: new Date('2024-01-15T10:30:00.000Z'),
-      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
-    };
-
-    const dto = targetRepoToDTO(domain);
-
-    // Validate against shared schema
-    const result = TargetRepoSchema.safeParse(dto);
-    expect(result.success).toBe(true);
-
-    // Verify date fields are in canonical ISO format
-    expect(dto.createdAt).toBe('2024-01-15T10:30:00.000Z');
-    expect(dto.updatedAt).toBe('2024-01-15T10:30:00.000Z');
-  });
-
-  it('converts DTO to domain model', () => {
-    const dto = {
-      id: uuidv4(),
-      name: 'test-target',
-      repoPath: '/path/to/target',
-      defaultBranch: 'main',
-      createdAt: '2024-01-15T10:30:00.000Z',
-      updatedAt: '2024-01-15T10:30:00.000Z',
-    };
-
-    const domain = targetRepoToDomain(dto);
     expect(domain.createdAt).toEqual(new Date('2024-01-15T10:30:00.000Z'));
     expect(domain.updatedAt).toEqual(new Date('2024-01-15T10:30:00.000Z'));
   });

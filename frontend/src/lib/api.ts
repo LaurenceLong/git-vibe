@@ -1,14 +1,12 @@
 import axios from 'axios';
 import { z } from 'zod';
 import type {
-  AgentModel,
   CreateProjectDTO,
   UpdateProjectDTO,
   TriggerAgentRunDTO,
   CreateThreadDTO,
   AddressWithAgentDTO,
   CreateCommentDTO,
-  CreateTargetRepoDTO,
   CreateWorkItemDTO,
   UpdateWorkItemDTO,
 } from 'git-vibe-shared';
@@ -19,10 +17,13 @@ import {
   ProjectSchema,
   ReviewThreadSchema,
   ReviewCommentSchema,
-  TargetRepoSchema,
-  AgentModelSchema,
   CommitSchema,
   CommitWithTaskSchema,
+  createPaginatedResponseSchema,
+  ModelsResponseSchema,
+  ProjectsListResponseSchema,
+  SearchResponseSchema,
+  BranchesResponseSchema,
 } from 'git-vibe-shared';
 
 const API_BASE_URL = '/api';
@@ -34,22 +35,13 @@ export const api = axios.create({
   },
 });
 
-// Helper to create paginated response schema
-const createPaginatedSchema = <T>(itemSchema: z.ZodType<T>) =>
-  z.object({
-    data: z.array(itemSchema),
-    pagination: z.object({
-      page: z.number(),
-      limit: z.number(),
-      total: z.number(),
-      totalPages: z.number(),
-    }),
-  });
+// Helper function to get the api client (for compatibility)
+export const getApiClient = () => api;
 
 export const projectsApi = {
-  list: async (page?: number, limit?: number) => {
-    const response = await api.get('/projects', { params: { page, limit } });
-    return { ...response, data: createPaginatedSchema(ProjectSchema).parse(response.data) };
+  list: async (page?: number, limit?: number, includeStats?: boolean) => {
+    const response = await api.get('/projects', { params: { page, limit, includeStats } });
+    return { ...response, data: ProjectsListResponseSchema.parse(response.data) };
   },
   get: async (id: string) => {
     const response = await api.get(`/projects/${id}`);
@@ -60,14 +52,12 @@ export const projectsApi = {
     return { ...response, data: ProjectSchema.parse(response.data) };
   },
   getModels: async (agent?: string) => {
-    const response = await api.get<{ data: AgentModel[] }>('/models', { params: { agent } });
-    return { ...response, data: { data: z.array(AgentModelSchema).parse(response.data.data) } };
+    const response = await api.get('/models', { params: { agent } });
+    return { ...response, data: ModelsResponseSchema.parse(response.data) };
   },
   refreshModels: async (agent?: string) => {
-    const response = await api.post<{ data: AgentModel[] }>('/models/refresh', undefined, {
-      params: { agent },
-    });
-    return { ...response, data: { data: z.array(AgentModelSchema).parse(response.data.data) } };
+    const response = await api.post('/models/refresh', undefined, { params: { agent } });
+    return { ...response, data: ModelsResponseSchema.parse(response.data) };
   },
   create: async (data: CreateProjectDTO) => {
     const response = await api.post('/projects', data);
@@ -80,31 +70,41 @@ export const projectsApi = {
   delete: (id: string) => api.delete(`/projects/${id}`),
   sync: (id: string) => api.post(`/projects/${id}/sync`),
   getBranches: (id: string) => api.get(`/projects/${id}/branches`),
-  getBranchesByPath: (repoPath: string) => api.get('/branches', { params: { repoPath } }),
+  getBranchesByPath: async (repoPath: string) => {
+    const response = await api.get('/branches', { params: { repoPath } });
+    return { ...response, data: BranchesResponseSchema.parse(response.data) };
+  },
   getFiles: (id: string) => api.get(`/projects/${id}/files`),
   getFileContent: (id: string, filePath: string) =>
     api.get(`/projects/${id}/files/content`, { params: { path: filePath } }),
-};
-
-export const targetReposApi = {
-  list: async () => {
-    const response = await api.get('/target-repos');
-    return { ...response, data: z.array(TargetRepoSchema).parse(response.data) };
-  },
-  get: async (id: string) => {
-    const response = await api.get(`/target-repos/${id}`);
-    return { ...response, data: TargetRepoSchema.parse(response.data) };
-  },
-  create: async (data: CreateTargetRepoDTO) => {
-    const response = await api.post('/target-repos', data);
-    return { ...response, data: TargetRepoSchema.parse(response.data) };
-  },
+  // Manual file operations with WorkItem
+  getOrCreateManualWorkItem: (id: string, title?: string) =>
+    api.post(`/projects/${id}/work-items/manual`, { title }),
+  getWorkItemFiles: (id: string, workItemId: string) =>
+    api.get(`/projects/${id}/work-items/${workItemId}/files`),
+  getWorkItemFileContent: (id: string, workItemId: string, filePath: string) =>
+    api.get(`/projects/${id}/work-items/${workItemId}/files/content`, {
+      params: { path: filePath },
+    }),
+  createFile: (id: string, workItemId: string, path: string, content: string) =>
+    api.post(`/projects/${id}/work-items/${workItemId}/files`, { path, content }),
+  updateFile: (id: string, workItemId: string, path: string, content: string) =>
+    api.put(`/projects/${id}/work-items/${workItemId}/files`, { path, content }),
+  deleteFile: (id: string, workItemId: string, path: string) =>
+    api.delete(`/projects/${id}/work-items/${workItemId}/files`, { params: { path } }),
+  commitChanges: (id: string, workItemId: string, message: string) =>
+    api.post(`/projects/${id}/work-items/${workItemId}/commit`, { message }),
+  createPRFromWorkItem: (id: string, workItemId: string) =>
+    api.post(`/projects/${id}/work-items/${workItemId}/create-pr`),
 };
 
 export const pullRequestsApi = {
   list: async (projectId?: string, page?: number, limit?: number) => {
     const response = await api.get('/pull-requests', { params: { projectId, page, limit } });
-    return { ...response, data: createPaginatedSchema(PullRequestSchema).parse(response.data) };
+    return {
+      ...response,
+      data: createPaginatedResponseSchema(PullRequestSchema).parse(response.data),
+    };
   },
   get: async (id: string) => {
     const response = await api.get(`/pull-requests/${id}`);
@@ -233,7 +233,10 @@ export const workItemsApi = {
   // List WorkItems with optional project filter and pagination
   list: async (projectId?: string, page?: number, limit?: number) => {
     const response = await api.get('/workitems', { params: { projectId, page, limit } });
-    return { ...response, data: createPaginatedSchema(WorkItemSchema).parse(response.data) };
+    return {
+      ...response,
+      data: createPaginatedResponseSchema(WorkItemSchema).parse(response.data),
+    };
   },
   // Create new WorkItem
   create: async (projectId: string, data: CreateWorkItemDTO) => {
@@ -296,4 +299,70 @@ export const workItemsApi = {
   // Resume task with session
   resumeTask: (id: string, taskId: string, prompt: string) =>
     api.post(`/workitems/${id}/tasks/${taskId}/resume`, { prompt }),
+};
+
+export const diffsApi = {
+  get: async (pullRequestId: string) => {
+    const response = await api.get(`/pull-requests/${pullRequestId}/diff`);
+    // API returns { diff, baseSha, headSha }, extract the diff string
+    const diffData = response.data;
+    if (typeof diffData === 'string') {
+      return { ...response, data: diffData };
+    }
+    if (diffData && typeof diffData === 'object' && 'diff' in diffData) {
+      return { ...response, data: typeof diffData.diff === 'string' ? diffData.diff : '' };
+    }
+    return { ...response, data: '' };
+  },
+};
+
+export const workflowsApi = {
+  list: async (projectId: string, page?: number, limit?: number) => {
+    const response = await api.get('/workflows', { params: { projectId, page, limit } });
+    return response;
+  },
+  get: async (id: string) => {
+    const response = await api.get(`/workflows/${id}`);
+    return response;
+  },
+  create: async (
+    projectId: string,
+    data: { name: string; description?: string; definition: any; isDefault?: boolean }
+  ) => {
+    const response = await api.post('/workflows', data, { params: { projectId } });
+    return response;
+  },
+  update: async (
+    id: string,
+    data: { name?: string; description?: string; definition?: any; isDefault?: boolean }
+  ) => {
+    const response = await api.patch(`/workflows/${id}`, data);
+    return response;
+  },
+  getRuns: async (workflowId: string, workItemId?: string) => {
+    const response = await api.get(`/workflows/${workflowId}/runs`, {
+      params: { workItemId },
+    });
+    return response;
+  },
+  getRunSteps: async (runId: string) => {
+    const response = await api.get(`/workflow-runs/${runId}/steps`);
+    return response;
+  },
+};
+
+export const searchApi = {
+  search: async (query: string, limit: number = 20) => {
+    const response = await api.get('/search', { params: { q: query, limit } });
+    const raw = response.data ?? {};
+    return {
+      ...response,
+      data: SearchResponseSchema.parse({
+        projects: raw.projects ?? [],
+        workItems: raw.workItems ?? [],
+        pullRequests: raw.pullRequests ?? [],
+        projectNames: raw.projectNames ?? {},
+      }),
+    };
+  },
 };

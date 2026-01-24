@@ -8,7 +8,6 @@ import { workspaceService } from './WorkspaceService.js';
 import { prService } from './PRService.js';
 import { openCodeAgentAdapter } from './OpenCodeAgentAdapter.js';
 import { claudeCodeAgentAdapter } from './ClaudeCodeAgentAdapter.js';
-import { PromptBuilder } from './PromptBuilder.js';
 import type { Project, WorkItem, AgentRun, PullRequest } from '../types/models.js';
 
 export type AgentType = 'opencode' | 'claudecode';
@@ -208,11 +207,14 @@ export class AgentService {
   }
 
   /**
-   * Start an agent run for a WorkItem
+   * Start an agent run for a WorkItem (stateless)
+   * Assumes workspace is already initialized - workflow handles workspace initialization
+   * Returns AgentRun and does not orchestrate workspace or PR creation
    */
-  private async startAgentRun(
-    workItem: WorkItem,
+  async startAgentRun(
+    workItemId: string,
     project: Project,
+    worktreePath: string,
     prompt: string,
     agentParams: AgentParams,
     options?: {
@@ -224,6 +226,7 @@ export class AgentService {
     if (!prompt || typeof prompt !== 'string') {
       throw new Error('Prompt is required and must be a string');
     }
+
     // Check concurrency limit
     const canStart = await this.canStartTask(project.id);
     if (!canStart) {
@@ -232,19 +235,16 @@ export class AgentService {
       );
     }
 
-    // Ensure workspace is initialized
-    const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
-
     // Acquire workspace lock
     const runId = uuidv4();
     const lockAcquired = await workItemsRepository.acquireLock(
-      updatedWorkItem.id,
+      workItemId,
       runId,
       3600000 * 6 // Default TTL: 6 hour in milliseconds
     );
 
     if (!lockAcquired) {
-      const lockStatus = await workItemsRepository.isLocked(updatedWorkItem.id);
+      const lockStatus = await workItemsRepository.isLocked(workItemId);
       throw new Error(
         `WorkItem is locked by another agent run. Owner: ${lockStatus.ownerRunId}, Expires: ${lockStatus.expiresAt}`
       );
@@ -258,16 +258,17 @@ export class AgentService {
       // Validate agent executable
       await adapter.validate({ executablePath: config.executablePath });
 
-      // Determine session_id: WorkItem-scoped by default
-      const sessionId = options?.sessionId || `wi-${updatedWorkItem.id}`;
+      // Determine session_id: Use provided sessionId or null (adapter will persist actual session)
+      // Do not create fake initial session - adapter will list and persist sessions before/during execution
+      const sessionId = options?.sessionId || null;
 
       // Determine head SHA before run
-      const headShaBefore = gitService.getHeadSha(updatedWorkItem.worktreePath || '');
+      const headShaBefore = gitService.getHeadSha(worktreePath);
 
       // Create agent run record
       const agentRun = await agentRunsRepository.create({
         id: runId,
-        workItemId: updatedWorkItem.id,
+        workItemId,
         projectId: project.id,
         agentKey: agentType,
         inputSummary: prompt ? prompt.substring(0, 200) : undefined,
@@ -292,7 +293,7 @@ export class AgentService {
       // Execute agent asynchronously
       adapter
         .run({
-          worktreePath: updatedWorkItem.worktreePath || '',
+          worktreePath,
           agentRunId: runId,
           prompt,
           config,
@@ -305,19 +306,21 @@ export class AgentService {
           });
           this.untrackRunningTask(project.id, runId);
           // Release lock
-          await workItemsRepository.releaseLock(updatedWorkItem.id, runId);
+          await workItemsRepository.releaseLock(workItemId, runId);
         });
 
       return agentRun;
     } catch (error) {
       // Release lock on error
-      await workItemsRepository.releaseLock(updatedWorkItem.id, runId);
+      await workItemsRepository.releaseLock(workItemId, runId);
       throw error;
     }
   }
 
   /**
-   * Execute a task: start agent automatically (PR will be created after agent finishes if there are changes)
+   * Execute a task: start agent automatically
+   * DEPRECATED: This method is kept for backward compatibility but workflow should handle orchestration
+   * Use startAgentRun directly from workflow nodes instead
    */
   async executeTask(
     projectId: string,
@@ -342,26 +345,41 @@ export class AgentService {
       // Parse agent params from project
       const agentParams = this.parseAgentParams(project.agentParams);
 
-      // Ensure workspace is initialized (needed for agent run, but don't create PR yet)
-      await workspaceService.ensureWorkspace(workItem, project);
+      // Ensure workspace is initialized (for backward compatibility)
+      const workspaceState = await workspaceService.ensureWorkspace(workItem, project);
+      if (!workItem.worktreePath) {
+        // Update WorkItem with workspace state (legacy support)
+        await workItemsRepository.update(workItemId, workspaceState);
+        workItem.worktreePath = workspaceState.worktreePath;
+      }
 
       // Build prompt from work item or user message
       let prompt: string;
       if (userMessage && userMessage.trim()) {
         // For conversation messages, use markdown format
-        prompt = PromptBuilder.buildConversationPrompt(userMessage);
+        prompt = `## User Message\n\n${userMessage.trim()}`;
       } else {
         // For regular task execution, use markdown format
         const description = workItem.body ?? workItemBody ?? '';
-        prompt = PromptBuilder.buildTaskPrompt(workItemTitle, description);
+        if (!description || !description.trim()) {
+          prompt = `## Task\n\n${workItemTitle}`;
+        } else {
+          prompt = `## Task\n\n${workItemTitle}\n\n## Description\n\n${description.trim()}`;
+        }
       }
 
       console.log(`[AgentService] Building prompt for work item ${workItemId}`);
       console.log(`[AgentService] Title: ${workItemTitle}`);
       console.log(`[AgentService] Final prompt length: ${prompt.length} characters`);
 
-      // Start agent run
-      const agentRun = await this.startAgentRun(workItem, project, prompt, agentParams);
+      // Start agent run (stateless version)
+      const agentRun = await this.startAgentRun(
+        workItemId,
+        project,
+        workItem.worktreePath || workspaceState.worktreePath,
+        prompt,
+        agentParams
+      );
 
       return {
         workItem: {
@@ -369,7 +387,6 @@ export class AgentService {
           title: workItemTitle,
           body: workItemBody,
         },
-        // PR will be created in finalizeAgentRun if there are changes
         agentRun,
       };
     } catch (error) {
@@ -410,6 +427,7 @@ export class AgentService {
 
   /**
    * Resume a task using the same session_id
+   * Triggers workflow by emitting workitem.task.resume event
    */
   async resumeTask(agentRunId: string, prompt: string): Promise<AgentRun> {
     const agentRun = await agentRunsRepository.findById(agentRunId);
@@ -427,102 +445,34 @@ export class AgentService {
       throw new Error('WorkItem not found');
     }
 
-    const project = await projectsRepository.findById(workItem.projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-
-    const agentParams = this.parseAgentParams(project.agentParams);
-    const agentType = agentParams.agentType || (project.defaultAgent as AgentType) || 'opencode';
-    const adapter = this.getAgentAdapter(agentType);
-    const config = this.buildAgentConfig(project, agentParams);
-
-    // Check concurrency limit
-    const canStart = await this.canStartTask(project.id);
-    if (!canStart) {
-      throw new Error(
-        `Maximum agent concurrency limit (${project.maxAgentConcurrency || 3}) reached for project. Please wait for existing tasks to complete.`
-      );
-    }
-
-    // Extract original prompt from the original run
-    let originalPrompt = '';
-    try {
-      const originalInputJson = JSON.parse(agentRun.inputJson) as {
-        prompt?: string;
-        config?: AgentConfig;
-      };
-      originalPrompt = originalInputJson.prompt || '';
-
-      // Fallback to inputSummary if prompt is not available
-      if (!originalPrompt && agentRun.inputSummary) {
-        originalPrompt = agentRun.inputSummary;
-      }
-    } catch {
-      // If JSON parsing fails, use inputSummary as fallback
-      if (agentRun.inputSummary) {
-        originalPrompt = agentRun.inputSummary;
-      }
-    }
-
-    // Build resume prompt using markdown format
-    const combinedPrompt = PromptBuilder.buildResumePrompt(
-      originalPrompt || '',
-      prompt,
-      workItem.title
+    // Emit workitem.task.resume event to trigger workflow
+    // The workflow will handle resuming the agent run via AgentNodeExecutor
+    const { workflowEventBus } = await import('./WorkflowEventBus.js');
+    console.log(
+      `[AgentService] Emitting workitem.task.resume event to resume task for ${workItem.id}`
     );
 
-    // Create new agent run record linked to the original
-    const newRunId = uuidv4();
-    const newAgentRun = await agentRunsRepository.create({
-      id: newRunId,
+    await workflowEventBus.emit({
+      type: 'workitem.task.resume',
       workItemId: workItem.id,
-      projectId: project.id,
-      agentKey: agentType,
-      inputSummary: combinedPrompt ? combinedPrompt.substring(0, 200) : undefined,
-      inputJson: JSON.stringify({
-        prompt: combinedPrompt,
-        originalPrompt,
-        newPrompt: prompt,
-        config,
-      }),
-      sessionId: agentRun.sessionId, // Reuse the same session_id
-      linkedAgentRunId: agentRunId, // Link to the original run
-    });
-
-    // Mark as running
-    await agentRunsRepository.update(newRunId, {
-      status: 'running',
-      startedAt: new Date(),
-    });
-
-    // Track as running
-    this.trackRunningTask(project.id, newRunId);
-
-    // Execute agent with session continuation
-    adapter
-      .correctWithReviewComments({
-        worktreePath: workItem.worktreePath || '',
-        agentRunId: newRunId,
+      data: {
+        originalAgentRunId: agentRunId,
         sessionId: agentRun.sessionId,
-        reviewComments: combinedPrompt,
-        config,
-      })
-      .catch(async (error: unknown) => {
-        await agentRunsRepository.update(newRunId, {
-          status: 'failed',
-          log: `Failed to resume agent process: ${error instanceof Error ? error.message : String(error)}`,
-          finishedAt: new Date(),
-        });
-        this.untrackRunningTask(project.id, newRunId);
-        await workItemsRepository.releaseLock(workItem.id, newRunId);
-      });
+        prompt,
+        title: workItem.title,
+        body: workItem.body ?? '',
+      },
+    });
 
-    return newAgentRun;
+    // Return the original agent run (workflow will create a new one)
+    // This maintains API compatibility while letting workflow handle the resume
+    return agentRun;
   }
 
   /**
    * Restart a task with the same prompt
+   * Canonical action: restart task. Emits workitem.restarted; workflow runs from
+   * workitem_restarted → process_workitem (agent).
    */
   async restartTask(agentRunId: string): Promise<AgentRun> {
     const agentRun = await agentRunsRepository.findById(agentRunId);
@@ -535,47 +485,20 @@ export class AgentService {
       throw new Error('WorkItem not found');
     }
 
-    const project = await projectsRepository.findById(workItem.projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
+    const { workflowEventBus } = await import('./WorkflowEventBus.js');
+    console.log(`[AgentService] Emitting workitem.restarted event for ${workItem.id}`);
 
-    // Parse original input and extract prompt
-    let prompt: string;
-    try {
-      const inputJson = JSON.parse(agentRun.inputJson) as { prompt?: string; config?: AgentConfig };
-      // Try to get prompt from inputJson
-      prompt = inputJson.prompt || '';
+    await workflowEventBus.emit({
+      type: 'workitem.restarted',
+      workItemId: workItem.id,
+      data: {
+        originalAgentRunId: agentRunId,
+        title: workItem.title,
+        body: workItem.body ?? '',
+      },
+    });
 
-      // Fallback to inputSummary if prompt is not available
-      if (!prompt && agentRun.inputSummary) {
-        prompt = agentRun.inputSummary;
-      }
-
-      // Final fallback to workItem title
-      if (!prompt && workItem.title) {
-        prompt = workItem.title;
-      }
-
-      // If still no prompt, throw an error
-      if (!prompt) {
-        throw new Error('Cannot restart task: original prompt not found');
-      }
-    } catch (error) {
-      // If JSON parsing fails or prompt extraction fails, use fallbacks
-      if (agentRun.inputSummary) {
-        prompt = agentRun.inputSummary;
-      } else if (workItem.title) {
-        prompt = workItem.title;
-      } else {
-        throw new Error('Cannot restart task: no prompt available');
-      }
-    }
-
-    const agentParams = this.parseAgentParams(project.agentParams);
-
-    // Start new agent run
-    return await this.startAgentRun(workItem, project, prompt, agentParams);
+    return agentRun;
   }
 
   /**
@@ -744,22 +667,20 @@ export class AgentService {
     const existingStatus = agentRun.status;
 
     try {
-      // Stage all changes first (including new files)
-      // This is necessary because new files won't show up in git diff until staged
-      gitService.stageAllChanges(workItem.worktreePath);
-
-      // Check if there are staged changes after staging
-      const hasStagedChanges = gitService.hasStagedChanges(workItem.worktreePath);
-
+      // Agent is expected to commit files itself, so we don't stage or commit automatically
+      // Just check what the agent has already committed
+      const headShaAfter = gitService.getHeadSha(workItem.worktreePath);
+      const headShaBefore = agentRun.headShaBefore || workItem.baseSha || headShaAfter;
+      
+      // Check if agent made any new commits
+      const hasNewCommits = headShaBefore !== headShaAfter;
+      
       let commitSha: string | null = null;
-      let headShaAfter: string;
-
-      if (hasStagedChanges) {
-        // Commit if changes exist
-        const commitMessage = `AgentRun ${agentRunId}: ${agentRun.inputSummary || 'Agent execution'}`;
-        commitSha = gitService.commitChanges(workItem.worktreePath, commitMessage);
-        headShaAfter = gitService.getHeadSha(workItem.worktreePath);
-
+      
+      if (hasNewCommits) {
+        // Agent has made commits - use the latest commit SHA
+        commitSha = headShaAfter;
+        
         // Check if there's an actual diff between base and head (to avoid creating PRs with no changes)
         if (!workItem.baseSha) {
           throw new Error(`WorkItem ${workItem.id} missing baseSha`);
@@ -767,12 +688,10 @@ export class AgentService {
         const diff = gitService.getDiff(workItem.baseSha, headShaAfter, workItem.worktreePath);
         const hasActualChanges = diff.trim().length > 0;
 
-        if (hasActualChanges) {
-          // Create PR only if there are actual changes
-          await this.openPRForWorkItem(workItem, project);
-        } else {
-          // No actual changes in diff - close any existing PR and update agent run log
-          await this.closeExistingPRIfNoDiff(workItem, headShaAfter);
+        // Don't automatically create PR - workflow will handle PR creation
+        // Just return information about whether changes exist
+        if (!hasActualChanges) {
+          // No actual changes in diff - update agent run log
           const noChangesMessage =
             '\n\n[Finalization] No changes detected in diff - PR creation skipped.';
           await agentRunsRepository.update(agentRunId, {
@@ -780,13 +699,23 @@ export class AgentService {
           });
         }
       } else {
-        // No staged changes - close any existing PR and update agent run log
-        headShaAfter = gitService.getHeadSha(workItem.worktreePath);
-        await this.closeExistingPRIfNoDiff(workItem, headShaAfter);
-        const noChangesMessage = '\n\n[Finalization] No changes detected - PR creation skipped.';
-        await agentRunsRepository.update(agentRunId, {
-          log: (agentRun.log ?? '') + noChangesMessage,
-        });
+        // No new commits from agent - check if there are unstaged changes
+        const hasUnstagedChanges = gitService.hasUnstagedChanges(workItem.worktreePath);
+        const hasStagedChanges = gitService.hasStagedChanges(workItem.worktreePath);
+        
+        if (hasUnstagedChanges || hasStagedChanges) {
+          // Agent didn't commit changes but there are changes present
+          const noCommitMessage = '\n\n[Finalization] Agent did not commit changes, but changes are present in working directory.';
+          await agentRunsRepository.update(agentRunId, {
+            log: (agentRun.log ?? '') + noCommitMessage,
+          });
+        } else {
+          // No changes at all
+          const noChangesMessage = '\n\n[Finalization] No changes detected - PR creation skipped.';
+          await agentRunsRepository.update(agentRunId, {
+            log: (agentRun.log ?? '') + noChangesMessage,
+          });
+        }
       }
 
       // Update AgentRun - preserve existing status unless finalization fails
@@ -799,10 +728,7 @@ export class AgentService {
         commitSha,
       });
 
-      // Update WorkItem cached head SHA
-      await workItemsRepository.update(workItem.id, {
-        headSha: headShaAfter,
-      });
+      // Don't update WorkItem directly - workflow will update it via workItemEventService
 
       // PR head SHA is tracked in WorkItem, not in PR schema
       // PR only stores sourceBranch and targetBranch references

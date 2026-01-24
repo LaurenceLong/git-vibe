@@ -31,6 +31,7 @@ import { workItemsApi } from '../lib/api';
 import type { WorkItemDTO } from 'git-vibe-shared';
 import { CreateWorkItemInput, UpdateWorkItemInput } from '../types';
 import { useToast } from '../components/Toast';
+import { extractErrorMessage } from '../lib/errorUtils';
 
 /**
  * Hook to fetch a single WorkItem by ID
@@ -91,8 +92,9 @@ export function useCreateWorkItem() {
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem created successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to create WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -125,8 +127,9 @@ export function useUpdateWorkItem(id: string) {
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem updated successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to update WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to update WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -164,8 +167,9 @@ export function useDeleteWorkItem(id: string, onSuccess?: () => void) {
         onSuccess();
       }
     },
-    onError: (err: Error) => {
-      showError(`Failed to delete WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to delete WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -198,8 +202,9 @@ export function useCloseWorkItem(id: string) {
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem closed successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to close WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to close WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -234,8 +239,9 @@ export function useCreatePRFromWorkItem(workItemId: string) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR created successfully from WorkItem');
     },
-    onError: (err: Error) => {
-      showError(`Failed to create PR from WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create PR from WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -270,8 +276,9 @@ export function useStartWorkItemTask(workItemId: string) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('Task started successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to start task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to start task');
+      showError(errorMessage);
     },
   });
 
@@ -305,8 +312,9 @@ export function useCancelWorkItemTask(workItemId: string, taskId: string) {
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('Task cancelled successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to cancel task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to cancel task');
+      showError(errorMessage);
     },
   });
 
@@ -342,8 +350,9 @@ export function useRestartWorkItemTask(workItemId: string, taskId: string) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('Task restarted successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to restart task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to restart task');
+      showError(errorMessage);
     },
   });
 
@@ -380,8 +389,9 @@ export function useResumeWorkItemTask(workItemId: string, taskId: string, prompt
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('Task resumed successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to resume task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to resume task');
+      showError(errorMessage);
     },
   });
 

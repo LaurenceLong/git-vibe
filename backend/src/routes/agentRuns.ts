@@ -284,7 +284,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
             stderrPosition = initialStderr.length;
           }
         }
-      } catch (error) {
+      } catch {
         // Files might not exist yet
       }
 
@@ -296,7 +296,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
               stdoutPosition = await readAndSendLogs(agentRun.stdoutPath, 'stdout', stdoutPosition);
             }
           });
-        } catch (error) {
+        } catch {
           // File might not exist yet, will be created later
         }
       }
@@ -308,7 +308,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
               stderrPosition = await readAndSendLogs(agentRun.stderrPath, 'stderr', stderrPosition);
             }
           });
-        } catch (error) {
+        } catch {
           // File might not exist yet, will be created later
         }
       }
@@ -369,7 +369,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
       const keepAliveInterval = setInterval(() => {
         try {
           reply.raw.write(': keepalive\n\n');
-        } catch (error) {
+        } catch {
           // Connection might be closed
         }
       }, 30000);
@@ -386,7 +386,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         }
         try {
           reply.raw.end();
-        } catch (error) {
+        } catch {
           // Connection might already be closed
         }
       };

@@ -20,7 +20,7 @@ export class AgentRunsRepository {
     agentKey: string;
     inputSummary?: string;
     inputJson: string;
-    sessionId: string;
+    sessionId: string | null;
     linkedAgentRunId?: string | null;
   }): Promise<AgentRun> {
     const db = await this.getDbInstance();
@@ -30,7 +30,7 @@ export class AgentRunsRepository {
       projectId: string;
       agentKey: string;
       inputJson: string;
-      sessionId: string;
+      sessionId: string | null;
       status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
       inputSummary?: string;
       linkedAgentRunId?: string | null;

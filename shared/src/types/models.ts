@@ -134,6 +134,7 @@ export interface Project {
   name: string;
   sourceRepoPath: string;
   sourceRepoUrl: string | null;
+  mirrorRepoPath: string;
   relayRepoPath: string;
   defaultBranch: string;
   defaultAgent: AgentKey;
@@ -151,35 +152,12 @@ export const ProjectSchema = z.object({
   name: z.string(),
   sourceRepoPath: z.string(),
   sourceRepoUrl: z.string().nullable(),
+  mirrorRepoPath: z.string(),
   relayRepoPath: z.string(),
   defaultBranch: z.string(),
   defaultAgent: AgentKeySchema,
   agentParams: z.string().nullable(), // JSON stringified
   maxAgentConcurrency: z.number(), // Maximum concurrent agent tasks
-  createdAt: zIsoDateTimeString,
-  updatedAt: zIsoDateTimeString,
-});
-
-/**
- * TargetRepo represents a target repository for imports
- */
-export interface TargetRepo {
-  id: string;
-  name: string;
-  repoPath: string;
-  defaultBranch: string;
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
-}
-
-/**
- * Zod schema for TargetRepo validation
- */
-export const TargetRepoSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  repoPath: z.string(),
-  defaultBranch: z.string(),
   createdAt: zIsoDateTimeString,
   updatedAt: zIsoDateTimeString,
 });
@@ -283,7 +261,7 @@ export interface AgentRun {
   status: AgentRunStatus;
   inputSummary: string | null;
   inputJson: string; // JSON stringified
-  sessionId: string; // Agent session ID for resuming (required)
+  sessionId: string | null; // Agent session ID for resuming (null if no session available - task cannot be resumed)
   linkedAgentRunId: string | null; // ID of the original agent run if this is a resumed task
   log: string | null;
   logPath: string | null;
@@ -292,6 +270,7 @@ export interface AgentRun {
   headShaBefore: string | null;
   headShaAfter: string | null;
   commitSha: string | null; // The auto-commit SHA if created
+  pid: number | null; // Process ID for tracking running processes
   startedAt: string | null; // ISO 8601
   finishedAt: string | null; // ISO 8601
   createdAt: string; // ISO 8601
@@ -309,7 +288,7 @@ export const AgentRunSchema = z.object({
   status: AgentRunStatusSchema,
   inputSummary: z.string().nullable(),
   inputJson: z.string(), // JSON stringified
-  sessionId: z.string(), // Agent session ID for resuming (required)
+  sessionId: z.string().nullable(), // Agent session ID for resuming (null if no session available - task cannot be resumed)
   linkedAgentRunId: z.string().uuid().nullable(), // ID of the original agent run if this is a resumed task
   log: z.string().nullable(),
   logPath: z.string().nullable(),
@@ -318,6 +297,7 @@ export const AgentRunSchema = z.object({
   headShaBefore: z.string().nullable(),
   headShaAfter: z.string().nullable(),
   commitSha: z.string().nullable(), // The auto-commit SHA if created
+  pid: z.number().nullable(), // Process ID for tracking running processes
   startedAt: zIsoDateTimeNullable,
   finishedAt: zIsoDateTimeNullable,
   createdAt: zIsoDateTimeString,
@@ -429,12 +409,6 @@ export type WorkItemDTO = z.infer<typeof WorkItemSchema>;
  * Use this for type-safe data validated against ProjectSchema
  */
 export type ProjectDTO = z.infer<typeof ProjectSchema>;
-
-/**
- * Inferred type from TargetRepoSchema
- * Use this for type-safe data validated against TargetRepoSchema
- */
-export type TargetRepoDTO = z.infer<typeof TargetRepoSchema>;
 
 /**
  * Inferred type from PullRequestSchema

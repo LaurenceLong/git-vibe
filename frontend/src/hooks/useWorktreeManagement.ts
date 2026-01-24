@@ -41,6 +41,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { workItemsApi } from '../lib/api';
 import { useToast } from '../components/Toast';
+import { extractErrorMessage } from '../lib/errorUtils';
 
 export interface UseWorktreeManagementOptions {
   /** The ID of the WorkItem */
@@ -99,12 +100,13 @@ export function useWorktreeManagement(
       queryClient.invalidateQueries({ queryKey: ['workitem', id] });
       success('Worktree removed successfully');
     },
-    onError: (err: Error) => {
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to remove worktree');
       // Handle worktree missing state
-      if (err.message.includes('not found') || err.message.includes('does not exist')) {
+      if (errorMessage.includes('not found') || errorMessage.includes('does not exist')) {
         showError('Worktree not found or already removed');
       } else {
-        showError(`Failed to remove worktree: ${err.message}`);
+        showError(errorMessage);
       }
     },
   });
@@ -125,8 +127,9 @@ export function useWorktreeManagement(
       queryClient.invalidateQueries({ queryKey: ['workitem', id] });
       success('Worktree removed successfully. The workspace will be reinitialized on next task.');
     },
-    onError: (err: Error) => {
-      showError(`Failed to recreate worktree: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to recreate worktree');
+      showError(errorMessage);
     },
   });
 

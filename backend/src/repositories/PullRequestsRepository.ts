@@ -62,6 +62,12 @@ export class PullRequestsRepository {
     return pr as PullRequest | undefined;
   }
 
+  async findAll(): Promise<PullRequest[]> {
+    const db = await this.getDbInstance();
+    const result = await db.select().from(pullRequests).execute();
+    return result as PullRequest[];
+  }
+
   async findByProjectId(projectId: string): Promise<PullRequest[]> {
     const db = await this.getDbInstance();
     const result = await db

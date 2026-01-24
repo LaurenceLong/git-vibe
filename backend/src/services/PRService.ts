@@ -17,31 +17,34 @@ import type { WorkItem, PullRequest, Project, AgentRun } from '../types/models.j
  */
 export class PRService {
   /**
-   * Open a PR for a WorkItem
+   * Open a PR for a WorkItem (stateless)
    * Creates a PullRequest record if one doesn't exist
+   * Does not update WorkItem - workflow will handle state updates
    */
-  async openPR(workItem: WorkItem, project: Project): Promise<PullRequest> {
+  async openPR(
+    workItemId: string,
+    projectId: string,
+    title: string,
+    description: string | null | undefined,
+    headBranch: string,
+    baseBranch: string
+  ): Promise<PullRequest> {
     // Check if PR already exists for this WorkItem
-    const existingPR = await pullRequestsRepository.findByWorkItemId(workItem.id);
+    const existingPR = await pullRequestsRepository.findByWorkItemId(workItemId);
     if (existingPR) {
       return existingPR;
-    }
-
-    // Ensure workspace is initialized
-    if (!workItem.worktreePath || !workItem.headBranch || !workItem.baseBranch) {
-      throw new Error(`WorkItem ${workItem.id} workspace is not initialized`);
     }
 
     // Create new PR
     const pr = await pullRequestsRepository.create({
       id: uuidv4(),
-      projectId: project.id,
-      workItemId: workItem.id,
-      title: workItem.title,
-      description: workItem.body || undefined,
+      projectId,
+      workItemId,
+      title,
+      description: description || undefined,
       status: 'open',
-      sourceBranch: workItem.headBranch,
-      targetBranch: workItem.baseBranch,
+      sourceBranch: headBranch,
+      targetBranch: baseBranch,
       mergeStrategy: 'merge',
     });
 
@@ -396,7 +399,7 @@ export class PRService {
         mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
 
-      case 'rebase':
+      case 'rebase': {
         // Strategy: rebase
         // For rebase, source branch might also be in a worktree
         const sourceBranchWorktree = gitService.findWorktreeForBranch(repoPath, pr.sourceBranch);
@@ -408,6 +411,7 @@ export class PRService {
         gitService.mergeFFOnly(mergePath, pr.sourceBranch);
         mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
+      }
 
       default:
         throw new Error(`Unknown merge strategy: ${strategy}`);

@@ -22,6 +22,7 @@ export const STORAGE_CONFIG = {
   patchesDir: path.join(baseTempDir, 'patches'),
   worktreesDir: path.join(baseTempDir, 'worktrees'),
   projectsDir: path.join(baseTempDir, 'projects'),
+  mirrorsDir: path.join(baseTempDir, 'mirrors'),
   projectRoot,
 } as const;
 

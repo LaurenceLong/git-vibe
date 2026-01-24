@@ -36,7 +36,6 @@ export type PRStatus = import('git-vibe-shared').PullRequestStatus;
 export type {
   WorkItemDTO,
   ProjectDTO,
-  TargetRepoDTO,
   PullRequestDTO,
   ReviewThreadDTO,
   ReviewCommentDTO,
@@ -51,7 +50,6 @@ export type {
 // These will be phased out in favor of DTO types
 export type WorkItem = import('git-vibe-shared').WorkItemDTO;
 export type Project = import('git-vibe-shared').ProjectDTO;
-export type TargetRepo = import('git-vibe-shared').TargetRepoDTO;
 export type PullRequest = import('git-vibe-shared').PullRequestDTO;
 export type ReviewThread = import('git-vibe-shared').ReviewThreadDTO;
 export type ReviewComment = import('git-vibe-shared').ReviewCommentDTO;

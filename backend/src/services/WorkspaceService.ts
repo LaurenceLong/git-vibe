@@ -1,4 +1,3 @@
-import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { gitService } from './GitService.js';
 import type { WorkItem, Project } from '../types/models.js';
 import path from 'node:path';
@@ -6,7 +5,20 @@ import fs from 'node:fs/promises';
 import { STORAGE_CONFIG } from '../config/storage.js';
 
 /**
+ * Workspace state returned by workspace operations
+ */
+export interface WorkspaceState {
+  worktreePath: string;
+  headBranch: string;
+  baseBranch: string;
+  baseSha: string;
+  headSha: string;
+  workspaceStatus: 'ready' | 'not_initialized' | 'error';
+}
+
+/**
  * WorkspaceService manages worktree initialization and maintenance for WorkItems
+ * Refactored to be stateless - returns workspace state instead of updating WorkItem directly
  *
  * Per PLAN.md Section 6:
  * - Ensure relay repo is present and clean
@@ -14,14 +26,15 @@ import { STORAGE_CONFIG } from '../config/storage.js';
  * - Resolve base SHA: git rev-parse <base_branch>
  * - Create head branch name: head_branch = "wi/<workItemId>"
  * - Create worktree: git worktree add -b <head_branch> <worktree_path> <base_branch>
- * - Persist workspace fields and set workspace_status=ready
+ * - Return workspace state (workflow will update WorkItem)
  */
 export class WorkspaceService {
   /**
    * Initialize workspace for a WorkItem
    * Creates worktree and branch if they don't exist
+   * Returns workspace state - workflow will update WorkItem
    */
-  async initWorkspace(workItem: WorkItem, project: Project): Promise<WorkItem> {
+  async initWorkspace(workItemId: string, project: Project): Promise<WorkspaceState> {
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
     const baseBranch = project.defaultBranch;
 
@@ -35,10 +48,10 @@ export class WorkspaceService {
     const baseSha = gitService.getRefSha(repoPath, baseBranch);
 
     // Step 4: Create head branch name
-    const headBranch = `wi/${workItem.id}`;
+    const headBranch = `wi/${workItemId}`;
 
     // Step 5: Create worktree path
-    const worktreePath = path.join(STORAGE_CONFIG.worktreesDir, workItem.id);
+    const worktreePath = path.join(STORAGE_CONFIG.worktreesDir, workItemId);
 
     // Step 6: Check if worktree already exists
     const worktreeStatus = gitService.getWorktreeStatus(repoPath, worktreePath);
@@ -54,21 +67,15 @@ export class WorkspaceService {
         // Worktree exists and directory is present, refresh head SHA
         const headSha = gitService.getWorktreeHead(worktreePath);
 
-        // Update WorkItem with current state
-        const updated = await workItemsRepository.update(workItem.id, {
+        // Return workspace state - workflow will update WorkItem
+        return {
           worktreePath,
           headBranch,
           baseBranch,
           baseSha,
           headSha,
           workspaceStatus: 'ready',
-        });
-
-        if (!updated) {
-          throw new Error(`Failed to update WorkItem ${workItem.id}`);
-        }
-
-        return updated;
+        };
       } else {
         // Worktree is registered but directory is missing, prune stale worktree
         try {
@@ -114,74 +121,78 @@ export class WorkspaceService {
     // Step 9: Get initial head SHA (same as baseSha initially)
     const headSha = gitService.getWorktreeHead(worktreePath);
 
-    // Step 10: Persist workspace fields
-    const updated = await workItemsRepository.update(workItem.id, {
+    // Step 10: Return workspace state - workflow will update WorkItem
+    return {
       worktreePath,
       headBranch,
       baseBranch,
       baseSha,
       headSha,
       workspaceStatus: 'ready',
-    });
-
-    if (!updated) {
-      throw new Error(`Failed to update WorkItem ${workItem.id}`);
-    }
-
-    return updated;
+    };
   }
 
   /**
-   * Ensure workspace exists (idempotent)
-   * Returns the WorkItem with workspace initialized
+   * Refresh cached head SHA for a WorkItem
+   * Returns the new head SHA - workflow will update WorkItem
    */
-  async ensureWorkspace(workItem: WorkItem, project: Project): Promise<WorkItem> {
-    // If workspace is already ready, just refresh head SHA
+  async refreshHeadSha(worktreePath: string): Promise<string> {
+    // Get current head SHA from worktree
+    return gitService.getWorktreeHead(worktreePath);
+  }
+
+  /**
+   * Get workspace state if workspace already exists
+   * Returns null if workspace doesn't exist
+   */
+  async getWorkspaceState(workItem: WorkItem, project: Project): Promise<WorkspaceState | null> {
     if (workItem.workspaceStatus === 'ready' && workItem.worktreePath) {
       const repoPath = project.relayRepoPath || project.sourceRepoPath;
       const worktreeStatus = gitService.getWorktreeStatus(repoPath, workItem.worktreePath);
 
       if (worktreeStatus === 'present') {
         // Worktree exists, refresh head SHA
-        return await this.refreshHeadSha(workItem);
+        const headSha = await this.refreshHeadSha(workItem.worktreePath);
+        return {
+          worktreePath: workItem.worktreePath,
+          headBranch: workItem.headBranch || `wi/${workItem.id}`,
+          baseBranch: workItem.baseBranch || project.defaultBranch,
+          baseSha: workItem.baseSha || gitService.getRefSha(repoPath, project.defaultBranch),
+          headSha,
+          workspaceStatus: 'ready',
+        };
       }
     }
 
-    // Initialize workspace
-    return await this.initWorkspace(workItem, project);
+    return null;
   }
 
   /**
-   * Refresh cached head SHA for a WorkItem
+   * Ensure workspace exists (idempotent)
+   * Returns workspace state - workflow will update WorkItem
    */
-  async refreshHeadSha(workItem: WorkItem): Promise<WorkItem> {
-    if (!workItem.worktreePath) {
-      throw new Error(`WorkItem ${workItem.id} has no worktree path`);
+  async ensureWorkspace(workItem: WorkItem, project: Project): Promise<WorkspaceState> {
+    // Check if workspace already exists
+    const existingState = await this.getWorkspaceState(workItem, project);
+    if (existingState) {
+      return existingState;
     }
 
-    // Get current head SHA from worktree
-    const headSha = gitService.getWorktreeHead(workItem.worktreePath);
-
-    // Update WorkItem with new head SHA
-    const updated = await workItemsRepository.update(workItem.id, {
-      headSha,
-    });
-
-    if (!updated) {
-      throw new Error(`Failed to update WorkItem ${workItem.id}`);
-    }
-
-    return updated;
+    // Initialize workspace
+    return await this.initWorkspace(workItem.id, project);
   }
 
   /**
    * Remove worktree for a WorkItem
    * Does not delete the branch, only removes the worktree
+   * Returns updated workspace state (workflow will persist)
    */
-  async removeWorktree(workItem: WorkItem, project: Project): Promise<void> {
+  async removeWorktree(workItem: WorkItem, project: Project): Promise<Partial<WorkspaceState>> {
     if (!workItem.worktreePath) {
       // No worktree to remove
-      return;
+      return {
+        workspaceStatus: 'not_initialized',
+      };
     }
 
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
@@ -194,11 +205,11 @@ export class WorkspaceService {
       gitService.removeWorktree(workItem.worktreePath, repoPath);
     }
 
-    // Update WorkItem to reflect worktree removal
-    await workItemsRepository.update(workItem.id, {
-      worktreePath: undefined,
+    // Return state indicating worktree removal (workflow will update WorkItem)
+    return {
+      worktreePath: '',
       workspaceStatus: 'not_initialized',
-    });
+    };
   }
 
   /**

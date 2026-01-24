@@ -10,14 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TargetReposIndexRouteImport } from './routes/target-repos/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
-import { Route as TargetReposIdRouteImport } from './routes/target-repos/$id'
 import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName'
 import { Route as ProjectsProjectNameIndexRouteImport } from './routes/projects/$projectName.index'
 import { Route as ProjectsProjectNameWorkitemsRouteImport } from './routes/projects/$projectName.workitems'
 import { Route as ProjectsProjectNameSettingsRouteImport } from './routes/projects/$projectName.settings'
 import { Route as ProjectsProjectNamePullrequestsRouteImport } from './routes/projects/$projectName.pullrequests'
+import { Route as ProjectsProjectNameDashboardRouteImport } from './routes/projects/$projectName.dashboard'
 import { Route as ProjectsProjectNameCodeRouteImport } from './routes/projects/$projectName.code'
 import { Route as ProjectsProjectNameActionsRouteImport } from './routes/projects/$projectName.actions'
 
@@ -26,19 +25,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TargetReposIndexRoute = TargetReposIndexRouteImport.update({
-  id: '/target-repos/',
-  path: '/target-repos/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TargetReposIdRoute = TargetReposIdRouteImport.update({
-  id: '/target-repos/$id',
-  path: '/target-repos/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectNameRoute = ProjectsProjectNameRouteImport.update({
@@ -70,6 +59,12 @@ const ProjectsProjectNamePullrequestsRoute =
     path: '/pullrequests',
     getParentRoute: () => ProjectsProjectNameRoute,
   } as any)
+const ProjectsProjectNameDashboardRoute =
+  ProjectsProjectNameDashboardRouteImport.update({
+    id: '/dashboard',
+    path: '/dashboard',
+    getParentRoute: () => ProjectsProjectNameRoute,
+  } as any)
 const ProjectsProjectNameCodeRoute = ProjectsProjectNameCodeRouteImport.update({
   id: '/code',
   path: '/code',
@@ -85,11 +80,10 @@ const ProjectsProjectNameActionsRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
-  '/target-repos/$id': typeof TargetReposIdRoute
   '/projects': typeof ProjectsIndexRoute
-  '/target-repos': typeof TargetReposIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
   '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
+  '/projects/$projectName/dashboard': typeof ProjectsProjectNameDashboardRoute
   '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
   '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
   '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
@@ -97,11 +91,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/target-repos/$id': typeof TargetReposIdRoute
   '/projects': typeof ProjectsIndexRoute
-  '/target-repos': typeof TargetReposIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
   '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
+  '/projects/$projectName/dashboard': typeof ProjectsProjectNameDashboardRoute
   '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
   '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
   '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
@@ -111,11 +104,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
-  '/target-repos/$id': typeof TargetReposIdRoute
   '/projects/': typeof ProjectsIndexRoute
-  '/target-repos/': typeof TargetReposIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
   '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
+  '/projects/$projectName/dashboard': typeof ProjectsProjectNameDashboardRoute
   '/projects/$projectName/pullrequests': typeof ProjectsProjectNamePullrequestsRoute
   '/projects/$projectName/settings': typeof ProjectsProjectNameSettingsRoute
   '/projects/$projectName/workitems': typeof ProjectsProjectNameWorkitemsRoute
@@ -126,11 +118,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/projects/$projectName'
-    | '/target-repos/$id'
     | '/projects'
-    | '/target-repos'
     | '/projects/$projectName/actions'
     | '/projects/$projectName/code'
+    | '/projects/$projectName/dashboard'
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
@@ -138,11 +129,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/target-repos/$id'
     | '/projects'
-    | '/target-repos'
     | '/projects/$projectName/actions'
     | '/projects/$projectName/code'
+    | '/projects/$projectName/dashboard'
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
@@ -151,11 +141,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/projects/$projectName'
-    | '/target-repos/$id'
     | '/projects/'
-    | '/target-repos/'
     | '/projects/$projectName/actions'
     | '/projects/$projectName/code'
+    | '/projects/$projectName/dashboard'
     | '/projects/$projectName/pullrequests'
     | '/projects/$projectName/settings'
     | '/projects/$projectName/workitems'
@@ -165,9 +154,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProjectsProjectNameRoute: typeof ProjectsProjectNameRouteWithChildren
-  TargetReposIdRoute: typeof TargetReposIdRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
-  TargetReposIndexRoute: typeof TargetReposIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -179,25 +166,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/target-repos/': {
-      id: '/target-repos/'
-      path: '/target-repos'
-      fullPath: '/target-repos'
-      preLoaderRoute: typeof TargetReposIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/projects/': {
       id: '/projects/'
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/target-repos/$id': {
-      id: '/target-repos/$id'
-      path: '/target-repos/$id'
-      fullPath: '/target-repos/$id'
-      preLoaderRoute: typeof TargetReposIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectName': {
@@ -235,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectNamePullrequestsRouteImport
       parentRoute: typeof ProjectsProjectNameRoute
     }
+    '/projects/$projectName/dashboard': {
+      id: '/projects/$projectName/dashboard'
+      path: '/dashboard'
+      fullPath: '/projects/$projectName/dashboard'
+      preLoaderRoute: typeof ProjectsProjectNameDashboardRouteImport
+      parentRoute: typeof ProjectsProjectNameRoute
+    }
     '/projects/$projectName/code': {
       id: '/projects/$projectName/code'
       path: '/code'
@@ -255,6 +235,7 @@ declare module '@tanstack/react-router' {
 interface ProjectsProjectNameRouteChildren {
   ProjectsProjectNameActionsRoute: typeof ProjectsProjectNameActionsRoute
   ProjectsProjectNameCodeRoute: typeof ProjectsProjectNameCodeRoute
+  ProjectsProjectNameDashboardRoute: typeof ProjectsProjectNameDashboardRoute
   ProjectsProjectNamePullrequestsRoute: typeof ProjectsProjectNamePullrequestsRoute
   ProjectsProjectNameSettingsRoute: typeof ProjectsProjectNameSettingsRoute
   ProjectsProjectNameWorkitemsRoute: typeof ProjectsProjectNameWorkitemsRoute
@@ -264,6 +245,7 @@ interface ProjectsProjectNameRouteChildren {
 const ProjectsProjectNameRouteChildren: ProjectsProjectNameRouteChildren = {
   ProjectsProjectNameActionsRoute: ProjectsProjectNameActionsRoute,
   ProjectsProjectNameCodeRoute: ProjectsProjectNameCodeRoute,
+  ProjectsProjectNameDashboardRoute: ProjectsProjectNameDashboardRoute,
   ProjectsProjectNamePullrequestsRoute: ProjectsProjectNamePullrequestsRoute,
   ProjectsProjectNameSettingsRoute: ProjectsProjectNameSettingsRoute,
   ProjectsProjectNameWorkitemsRoute: ProjectsProjectNameWorkitemsRoute,
@@ -276,9 +258,7 @@ const ProjectsProjectNameRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProjectsProjectNameRoute: ProjectsProjectNameRouteWithChildren,
-  TargetReposIdRoute: TargetReposIdRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
-  TargetReposIndexRoute: TargetReposIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

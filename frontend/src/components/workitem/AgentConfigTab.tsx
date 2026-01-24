@@ -25,6 +25,8 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Bot, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { extractErrorMessage } from '@/lib/errorUtils';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import { formatDateTime, formatDuration } from '@/lib/datetime';
 
 export interface AgentConfigTabProps {
@@ -47,6 +49,7 @@ export function AgentConfigTab({
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
+  const { confirm } = useConfirmModal();
 
   // Track which runs are currently being polled
   const [pollingRuns, setPollingRuns] = useState<Set<string>>(new Set());
@@ -92,8 +95,9 @@ export function AgentConfigTab({
       queryClient.invalidateQueries({ queryKey: ['agent-runs', workItemId] });
       success('Agent run cancelled successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to cancel agent run: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to cancel agent run');
+      showError(errorMessage);
     },
   });
 
@@ -119,8 +123,9 @@ export function AgentConfigTab({
       success('Agent run triggered successfully');
       setIsConfigModalOpen(false);
     },
-    onError: (err: Error) => {
-      showError(`Failed to trigger agent run: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to trigger agent run');
+      showError(errorMessage);
     },
   });
 
@@ -142,7 +147,7 @@ export function AgentConfigTab({
   };
 
   const handleCancelRun = async (runId: string) => {
-    if (window.confirm('Are you sure you want to cancel this agent run?')) {
+    if (await confirm({ message: 'Are you sure you want to cancel this agent run?' })) {
       await cancelMutation.mutateAsync(runId);
     }
   };

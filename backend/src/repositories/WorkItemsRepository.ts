@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, isNotNull } from 'drizzle-orm';
 import { workItems } from '../models/schema.js';
 import type { WorkItem } from '../types/models.js';
 import { getDb } from '../db/client.js';
@@ -130,9 +130,29 @@ export class WorkItemsRepository {
     const isExpired = existing.lockExpiresAt ? new Date(existing.lockExpiresAt) < now : true;
     const isOwned = existing.lockOwnerRunId === runId;
 
+    // If locked by another run and not expired, check if that run is still active
     if (existing.lockOwnerRunId && !isExpired && !isOwned) {
-      // Locked by another run and not expired
-      return false;
+      // Check if the lock owner run is still active
+      const isStale = await this.isLockStale(existing.lockOwnerRunId);
+      if (isStale) {
+        // Lock owner run is no longer active, release the stale lock
+        console.log(
+          `[WorkItemsRepository] Releasing stale lock on workItem ${workItemId} owned by inactive run ${existing.lockOwnerRunId}`
+        );
+        await db
+          .update(workItems)
+          .set({
+            lockOwnerRunId: null,
+            lockExpiresAt: null,
+            updatedAt: now,
+          })
+          .where(eq(workItems.id, workItemId))
+          .execute();
+        // Continue to acquire the lock
+      } else {
+        // Locked by another active run and not expired
+        return false;
+      }
     }
 
     // Acquire lock
@@ -147,6 +167,23 @@ export class WorkItemsRepository {
       .execute();
 
     return true;
+  }
+
+  /**
+   * Check if a lock is stale (i.e., the owner run is no longer active)
+   */
+  private async isLockStale(ownerRunId: string): Promise<boolean> {
+    const { agentRunsRepository } = await import('./AgentRunsRepository.js');
+    const agentRun = await agentRunsRepository.findById(ownerRunId);
+
+    // If run doesn't exist, lock is stale
+    if (!agentRun) {
+      return true;
+    }
+
+    // If run is completed, failed, or cancelled, lock is stale
+    const activeStatuses = ['queued', 'running'];
+    return !activeStatuses.includes(agentRun.status);
   }
 
   async releaseLock(workItemId: string, runId: string): Promise<boolean> {
@@ -213,6 +250,23 @@ export class WorkItemsRepository {
       return { locked: false };
     }
 
+    // Check if lock is stale (owner run is no longer active)
+    const isStale = await this.isLockStale(workItem.lockOwnerRunId);
+    if (isStale) {
+      // Lock is stale, clear it
+      await db
+        .update(workItems)
+        .set({
+          lockOwnerRunId: null,
+          lockExpiresAt: null,
+          updatedAt: now,
+        })
+        .where(eq(workItems.id, workItemId))
+        .execute();
+
+      return { locked: false };
+    }
+
     return {
       locked: true,
       ownerRunId: workItem.lockOwnerRunId,
@@ -224,6 +278,81 @@ export class WorkItemsRepository {
     // This method now just returns the WorkItem itself
     // The PR is accessed via pullRequestsRepository.findByWorkItemId()
     return this.findById(workItemId);
+  }
+
+  /**
+   * Release all stale locks (locks owned by runs that are no longer active)
+   * This should be called on service startup to clean up locks from crashed services
+   */
+  async releaseStaleLocks(): Promise<number> {
+    const db = await this.getDbInstance();
+    const { agentRunsRepository } = await import('./AgentRunsRepository.js');
+    const now = new Date();
+
+    // Find all locked work items (those with a non-null lockOwnerRunId)
+    const lockedWorkItems = await db
+      .select()
+      .from(workItems)
+      .where(isNotNull(workItems.lockOwnerRunId))
+      .execute();
+
+    let releasedCount = 0;
+
+    for (const workItem of lockedWorkItems) {
+      if (!workItem.lockOwnerRunId) {
+        continue;
+      }
+
+      // Check if lock is expired
+      const isExpired = workItem.lockExpiresAt ? new Date(workItem.lockExpiresAt) < now : true;
+      if (isExpired) {
+        // Lock is expired, release it
+        await db
+          .update(workItems)
+          .set({
+            lockOwnerRunId: null,
+            lockExpiresAt: null,
+            updatedAt: now,
+          })
+          .where(eq(workItems.id, workItem.id))
+          .execute();
+        releasedCount++;
+        console.log(
+          `[WorkItemsRepository] Released expired lock on workItem ${workItem.id} (expired at ${workItem.lockExpiresAt})`
+        );
+        continue;
+      }
+
+      // Check if the lock owner run is still active
+      const agentRun = await agentRunsRepository.findById(workItem.lockOwnerRunId);
+      const activeStatuses = ['queued', 'running'];
+      const isStale = !agentRun || !activeStatuses.includes(agentRun.status);
+
+      if (isStale) {
+        // Lock owner run is no longer active, release the stale lock
+        await db
+          .update(workItems)
+          .set({
+            lockOwnerRunId: null,
+            lockExpiresAt: null,
+            updatedAt: now,
+          })
+          .where(eq(workItems.id, workItem.id))
+          .execute();
+        releasedCount++;
+        console.log(
+          `[WorkItemsRepository] Released stale lock on workItem ${workItem.id} owned by run ${workItem.lockOwnerRunId} (status: ${agentRun?.status || 'not found'})`
+        );
+      }
+    }
+
+    if (releasedCount > 0) {
+      console.log(
+        `[WorkItemsRepository] Released ${releasedCount} stale lock(s) on service startup`
+      );
+    }
+
+    return releasedCount;
   }
 }
 

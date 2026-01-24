@@ -67,18 +67,14 @@ export function ThreadActions({
     }
   };
 
-  const formatDate = (date: Date) => {
-    return formatDateTime(date);
-  };
-
   return (
     <div className="space-y-4">
       {/* Thread Status and Metadata */}
       <div className="flex flex-wrap items-center gap-3">
         <ThreadStatusBadge status={status} />
         <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-          <span>Created: {formatDate(createdAt)}</span>
-          <span>Updated: {formatDate(updatedAt)}</span>
+          <span>Created: {formatDateTime(createdAt)}</span>
+          <span>Updated: {formatDateTime(updatedAt)}</span>
         </div>
       </div>
 

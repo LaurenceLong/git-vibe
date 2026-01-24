@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { AgentModel, RepoFile } from './models.js';
 import { AgentModelSchema, RepoFileSchema } from './models.js';
+import { ProjectSchema, WorkItemSchema, PullRequestSchema } from './models.js';
 
 // ============================================================================
 // Models Response
@@ -53,7 +54,9 @@ export const FilesResponseSchema = z.object({
 export interface FileContentResponse {
   data: {
     path: string;
-    content: string;
+    content: string | null;
+    isBinary?: boolean;
+    size?: number;
   };
 }
 
@@ -63,7 +66,9 @@ export interface FileContentResponse {
 export const FileContentResponseSchema = z.object({
   data: z.object({
     path: z.string(),
-    content: z.string(),
+    content: z.string().nullable(),
+    isBinary: z.boolean().optional(),
+    size: z.number().optional(),
   }),
 });
 
@@ -77,6 +82,7 @@ export const FileContentResponseSchema = z.object({
 export interface BranchesResponse {
   data: string[];
   defaultBranch: string;
+  currentBranch?: string;
 }
 
 /**
@@ -85,6 +91,7 @@ export interface BranchesResponse {
 export const BranchesResponseSchema = z.object({
   data: z.array(z.string()),
   defaultBranch: z.string(),
+  currentBranch: z.string().optional(),
 });
 
 // ============================================================================
@@ -277,6 +284,130 @@ export const UnresolveThreadResponseSchema = z.object({
   status: z.string(),
   severity: z.string(),
   anchor: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+// ============================================================================
+// Project Statistics (for /api/projects?includeStats=true)
+// ============================================================================
+
+export const ProjectStatsSchema = z.object({
+  workItems: z.number(),
+  openWorkItems: z.number(),
+  pullRequests: z.number(),
+  openPullRequests: z.number(),
+});
+
+export type ProjectStatsDTO = z.infer<typeof ProjectStatsSchema>;
+
+// ============================================================================
+// Projects List Response (paginated projects with optional stats)
+// ============================================================================
+
+export const ProjectsListResponseSchema = z
+  .object({
+    data: z.array(ProjectSchema),
+    pagination: z.object({
+      page: z.number(),
+      limit: z.number(),
+      total: z.number(),
+      totalPages: z.number(),
+    }),
+  })
+  .extend({
+    statistics: z.record(z.string(), ProjectStatsSchema).optional(),
+  });
+
+export type ProjectsListResponseDTO = z.infer<typeof ProjectsListResponseSchema>;
+
+// ============================================================================
+// Search Response (GET /api/search)
+// ============================================================================
+
+export const SearchResponseSchema = z.object({
+  projects: z.array(ProjectSchema),
+  workItems: z.array(WorkItemSchema),
+  pullRequests: z.array(PullRequestSchema),
+  projectNames: z.record(z.string(), z.string()),
+});
+
+export type SearchResponseDTO = z.infer<typeof SearchResponseSchema>;
+
+// ============================================================================
+// Workflow Response
+// ============================================================================
+
+export interface WorkflowResponse {
+  data: {
+    id: string;
+    name: string;
+    description: string;
+    definition: any;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+export const WorkflowResponseSchema = z.object({
+  data: z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    definition: z.any(),
+    isDefault: z.boolean(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+});
+
+export interface WorkflowRunResponse {
+  data: {
+    id: string;
+    workflowId: string;
+    workItemId: string;
+    status: 'pending' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'skipped';
+    currentStepId: string | null;
+    startedAt: string | null;
+    finishedAt: string | null;
+    createdAt: string;
+  };
+}
+
+export const WorkflowRunResponseSchema = z.object({
+  data: z.object({
+    id: z.string(),
+    workflowId: z.string(),
+    workItemId: z.string(),
+    status: z.enum(['pending', 'running', 'succeeded', 'failed', 'blocked', 'skipped']),
+    currentStepId: z.string().nullable(),
+    startedAt: z.string().nullable(),
+    finishedAt: z.string().nullable(),
+    createdAt: z.string(),
+  }),
+});
+
+// ============================================================================
+// Workflow List Item (for paginated /api/workflows)
+// ============================================================================
+
+export interface WorkflowListItem {
+  id: string;
+  name: string;
+  description?: string;
+  definition: any;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const WorkflowListItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  definition: z.any(),
+  isDefault: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -11,18 +11,27 @@ import {
   BranchesResponseSchema,
   SyncResponseSchema,
   DeleteProjectResponseSchema,
+  CreateFileDTOSchema,
+  UpdateFileDTOSchema,
+  CommitChangesDTOSchema,
+  GetOrCreateManualWorkItemDTOSchema,
+  ProjectsListResponseSchema,
+  ProjectStatsSchema,
 } from 'git-vibe-shared';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { gitService } from '../services/GitService.js';
 import { modelsCache } from '../services/ModelsCache.js';
+import { workspaceService } from '../services/WorkspaceService.js';
+import { prService } from '../services/PRService.js';
 import { STORAGE_CONFIG } from '../config/storage.js';
 import { cleanupDirectory } from '../utils/storage.js';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { toDTO as projectToDTO } from '../mappers/projects.js';
 import { toDTO as workItemToDTO } from '../mappers/workItems.js';
+import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
 
 export async function projectsRoutes(server: FastifyInstance) {
   server.post('/api/projects', async (request, reply) => {
@@ -40,20 +49,28 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       await gitService.validateRepo(body.sourceRepoPath);
 
-      // Use provided defaultBranch or auto-detect from source repo
-      const defaultBranch = body.defaultBranch || gitService.getDefaultBranch(body.sourceRepoPath);
+      // Use provided defaultBranch or auto-detect current active branch from source repo
+      const defaultBranch = body.defaultBranch || gitService.getCurrentBranch(body.sourceRepoPath);
+
+      // Auto-detect sourceRepoUrl from git remote if not provided
+      const sourceRepoUrl = body.sourceRepoUrl || gitService.getRemoteUrl(body.sourceRepoPath) || undefined;
+
+      // Determine mirror repo path (shared by projects with same source path)
+      const mirrorRepoPath = gitService.getMirrorRepoPath(body.sourceRepoPath);
 
       // Create relay repo path
       const relayRepoPath = path.join(STORAGE_CONFIG.projectsDir, body.name);
 
-      // Create relay repo by copying .git directory and resetting
-      await gitService.createRelayRepo(body.sourceRepoPath, relayRepoPath, defaultBranch);
+      // Create relay repo using mirror repo architecture
+      const projectId = uuidv4();
+      await gitService.createRelayRepo(body.sourceRepoPath, relayRepoPath, mirrorRepoPath, projectId, defaultBranch);
 
       const project = await projectsRepository.create({
-        id: uuidv4(),
+        id: projectId,
         name: body.name,
         sourceRepoPath: body.sourceRepoPath,
-        sourceRepoUrl: body.sourceRepoUrl || undefined,
+        sourceRepoUrl,
+        mirrorRepoPath,
         relayRepoPath,
         defaultBranch,
         defaultAgent: body.defaultAgent || 'opencode',
@@ -74,18 +91,44 @@ export async function projectsRoutes(server: FastifyInstance) {
     }
   });
 
-  server.get<{ Querystring: { page?: string; limit?: string } }>(
+  server.get<{ Querystring: { page?: string; limit?: string; includeStats?: string } }>(
     '/api/projects',
     async (request) => {
       const page = parseInt(request.query.page || '1', 10);
       const limit = parseInt(request.query.limit || '10', 10);
+      const includeStats = request.query.includeStats === 'true';
       const offset = (page - 1) * limit;
 
       const allProjects = await projectsRepository.findAll();
       const total = allProjects.length;
       const projects = allProjects.slice(offset, offset + limit);
 
-      return {
+      let statistics: Record<string, z.infer<typeof ProjectStatsSchema>> | undefined;
+
+      if (includeStats && projects.length > 0) {
+        const projectIds = projects.map((p) => p.id);
+        const allWorkItems = await workItemsRepository.findAll();
+        const allPullRequests = await pullRequestsRepository.findAll();
+        const relevantWorkItems = allWorkItems.filter((wi) => projectIds.includes(wi.projectId));
+        const relevantPullRequests = allPullRequests.filter((pr) => projectIds.includes(pr.projectId));
+
+        const statsMap: Record<string, z.infer<typeof ProjectStatsSchema>> = {};
+        for (const projectId of projectIds) {
+          const projectWorkItems = relevantWorkItems.filter((wi) => wi.projectId === projectId);
+          const projectPullRequests = relevantPullRequests.filter(
+            (pr) => pr.projectId === projectId
+          );
+          statsMap[projectId] = ProjectStatsSchema.parse({
+            workItems: projectWorkItems.length,
+            openWorkItems: projectWorkItems.filter((wi) => wi.status === 'open').length,
+            pullRequests: projectPullRequests.length,
+            openPullRequests: projectPullRequests.filter((pr) => pr.status === 'open').length,
+          });
+        }
+        statistics = statsMap;
+      }
+
+      const payload = {
         data: projects.map(projectToDTO),
         pagination: {
           page,
@@ -93,7 +136,9 @@ export async function projectsRoutes(server: FastifyInstance) {
           total,
           totalPages: Math.ceil(total / limit),
         },
+        ...(statistics != null && { statistics }),
       };
+      return ProjectsListResponseSchema.parse(payload);
     }
   );
 
@@ -234,11 +279,12 @@ export async function projectsRoutes(server: FastifyInstance) {
       await gitService.validateRepo(repoPath);
 
       const branches = gitService.listBranches(repoPath);
-      const defaultBranch = gitService.getDefaultBranch(repoPath);
+      const currentBranch = gitService.getCurrentBranch(repoPath);
 
       const response = BranchesResponseSchema.parse({
         data: branches,
-        defaultBranch,
+        defaultBranch: currentBranch,
+        currentBranch,
       });
       return reply.status(200).send(response);
     } catch (error) {
@@ -328,15 +374,15 @@ export async function projectsRoutes(server: FastifyInstance) {
       const syncCommitSha = await gitService.syncRelayToSource(
         project.relayRepoPath,
         project.sourceRepoPath,
-        project.name
+        project.mirrorRepoPath,
+        project.id
       );
 
       // Get the commit SHA to use for marking PRs as synced
       // If a new commit was created, use that SHA; otherwise use current HEAD of relay branch
       // (if no changes, it means everything is already synced)
-      const relayBranch = `relay-${project.name}`;
-      const commitShaToUse =
-        syncCommitSha || gitService.getRefSha(project.sourceRepoPath, relayBranch);
+      // Use default branch for commit SHA (relay has been merged into default)
+      const commitShaToUse = syncCommitSha || gitService.getRefSha(project.sourceRepoPath, project.defaultBranch);
 
       // Mark all merged PRs as synced
       const mergedPRs = await pullRequestsRepository.findByProjectId(project.id);
@@ -406,6 +452,636 @@ export async function projectsRoutes(server: FastifyInstance) {
       throw error;
     }
   });
+
+  // ============================================================================
+  // Manual File Operations with WorkItem
+  // ============================================================================
+
+  /**
+   * Get or create a manual WorkItem for the current user session
+   * All manual file operations should use the same WorkItem
+   * Ensures idempotency - returns existing WorkItem if found
+   */
+  server.post<{ Params: { id: string } }>(
+    '/api/projects/:id/work-items/manual',
+    async (request, reply) => {
+      try {
+        const body = GetOrCreateManualWorkItemDTOSchema.parse(request.body);
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        // Look for existing open manual WorkItem for this project
+        // Use a more specific identifier to avoid conflicts
+        const existingWorkItems = await workItemsRepository.findByProjectId(project.id);
+        const existingManualWorkItem = existingWorkItems.find(
+          (wi) =>
+            wi.status === 'open' &&
+            (wi.title === 'Manual edit session' ||
+              wi.title.startsWith('Manual edit session') ||
+              (body.title && wi.title === body.title))
+        );
+
+        if (existingManualWorkItem) {
+          // Ensure workspace is initialized for existing WorkItem
+          const updatedWorkItem = await workspaceService.ensureWorkspace(
+            existingManualWorkItem,
+            project
+          );
+          return reply.status(200).send(workItemToDTO(updatedWorkItem));
+        }
+
+        // Create new manual WorkItem
+        const workItem = await workItemsRepository.create({
+          id: uuidv4(),
+          projectId: project.id,
+          type: 'feature-request',
+          title: body.title || 'Manual edit session',
+          body: 'Manual file editing session',
+        });
+
+        // Initialize workspace for the WorkItem
+        const updatedWorkItem = await workspaceService.initWorkspace(workItem, project);
+
+        return reply.status(201).send(workItemToDTO(updatedWorkItem));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Validation failed',
+            details: error.errors,
+          });
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  /**
+   * Get files from WorkItem's worktree
+   */
+  server.get<{ Params: { id: string; workItemId: string } }>(
+    '/api/projects/:id/work-items/:workItemId/files',
+    async (request, reply) => {
+      try {
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        const files = await gitService.listFiles(updatedWorkItem.worktreePath);
+
+        const response = FilesResponseSchema.parse({ data: files });
+        return reply.status(200).send(response);
+      } catch (error) {
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to list files',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  /**
+   * Get file content from WorkItem's worktree
+   */
+  server.get<{ Params: { id: string; workItemId: string }; Querystring: { path: string } }>(
+    '/api/projects/:id/work-items/:workItemId/files/content',
+    async (request, reply) => {
+      try {
+        const { path: filePath } = request.query;
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        if (!filePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'File path is required',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        // Check if file is binary or empty
+        const fullPath = path.join(updatedWorkItem.worktreePath, filePath);
+        const stats = await fs.stat(fullPath);
+        const isBinary = await (async () => {
+          try {
+            const content = await fs.readFile(fullPath, { encoding: 'utf-8' });
+            // Check for null bytes or other control characters (binary-ish)
+            for (let i = 0; i < content.length; i++) {
+              const code = content.charCodeAt(i);
+              if (code === 0) return true; // NUL
+              if (code < 9) return true; // C0 controls below tab
+              if (code > 13 && code < 32) return true; // C0 controls excluding \t,\n,\r
+            }
+            return false;
+          } catch {
+            return true;
+          }
+        })();
+
+        if (isBinary) {
+          return reply.status(200).send({
+            data: {
+              path: filePath,
+              content: null,
+              isBinary: true,
+              size: stats.size,
+            },
+          });
+        }
+
+        const content = await gitService.getFileContent(updatedWorkItem.worktreePath, filePath);
+
+        const response = FileContentResponseSchema.parse({
+          data: {
+            path: filePath,
+            content,
+            isBinary: false,
+            size: stats.size,
+          },
+        });
+        return reply.status(200).send(response);
+      } catch (error) {
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to read file',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  /**
+   * Create a new file in the WorkItem's worktree
+   * Auto-commits with a sensible commit message
+   */
+  server.post<{ Params: { id: string; workItemId: string } }>(
+    '/api/projects/:id/work-items/:workItemId/files',
+    async (request, reply) => {
+      try {
+        const body = CreateFileDTOSchema.parse(request.body);
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        // Validate path (prevent directory traversal)
+        if (body.path.includes('..') || path.isAbsolute(body.path)) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Invalid file path',
+          });
+        }
+
+        // Create the file in the worktree
+        const filePath = path.join(updatedWorkItem.worktreePath, body.path);
+        const dirPath = path.dirname(filePath);
+
+        // Create directory if it doesn't exist
+        await fs.mkdir(dirPath, { recursive: true });
+        await fs.writeFile(filePath, body.content, 'utf-8');
+
+        // Auto-commit with sensible message
+        const commitMessage = `Add ${body.path}`;
+        const commitSha = gitService.commitChanges(updatedWorkItem.worktreePath, commitMessage);
+
+        // Update WorkItem with new head SHA
+        await workItemsRepository.update(updatedWorkItem.id, {
+          headSha: commitSha,
+        });
+
+        return reply.status(201).send({
+          success: true,
+          message: 'File created successfully',
+          path: body.path,
+          commitSha,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Validation failed',
+            details: error.errors,
+          });
+        }
+
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to create file',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  /**
+   * Update an existing file in the WorkItem's worktree
+   * Auto-commits with a sensible commit message
+   */
+  server.put<{ Params: { id: string; workItemId: string } }>(
+    '/api/projects/:id/work-items/:workItemId/files',
+    async (request, reply) => {
+      try {
+        const body = UpdateFileDTOSchema.parse(request.body);
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        // Validate path
+        if (body.path.includes('..') || path.isAbsolute(body.path)) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Invalid file path',
+          });
+        }
+
+        // Check if file exists
+        const filePath = path.join(updatedWorkItem.worktreePath, body.path);
+        try {
+          await fs.access(filePath);
+        } catch {
+          return reply.status(404).send({
+            error: true,
+            message: 'File not found',
+          });
+        }
+
+        // Update the file in the worktree
+        await fs.writeFile(filePath, body.content, 'utf-8');
+
+        // Auto-commit with sensible message
+        const commitMessage = `Update ${body.path}`;
+        const commitSha = gitService.commitChanges(updatedWorkItem.worktreePath, commitMessage);
+
+        // Update WorkItem with new head SHA
+        await workItemsRepository.update(updatedWorkItem.id, {
+          headSha: commitSha,
+        });
+
+        return reply.status(200).send({
+          success: true,
+          message: 'File updated successfully',
+          path: body.path,
+          commitSha,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Validation failed',
+            details: error.errors,
+          });
+        }
+
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to update file',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  /**
+   * Delete a file in the WorkItem's worktree
+   * Auto-commits with a sensible commit message
+   */
+  server.delete<{ Params: { id: string; workItemId: string }; Querystring: { path: string } }>(
+    '/api/projects/:id/work-items/:workItemId/files',
+    async (request, reply) => {
+      try {
+        const { path: filePath } = request.query;
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        if (!filePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'File path is required',
+          });
+        }
+
+        // Validate path
+        if (filePath.includes('..') || path.isAbsolute(filePath)) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Invalid file path',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        // Check if file exists
+        const fullPath = path.join(updatedWorkItem.worktreePath, filePath);
+        try {
+          await fs.access(fullPath);
+        } catch {
+          return reply.status(404).send({
+            error: true,
+            message: 'File not found',
+          });
+        }
+
+        // Delete the file in the worktree
+        await fs.unlink(fullPath);
+
+        // Auto-commit with sensible message
+        const commitMessage = `Delete ${filePath}`;
+        const commitSha = gitService.commitChanges(updatedWorkItem.worktreePath, commitMessage);
+
+        // Update WorkItem with new head SHA
+        await workItemsRepository.update(updatedWorkItem.id, {
+          headSha: commitSha,
+        });
+
+        return reply.status(200).send({
+          success: true,
+          message: 'File deleted successfully',
+          path: filePath,
+          commitSha,
+        });
+      } catch (error) {
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to delete file',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  /**
+   * Commit changes in the WorkItem's worktree
+   */
+  server.post<{ Params: { id: string; workItemId: string } }>(
+    '/api/projects/:id/work-items/:workItemId/commit',
+    async (request, reply) => {
+      try {
+        const body = CommitChangesDTOSchema.parse(request.body);
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        // Check if there are any changes to commit
+        if (!gitService.hasAnyChanges(updatedWorkItem.worktreePath)) {
+          return reply.status(400).send({
+            error: true,
+            message: 'No changes to commit',
+          });
+        }
+
+        // Commit the changes
+        const commitSha = gitService.commitChanges(updatedWorkItem.worktreePath, body.message);
+
+        // Update WorkItem with new head SHA
+        const finalWorkItem = await workItemsRepository.update(workItem.id, {
+          headSha: commitSha,
+        });
+
+        return reply.status(200).send({
+          success: true,
+          message: 'Changes committed successfully',
+          commitSha,
+          workItem: finalWorkItem ? workItemToDTO(finalWorkItem) : workItemToDTO(updatedWorkItem),
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.status(400).send({
+            error: true,
+            message: 'Validation failed',
+            details: error.errors,
+          });
+        }
+
+        return reply.status(500).send({
+          error: true,
+          message: 'Failed to commit changes',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
+
+  /**
+   * Create a Pull Request from the WorkItem
+   * Ensures idempotency and commits any uncommitted changes before creating PR
+   */
+  server.post<{ Params: { id: string; workItemId: string } }>(
+    '/api/projects/:id/work-items/:workItemId/create-pr',
+    async (request, reply) => {
+      try {
+        const project = await projectsRepository.findById(request.params.id);
+
+        if (!project) {
+          return reply.status(404).send({
+            error: true,
+            message: 'Project not found',
+          });
+        }
+
+        const workItem = await workItemsRepository.findById(request.params.workItemId);
+
+        if (!workItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
+
+        // Ensure workspace is initialized
+        const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
+
+        if (!updatedWorkItem.worktreePath) {
+          return reply.status(400).send({
+            error: true,
+            message: 'WorkItem workspace is not initialized',
+          });
+        }
+
+        // Check if PR already exists (idempotency)
+        const existingPR = await pullRequestsRepository.findByWorkItemId(updatedWorkItem.id);
+        if (existingPR) {
+          return reply.status(200).send(pullRequestToDTO(existingPR));
+        }
+
+        // Commit any uncommitted changes before creating PR
+        if (gitService.hasAnyChanges(updatedWorkItem.worktreePath)) {
+          const commitMessage = 'Finish manual editing session';
+          const commitSha = gitService.commitChanges(updatedWorkItem.worktreePath, commitMessage);
+          await workItemsRepository.update(updatedWorkItem.id, {
+            headSha: commitSha,
+          });
+          // Refresh workItem to get updated headSha
+          const refreshedWorkItem = await workItemsRepository.findById(updatedWorkItem.id);
+          if (refreshedWorkItem) {
+            // Create PR using PRService
+            const pr = await prService.openPR(refreshedWorkItem, project);
+            return reply.status(201).send(pullRequestToDTO(pr));
+          }
+        }
+
+        // Create PR using PRService
+        const pr = await prService.openPR(updatedWorkItem, project);
+
+        return reply.status(201).send(pullRequestToDTO(pr));
+      } catch (error) {
+        return reply.status(400).send({
+          error: true,
+          message: 'Failed to create PR',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  );
 
   server.delete<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
     try {

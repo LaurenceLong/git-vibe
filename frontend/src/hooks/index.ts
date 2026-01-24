@@ -8,7 +8,6 @@ export { useAgentRunPolling } from './useAgentRunPolling';
 export { useWorkItemRefresh } from './useWorkItemRefresh';
 export { useDiffView } from './useDiffView';
 export { useReviewThreads } from './useReviewThreads';
-export { useImportJob } from './useImportJob';
 export { useWorktreeManagement } from './useWorktreeManagement';
 export { useBranchSelector } from './useBranchSelector';
 export { useKeyboardShortcuts } from './useKeyboardShortcuts';

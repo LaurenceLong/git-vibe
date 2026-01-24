@@ -5,8 +5,9 @@
  * Items are clickable and navigate to detail view
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { workItemsApi, agentRunsApi } from '@/lib/api';
 import { Project, WorkItem, WorkItemType, WorkItemStatus, AgentRun, AgentRunStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -17,7 +18,7 @@ import { CreateWorkItemModal } from '@/components/workitem/CreateWorkItemModal';
 import { useCreateWorkItem } from '@/hooks/useWorkItem';
 import { WorkItemDetail } from '@/components/workitem/WorkItemDetail';
 import { ArrowLeft, Terminal, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatDate, sortDates } from '@/lib/datetime';
+import { formatDateTime, sortDates } from '@/lib/datetime';
 
 /**
  * StatusBadge component for displaying agent run status
@@ -127,12 +128,18 @@ export function WorkItemsTab({
   initialType = 'all',
   initialWorkItemId = null,
 }: WorkItemsTabProps) {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<WorkItemStatus | 'all'>(initialStatus);
   const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>(initialType);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(initialWorkItemId);
   const itemsPerPage = 10;
+
+  // Sync selectedWorkItemId with URL changes (e.g., browser back/forward)
+  useEffect(() => {
+    setSelectedWorkItemId(initialWorkItemId);
+  }, [initialWorkItemId]);
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['workitems', project.id, currentPage, itemsPerPage],
@@ -152,9 +159,12 @@ export function WorkItemsTab({
   // Track expanded work items for log previews
   const [expandedWorkItems, setExpandedWorkItems] = useState<Set<string>>(new Set());
 
+  // Memoize work item IDs for query key stability
+  const workItemIds = useMemo(() => workItems.map((wi) => wi.id), [workItems]);
+
   // Fetch agent runs for all work items
   const { data: agentRunsMap } = useQuery({
-    queryKey: ['workitems-agent-runs', workItems.map((wi) => wi.id)],
+    queryKey: ['workitems-agent-runs', workItemIds],
     queryFn: async () => {
       const runsMap = new Map<string, AgentRun[]>();
       await Promise.all(
@@ -173,13 +183,39 @@ export function WorkItemsTab({
     enabled: workItems.length > 0,
   });
 
-  // Get the latest agent run for a work item
-  const getLatestAgentRun = (workItemId: string): AgentRun | null => {
-    const runs = agentRunsMap?.get(workItemId) || [];
-    if (runs.length === 0) return null;
-    // Sort by createdAt descending to get the most recent run
-    return runs.sort((a, b) => sortDates(a.createdAt, b.createdAt, 'desc'))[0];
-  };
+  // Memoize latest agent runs map to avoid recalculating on every render
+  const latestAgentRunsMap = useMemo(() => {
+    const map = new Map<string, AgentRun | null>();
+    if (!agentRunsMap) return map;
+
+    workItemIds.forEach((workItemId) => {
+      const runs = agentRunsMap.get(workItemId) || [];
+      if (runs.length === 0) {
+        map.set(workItemId, null);
+      } else {
+        // Sort by createdAt descending to get the most recent run
+        const latest = runs.sort((a, b) => sortDates(a.createdAt, b.createdAt, 'desc'))[0];
+        map.set(workItemId, latest);
+      }
+    });
+
+    return map;
+  }, [agentRunsMap, workItemIds]);
+
+  // Get the latest agent run for a work item (memoized)
+  const getLatestAgentRun = useCallback(
+    (workItemId: string): AgentRun | null => {
+      return latestAgentRunsMap.get(workItemId) ?? null;
+    },
+    [latestAgentRunsMap]
+  );
+
+  // Sort by createdAt descending (newest first) - memoized
+  const sortedWorkItems = useMemo(() => {
+    return [...workItems].sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [workItems]);
 
   const toggleExpanded = (workItemId: string) => {
     setExpandedWorkItems((prev) => {
@@ -207,17 +243,30 @@ export function WorkItemsTab({
 
   const handleWorkItemClick = (workItemId: string) => {
     setSelectedWorkItemId(workItemId);
+    navigate({
+      to: '/projects/$projectName/workitems',
+      params: { projectName: project.name },
+      search: { status: statusFilter, type: typeFilter, workItemId },
+    });
   };
 
   const handleBackToList = () => {
     setSelectedWorkItemId(null);
+    navigate({
+      to: '/projects/$projectName/workitems',
+      params: { projectName: project.name },
+      search: { status: statusFilter, type: typeFilter },
+    });
   };
 
-  const filteredWorkItems = workItems.filter((wi: WorkItem) => {
-    if (statusFilter !== 'all' && wi.status !== statusFilter) return false;
-    if (typeFilter !== 'all' && wi.type !== typeFilter) return false;
-    return true;
-  });
+  // Filter work items - memoized for performance
+  const filteredWorkItems = useMemo(() => {
+    return sortedWorkItems.filter((wi: WorkItem) => {
+      if (statusFilter !== 'all' && wi.status !== statusFilter) return false;
+      if (typeFilter !== 'all' && wi.type !== typeFilter) return false;
+      return true;
+    });
+  }, [sortedWorkItems, statusFilter, typeFilter]);
 
   // If a work item is selected, show the detail view
   if (selectedWorkItemId) {
@@ -314,10 +363,10 @@ export function WorkItemsTab({
                         {latestAgentRun && <AgentRunStatusBadge status={latestAgentRun.status} />}
                       </div>
                       <div className="mt-2 text-sm text-gray-600">
-                        Created {formatDate(workItem.createdAt)}
+                        Created {formatDateTime(workItem.createdAt)}
                         {latestAgentRun && (
                           <span className="ml-3">
-                            Agent run: {formatDate(latestAgentRun.createdAt)}
+                            Agent run: {formatDateTime(latestAgentRun.createdAt)}
                           </span>
                         )}
                       </div>

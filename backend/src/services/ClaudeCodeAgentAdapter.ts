@@ -125,6 +125,15 @@ export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
 
     const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
 
+    // Store PID in memory cache and persist to database
+    if (child.pid) {
+      this.processPids.set(runId, child.pid);
+      await agentRunsRepository.update(runId, {
+        pid: child.pid,
+      });
+      console.log(`[ClaudeCodeAgent] Stored PID ${child.pid} for run ${runId}`);
+    }
+
     child.stdout?.on('data', append);
     child.stderr?.on('data', append);
 
@@ -162,6 +171,15 @@ export class ClaudeCodeAgentAdapter extends AgentAdapter<ClaudeCodeSession> {
     args.push(reviewComments);
 
     const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
+
+    // Store PID in memory cache and persist to database
+    if (child.pid) {
+      this.processPids.set(runId, child.pid);
+      await agentRunsRepository.update(runId, {
+        pid: child.pid,
+      });
+      console.log(`[ClaudeCodeAgent] Stored PID ${child.pid} for correction run ${runId}`);
+    }
 
     child.stdout?.on('data', append);
     child.stderr?.on('data', append);

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { FolderOpen, X, GitPullRequest, Folder as FolderIcon } from 'lucide-react';
-import { projectsApi, workItemsApi, pullRequestsApi } from '@/lib/api';
+import { projectsApi } from '@/lib/api';
 import { CreateProjectSchema } from '@/lib/validation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,11 +15,96 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/Toast';
-import type { WorkItem, PullRequest, Project } from '@/types';
+import { extractErrorMessage } from '@/lib/errorUtils';
+import type { Project } from '@/types';
 
 export const Route = createFileRoute('/projects/')({
   component: ProjectsIndex,
 });
+
+/**
+ * Project card component - memoized to prevent unnecessary re-renders
+ */
+const ProjectCard = React.memo(
+  ({
+    project,
+    stats,
+    onDelete,
+    isDeleting,
+  }: {
+    project: Project;
+    stats: ProjectStats;
+    onDelete: (project: { id: string; name: string }) => void;
+    isDeleting: boolean;
+  }) => {
+    return (
+      <div className="group relative flex max-w-md flex-col rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50">
+        {/* Delete button - small X at top right */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            onDelete({ id: project.id, name: project.name });
+          }}
+          disabled={isDeleting}
+          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 disabled:opacity-50 group-hover:opacity-100"
+          title="Delete project"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <Link to="/projects/$projectName" params={{ projectName: project.name }} className="block">
+          <div className="pr-6">
+            <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+            <p className="mt-1 text-sm text-gray-600">{project.sourceRepoPath}</p>
+
+            {/* Project Statistics Short Info */}
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-600">
+              <div className="flex items-center gap-1.5">
+                <FolderIcon className="h-3.5 w-3.5 text-blue-500" />
+                <span>
+                  <span className="font-medium">{stats.workItems}</span> work items
+                  <span className="text-gray-400"> ({stats.openWorkItems} open)</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <GitPullRequest className="h-3.5 w-3.5 text-purple-500" />
+                <span>
+                  <span className="font-medium">{stats.pullRequests}</span> PRs
+                  <span className="text-gray-400"> ({stats.openPullRequests} open)</span>
+                </span>
+              </div>
+            </div>
+
+            {project.sourceRepoUrl && (
+              <a
+                href={project.sourceRepoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block text-sm text-blue-600 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {project.sourceRepoUrl}
+              </a>
+            )}
+            <div className="mt-2 text-xs text-gray-600">
+              <span className="font-medium">Default Branch:</span> {project.defaultBranch}
+            </div>
+          </div>
+        </Link>
+      </div>
+    );
+  }
+);
+
+ProjectCard.displayName = 'ProjectCard';
+
+// Type for project stats
+type ProjectStats = {
+  workItems: number;
+  openWorkItems: number;
+  pullRequests: number;
+  openPullRequests: number;
+};
 
 /**
  * Projects index page component
@@ -36,9 +121,10 @@ function ProjectsIndex() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Fetch projects with statistics included in the response (single query optimization)
   const { data: response, isLoading } = useQuery({
-    queryKey: ['projects', currentPage, itemsPerPage],
-    queryFn: () => projectsApi.list(currentPage, itemsPerPage),
+    queryKey: ['projects', currentPage, itemsPerPage, 'with-stats'],
+    queryFn: () => projectsApi.list(currentPage, itemsPerPage, true),
   });
 
   const projects = response?.data?.data || [];
@@ -51,34 +137,40 @@ function ProjectsIndex() {
       }
     : undefined;
 
-  // Fetch statistics for all projects
-  const { data: allWorkItems } = useQuery({
-    queryKey: ['all-workitems'],
-    queryFn: () => workItemsApi.list(),
-  });
+  // Get statistics from the API response (backend calculates and returns them)
+  const projectStatsMap = useMemo(() => {
+    const statsMap = new Map<string, ProjectStats>();
+    const statistics = response?.data?.statistics ?? {};
 
-  const { data: allPullRequestsResponse } = useQuery({
-    queryKey: ['all-pull-requests'],
-    queryFn: () => pullRequestsApi.list(),
-  });
+    projects.forEach((project: Project) => {
+      const stats = statistics[project.id] ?? {
+        workItems: 0,
+        openWorkItems: 0,
+        pullRequests: 0,
+        openPullRequests: 0,
+      };
+      statsMap.set(project.id, stats);
+    });
 
-  const getProjectStats = (projectId: string) => {
-    const workItems =
-      allWorkItems?.data?.data?.filter((wi: WorkItem) => wi.projectId === projectId) || [];
+    return statsMap;
+  }, [response, projects]);
 
-    const pullRequests =
-      allPullRequestsResponse?.data?.data?.filter(
-        (pr: PullRequest) => pr.projectId === projectId
-      ) || [];
-    return {
-      workItems: workItems.length,
-      openWorkItems: workItems.filter((wi: WorkItem) => wi.status === 'open').length,
-      pullRequests: pullRequests.length,
-      openPullRequests: pullRequests.filter((pr: PullRequest) => pr.status === 'open').length,
-    };
-  };
+  const getProjectStats = useMemo(
+    () => (projectId: string) => {
+      return (
+        projectStatsMap.get(projectId) || {
+          workItems: 0,
+          openWorkItems: 0,
+          pullRequests: 0,
+          openPullRequests: 0,
+        }
+      );
+    },
+    [projectStatsMap]
+  );
 
   const [sourceRepoPath, setSourceRepoPath] = useState('');
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const { data: branchesData, isLoading: isLoadingBranches } = useQuery({
     queryKey: ['branches', sourceRepoPath],
@@ -87,7 +179,7 @@ function ProjectsIndex() {
   });
 
   const branches = branchesData?.data || [];
-  const defaultBranchFromRepo = branchesData?.defaultBranch;
+  const currentBranchFromRepo = branchesData?.currentBranch;
 
   const {
     register,
@@ -101,7 +193,6 @@ function ProjectsIndex() {
     defaultValues: {
       name: '',
       sourceRepoPath: '',
-      sourceRepoUrl: '',
       defaultBranch: undefined,
     },
   });
@@ -113,10 +204,53 @@ function ProjectsIndex() {
   }, [watchedSourceRepoPath]);
 
   React.useEffect(() => {
-    if (defaultBranchFromRepo && !watch('defaultBranch')) {
-      setValue('defaultBranch', defaultBranchFromRepo);
+    if (currentBranchFromRepo && !watch('defaultBranch')) {
+      setValue('defaultBranch', currentBranchFromRepo);
     }
-  }, [defaultBranchFromRepo, setValue, watch]);
+  }, [currentBranchFromRepo, setValue, watch]);
+
+  const handleFolderPicker = async () => {
+    // Try to use File System Access API (modern browsers)
+    if ('showDirectoryPicker' in window) {
+      try {
+        const directoryHandle = await (window as any).showDirectoryPicker();
+        // Get the directory name
+        const dirName = directoryHandle.name;
+        // Note: File System Access API doesn't give us the full path for security reasons
+        // We'll use the directory name and let the user adjust if needed
+        // For a full path, we'd need a backend endpoint
+        setValue('sourceRepoPath', dirName);
+        setSourceRepoPath(dirName);
+      } catch (error: any) {
+        // User cancelled or error occurred
+        if (error.name !== 'AbortError') {
+          showError('Failed to select folder. Please enter the path manually.');
+        }
+      }
+    } else {
+      // Fallback to file input with webkitdirectory
+      if (folderInputRef.current) {
+        folderInputRef.current.click();
+      }
+    }
+  };
+
+  const handleFolderSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      // Get the directory path from the first file
+      const filePath = files[0].webkitRelativePath || files[0].name;
+      const directory = filePath.split('/')[0];
+      // For webkitdirectory, we can't get the full path, only relative paths
+      // We'll use the directory name as a hint
+      setValue('sourceRepoPath', directory);
+      setSourceRepoPath(directory);
+    }
+    // Reset the input so the same folder can be selected again
+    if (folderInputRef.current) {
+      folderInputRef.current.value = '';
+    }
+  };
 
   const createProjectMutation = useMutation({
     mutationFn: (data: z.infer<typeof CreateProjectSchema>) =>
@@ -128,8 +262,9 @@ function ProjectsIndex() {
       setCurrentPage(1);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
-    onError: (err: Error) => {
-      showError(`Failed to create project: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create project');
+      showError(errorMessage);
     },
   });
 
@@ -166,8 +301,9 @@ function ProjectsIndex() {
       setProjectToDelete(null);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
-    onError: (err: Error) => {
-      showError(`Failed to delete project: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to delete project');
+      showError(errorMessage);
     },
   });
 
@@ -200,72 +336,15 @@ function ProjectsIndex() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {projects?.map((project: Project) => {
-              const stats = getProjectStats(project.id);
-              return (
-                <div
-                  key={project.id}
-                  className="group relative flex max-w-md flex-col rounded-lg border bg-white p-4 transition-colors hover:bg-gray-50"
-                >
-                  {/* Delete button - small X at top right */}
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDeleteClick({ id: project.id, name: project.name });
-                    }}
-                    disabled={deleteProjectMutation.isPending}
-                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 disabled:opacity-50 group-hover:opacity-100"
-                    title="Delete project"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-
-                  <Link
-                    to="/projects/$projectName"
-                    params={{ projectName: project.name }}
-                    className="block"
-                  >
-                    <div className="pr-6">
-                      <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
-                      <p className="mt-1 text-sm text-gray-600">{project.sourceRepoPath}</p>
-
-                      {/* Project Statistics Short Info */}
-                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-600">
-                        <div className="flex items-center gap-1.5">
-                          <FolderIcon className="h-3.5 w-3.5 text-blue-500" />
-                          <span>
-                            <span className="font-medium">{stats.workItems}</span> work items
-                            <span className="text-gray-400"> ({stats.openWorkItems} open)</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <GitPullRequest className="h-3.5 w-3.5 text-purple-500" />
-                          <span>
-                            <span className="font-medium">{stats.pullRequests}</span> PRs
-                            <span className="text-gray-400"> ({stats.openPullRequests} open)</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {project.sourceRepoUrl && (
-                        <a
-                          href={project.sourceRepoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 block text-sm text-blue-600 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {project.sourceRepoUrl}
-                        </a>
-                      )}
-                      <div className="mt-2 text-xs text-gray-600">
-                        <span className="font-medium">Default Branch:</span> {project.defaultBranch}
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              );
-            })}
+            {projects?.map((project: Project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                stats={getProjectStats(project.id)}
+                onDelete={handleDeleteClick}
+                isDeleting={deleteProjectMutation.isPending}
+              />
+            ))}
           </div>
 
           {/* Pagination */}
@@ -295,24 +374,47 @@ function ProjectsIndex() {
             {...register('name')}
           />
 
-          <Input
-            label="Source Repo Path"
-            id="sourceRepoPath"
-            placeholder="/path/to/repo"
-            error={errors.sourceRepoPath?.message}
-            fullWidth
-            {...register('sourceRepoPath')}
-          />
-
-          <Input
-            label="Source Repo URL (optional)"
-            id="sourceRepoUrl"
-            type="url"
-            placeholder="https://github.com/user/repo"
-            error={errors.sourceRepoUrl?.message}
-            fullWidth
-            {...register('sourceRepoUrl')}
-          />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Source Repo Path
+              <span className="ml-1 text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="sourceRepoPath"
+                placeholder="/path/to/repo or C:\\path\\to\\repo"
+                error={errors.sourceRepoPath?.message}
+                fullWidth
+                className="flex-1"
+                {...register('sourceRepoPath')}
+              />
+              <input
+                ref={folderInputRef}
+                type="file"
+                webkitdirectory=""
+                directory=""
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleFolderSelected}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleFolderPicker}
+                className="flex items-center gap-2 whitespace-nowrap"
+                title="Select folder (may require manual path entry)"
+              >
+                <FolderOpen className="h-4 w-4" />
+                Browse
+              </Button>
+            </div>
+            {errors.sourceRepoPath?.message && (
+              <p className="mt-1 text-sm text-red-600">{errors.sourceRepoPath.message}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              Enter the full path to your Git repository directory
+            </p>
+          </div>
 
           <Select
             label="Default Branch"

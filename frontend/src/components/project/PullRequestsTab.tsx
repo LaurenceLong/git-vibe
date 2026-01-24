@@ -4,8 +4,9 @@
  * Items are clickable and navigate to detail view
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { pullRequestsApi } from '@/lib/api';
 import { Project, PullRequest, PullRequestStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -13,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { PRDetail } from '@/components/pr/PRDetail';
 import { ArrowLeft, CheckCircle, Clock } from 'lucide-react';
+import { formatDateTime } from '@/lib/datetime';
 
 export interface PullRequestsTabProps {
   project: Project;
@@ -25,10 +27,16 @@ export function PullRequestsTab({
   initialStatus = 'all',
   initialPrId = null,
 }: PullRequestsTabProps) {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<PullRequestStatus | 'all'>(initialStatus);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedPRId, setSelectedPRId] = useState<string | null>(initialPrId);
   const itemsPerPage = 10;
+
+  // Sync selectedPRId with URL changes (e.g., browser back/forward)
+  useEffect(() => {
+    setSelectedPRId(initialPrId);
+  }, [initialPrId]);
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['pull-requests', project.id, currentPage, itemsPerPage],
@@ -36,19 +44,46 @@ export function PullRequestsTab({
   });
 
   const pullRequests = response?.data?.data || [];
-  const pagination = response?.data?.pagination;
+  const pagination = response?.data?.pagination
+    ? {
+        page: response.data.pagination.page,
+        totalPages: response.data.pagination.totalPages,
+        total: response.data.pagination.total,
+        limit: response.data.pagination.limit,
+      }
+    : undefined;
 
-  const filteredPRs = pullRequests.filter((pr: PullRequest) => {
-    if (statusFilter !== 'all' && pr.status !== statusFilter) return false;
-    return true;
-  });
+  // Sort by createdAt descending (newest first) - memoized
+  const sortedPRs = useMemo(() => {
+    return [...pullRequests].sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [pullRequests]);
+
+  // Filter pull requests - memoized for performance
+  const filteredPRs = useMemo(() => {
+    return sortedPRs.filter((pr: PullRequest) => {
+      if (statusFilter !== 'all' && pr.status !== statusFilter) return false;
+      return true;
+    });
+  }, [sortedPRs, statusFilter]);
 
   const handlePRClick = (prId: string) => {
     setSelectedPRId(prId);
+    navigate({
+      to: '/projects/$projectName/pullrequests',
+      params: { projectName: project.name },
+      search: { status: statusFilter, prId },
+    });
   };
 
   const handleBackToList = () => {
     setSelectedPRId(null);
+    navigate({
+      to: '/projects/$projectName/pullrequests',
+      params: { projectName: project.name },
+      search: { status: statusFilter },
+    });
   };
 
   // If a PR is selected, show the detail view
@@ -138,7 +173,7 @@ export function PullRequestsTab({
                     {pr.sourceBranch} → {pr.targetBranch}
                   </div>
                   <div className="mt-1 text-sm text-gray-600">
-                    Created {new Date(pr.createdAt).toLocaleDateString()}
+                    Created {formatDateTime(pr.createdAt)}
                   </div>
                 </div>
                 <div className="ml-4 text-gray-400">

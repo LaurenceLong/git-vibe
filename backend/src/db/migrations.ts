@@ -76,7 +76,9 @@ export async function runMigrations() {
       'review_threads',
       'review_comments',
       'agent_runs',
-      'target_repos',
+      'workflows',
+      'workflow_runs',
+      'step_executions',
     ];
     const existingTables = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")

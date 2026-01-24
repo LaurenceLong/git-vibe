@@ -55,7 +55,7 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
   async getModels(): Promise<AgentModel[]> {
     console.log('[OpenCodeAgent] Fetching available models...');
     try {
-      const { stdout } = this.execCommand('opencode models');
+      const { stdout } = await this.execCommandAsync('opencode models');
       const models = this.parseModelsFromOutput(stdout);
       console.log(`[OpenCodeAgent] Found ${models.length} available models`);
       return models;
@@ -76,13 +76,37 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
     console.log(`[OpenCodeAgent] Prompt length: ${prompt.length} characters`);
 
     try {
+      // Before starting: List sessions and persist the latest one (if any)
+      const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+      let initialSessionId: string | null = null;
+      try {
+        console.log(`[OpenCodeAgent] Listing sessions before starting run ${runId}...`);
+        const sessions = await this.listSessions(worktreePath);
+        if (sessions.length > 0) {
+          const latestSession = sessions[0]; // Most recent session
+          initialSessionId = latestSession.id;
+          console.log(`[OpenCodeAgent] Found existing session: ${initialSessionId}, persisting...`);
+          this.cacheSession(runId, latestSession);
+          await this.saveSessionToDatabase(runId, latestSession);
+          // Update the sessionId in the database
+          await agentRunsRepository.update(runId, {
+            sessionId: initialSessionId,
+          });
+          console.log(`[OpenCodeAgent] Persisted existing session ${initialSessionId} to database`);
+        } else {
+          console.log(`[OpenCodeAgent] No existing sessions found, sessionId will be null`);
+        }
+      } catch (error) {
+        console.error(`[OpenCodeAgent] Failed to list sessions before start:`, error);
+        // Continue anyway - session will be set to null
+      }
+
       const { stdoutFile, stderrFile } = await this.createStdoutStderrFiles(runId);
       const stdoutPath = await this.getStdoutPath(runId);
       const stderrPath = await this.getStderrPath(runId);
       console.log(`[OpenCodeAgent] Log files created: stdout=${stdoutPath}, stderr=${stderrPath}`);
 
       // Update database with log file paths immediately so SSE streaming can work
-      const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
       await agentRunsRepository.update(runId, {
         stdoutPath,
         stderrPath,
@@ -123,6 +147,61 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
       console.log(`[OpenCodeAgent] Process spawned with PID: ${child.pid}`);
 
+      // Store PID in memory cache and persist to database
+      if (child.pid) {
+        this.processPids.set(runId, child.pid);
+        await agentRunsRepository.update(runId, {
+          pid: child.pid,
+        });
+        console.log(`[OpenCodeAgent] Stored PID ${child.pid} for run ${runId}`);
+      }
+
+      // Start session polling to persist session updates during execution
+      // Poll until we get a new session (different from initial) or task ends
+      let sessionPollingInterval: NodeJS.Timeout | null = null;
+      const startSessionPolling = () => {
+        sessionPollingInterval = setInterval(async () => {
+          try {
+            // Check if process is still running
+            if (!child.pid || child.killed) {
+              console.log(`[OpenCodeAgent] Process no longer running, stopping session polling`);
+              if (sessionPollingInterval) {
+                clearInterval(sessionPollingInterval);
+                sessionPollingInterval = null;
+              }
+              return;
+            }
+
+            const sessions = await this.listSessions(worktreePath);
+            if (sessions.length > 0) {
+              const latestSession = sessions[0];
+              // If we found a new session (different from initial), persist it and stop polling
+              if (latestSession.id !== initialSessionId) {
+                console.log(
+                  `[OpenCodeAgent] New session detected: ${latestSession.id} (was: ${initialSessionId})`
+                );
+                this.cacheSession(runId, latestSession);
+                await this.saveSessionToDatabase(runId, latestSession);
+                await agentRunsRepository.update(runId, {
+                  sessionId: latestSession.id,
+                });
+                console.log(
+                  `[OpenCodeAgent] Persisted new session ${latestSession.id} to database, stopping polling`
+                );
+                // Stop polling once we found the new session
+                if (sessionPollingInterval) {
+                  clearInterval(sessionPollingInterval);
+                  sessionPollingInterval = null;
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`[OpenCodeAgent] Error during session polling:`, error);
+          }
+        }, 5000); // Poll every 5 seconds
+      };
+      startSessionPolling();
+
       let outputCount = 0;
       child.stdout?.on('data', (chunk) => {
         outputCount++;
@@ -142,6 +221,13 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       });
 
       child.on('close', async (code) => {
+        // Stop session polling
+        if (sessionPollingInterval) {
+          clearInterval(sessionPollingInterval);
+          sessionPollingInterval = null;
+          console.log(`[OpenCodeAgent] Stopped session polling for run ${runId}`);
+        }
+
         console.log(`[OpenCodeAgent] Run ${runId} process closed with exit code: ${code}`);
         console.log(`[OpenCodeAgent] Total output chunks received: ${outputCount}`);
 
@@ -154,8 +240,8 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
           stdoutFile,
           stderrFile,
           async () => {
-            // List sessions and save the latest one
-            console.log(`[OpenCodeAgent] Listing sessions for run ${runId}...`);
+            // Final session check and save
+            console.log(`[OpenCodeAgent] Final session check for run ${runId}...`);
             try {
               const sessions = await this.listSessions(worktreePath);
               console.log(`[OpenCodeAgent] Found ${sessions.length} sessions`);
@@ -165,15 +251,21 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
                 this.cacheSession(runId, latestSession);
                 await this.saveSessionToDatabase(runId, latestSession);
                 // Update the sessionId field in the database with the actual opencode session ID
-                const { agentRunsRepository } =
-                  await import('../repositories/AgentRunsRepository.js');
                 await agentRunsRepository.update(runId, {
                   sessionId: latestSession.id,
                 });
-                console.log(`[OpenCodeAgent] Session ID updated in database: ${latestSession.id}`);
+                console.log(
+                  `[OpenCodeAgent] Final session ID updated in database: ${latestSession.id}`
+                );
+              } else {
+                // No session found - ensure it's set to null
+                await agentRunsRepository.update(runId, {
+                  sessionId: null,
+                });
+                console.log(`[OpenCodeAgent] No session found, set sessionId to null`);
               }
             } catch (error) {
-              console.error('[OpenCodeAgent] Failed to list sessions:', error);
+              console.error('[OpenCodeAgent] Failed to list sessions on close:', error);
             }
           }
         );
@@ -238,6 +330,15 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
       const child = this.spawnProcess(config.executablePath, args, { cwd: worktreePath });
       console.log(`[OpenCodeAgent] Correction process spawned with PID: ${child.pid}`);
 
+      // Store PID in memory cache and persist to database
+      if (child.pid) {
+        this.processPids.set(runId, child.pid);
+        await agentRunsRepository.update(runId, {
+          pid: child.pid,
+        });
+        console.log(`[OpenCodeAgent] Stored PID ${child.pid} for correction run ${runId}`);
+      }
+
       let outputCount = 0;
       child.stdout?.on('data', (chunk) => {
         outputCount++;
@@ -289,7 +390,7 @@ export class OpenCodeAgentAdapter extends AgentAdapter<OpenCodeSession> {
   async listSessions(worktreePath: string): Promise<OpenCodeSession[]> {
     console.log(`[OpenCodeAgent] Listing sessions for worktree: ${worktreePath}`);
     try {
-      const { stdout } = this.execCommand('opencode session list --format json', {
+      const { stdout } = await this.execCommandAsync('opencode session list --format json', {
         cwd: worktreePath,
       });
 

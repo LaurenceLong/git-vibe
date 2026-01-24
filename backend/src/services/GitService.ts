@@ -1,9 +1,11 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { GitWorktreeService } from './GitWorktreeService.js';
 import { GitCommitService } from './GitCommitService.js';
 import { GitFileService, type RepoFile } from './GitFileService.js';
 import { GitRelayService } from './GitRelayService.js';
+import { STORAGE_CONFIG } from '../config/storage.js';
 
 // Re-export RepoFile interface for backward compatibility
 export type { RepoFile };
@@ -25,7 +27,8 @@ export class GitService {
     this.fileService = new GitFileService();
     this.relayService = new GitRelayService(
       this.execCommand.bind(this),
-      this.getDefaultBranch.bind(this)
+      this.getDefaultBranch.bind(this),
+      STORAGE_CONFIG.mirrorsDir
     );
   }
 
@@ -83,6 +86,15 @@ export class GitService {
       return output.replace('refs/remotes/origin/', '');
     } catch {
       return 'main';
+    }
+  }
+
+  getRemoteUrl(repoPath: string, remote: string = 'origin'): string | null {
+    try {
+      const output = this.execCommand(`git remote get-url ${remote}`, repoPath).trim();
+      return output || null;
+    } catch {
+      return null;
     }
   }
 
@@ -377,20 +389,52 @@ export class GitService {
   // Relay Repository Operations (delegated to GitRelayService)
   // ============================================================================
 
+  /**
+   * Get the mirror repo path for a given source repo path
+   * Multiple projects with the same source path share the same mirror repo
+   * This duplicates the logic from GitMirrorService.getMirrorRepoPath to avoid circular dependencies
+   */
+  getMirrorRepoPath(sourceRepoPath: string): string {
+    // Normalize the source path to handle different path formats
+    const normalizedPath = path.resolve(sourceRepoPath).replace(/\\/g, '/');
+    
+    // Create a hash from the normalized path
+    let hash = 0;
+    for (let i = 0; i < normalizedPath.length; i++) {
+      const char = normalizedPath.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Use absolute value and convert to hex for filename-safe string
+    const hashStr = Math.abs(hash).toString(16).padStart(8, '0');
+    
+    // Create a safe directory name from the last part of the path
+    const pathParts = normalizedPath.split('/').filter(p => p.length > 0);
+    const lastPart = pathParts[pathParts.length - 1] || 'repo';
+    const safeName = lastPart.replace(/[^a-zA-Z0-9._-]/g, '_');
+    
+    // Combine hash and safe name for uniqueness and readability
+    return path.join(STORAGE_CONFIG.mirrorsDir, `${safeName}-${hashStr}.git`);
+  }
+
   async createRelayRepo(
     sourceRepoPath: string,
     relayRepoPath: string,
+    mirrorRepoPath: string,
+    projectId: string,
     branch?: string
   ): Promise<void> {
-    return this.relayService.createRelayRepo(sourceRepoPath, relayRepoPath, branch);
+    return this.relayService.createRelayRepo(sourceRepoPath, relayRepoPath, mirrorRepoPath, projectId, branch);
   }
 
   async syncRelayToSource(
     relayRepoPath: string,
     sourceRepoPath: string,
-    projectName: string
+    mirrorRepoPath: string,
+    projectId: string
   ): Promise<string | null> {
-    return this.relayService.syncRelayToSource(relayRepoPath, sourceRepoPath, projectName);
+    return this.relayService.syncRelayToSource(relayRepoPath, sourceRepoPath, mirrorRepoPath, projectId);
   }
 }
 

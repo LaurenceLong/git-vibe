@@ -22,6 +22,8 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { GitPullRequest, GitBranch, Hash, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { extractErrorMessage } from '@/lib/errorUtils';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import { formatDateTime } from '@/lib/datetime';
 
 export interface PRStatusTabProps {
@@ -37,6 +39,7 @@ export interface PRStatusTabProps {
 export function PRStatusTab({ workItemId, isActive = true }: PRStatusTabProps) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
+  const { confirm } = useConfirmModal();
 
   // Fetch workItem to get projectId - only when tab is active
   const { data: workItem } = useQuery({
@@ -82,8 +85,9 @@ export function PRStatusTab({ workItemId, isActive = true }: PRStatusTabProps) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR merged successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to merge PR: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to merge PR');
+      showError(errorMessage);
     },
   });
 
@@ -99,19 +103,20 @@ export function PRStatusTab({ workItemId, isActive = true }: PRStatusTabProps) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR closed successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to close PR: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to close PR');
+      showError(errorMessage);
     },
   });
 
   const handleMergePR = async (prId: string) => {
-    if (window.confirm('Are you sure you want to merge this PR?')) {
+    if (await confirm({ message: 'Are you sure you want to merge this PR?' })) {
       await mergePRMutation.mutateAsync(prId);
     }
   };
 
   const handleClosePR = async (prId: string) => {
-    if (window.confirm('Are you sure you want to close this PR?')) {
+    if (await confirm({ message: 'Are you sure you want to close this PR?' })) {
       await closePRMutation.mutateAsync(prId);
     }
   };

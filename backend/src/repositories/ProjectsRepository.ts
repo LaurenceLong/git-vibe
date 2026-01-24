@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { projects } from '../models/schema.js';
 import type { Project } from '../types/models.js';
 import { getDb } from '../db/client.js';
@@ -18,6 +18,7 @@ export class ProjectsRepository {
     name: string;
     sourceRepoPath: string;
     sourceRepoUrl?: string;
+    mirrorRepoPath: string;
     relayRepoPath: string;
     defaultBranch: string;
     defaultAgent?: string;
@@ -31,6 +32,7 @@ export class ProjectsRepository {
         name: data.name,
         sourceRepoPath: data.sourceRepoPath,
         sourceRepoUrl: data.sourceRepoUrl || null,
+        mirrorRepoPath: data.mirrorRepoPath,
         relayRepoPath: data.relayRepoPath,
         defaultBranch: data.defaultBranch,
         defaultAgent: data.defaultAgent || 'opencode',
@@ -44,7 +46,7 @@ export class ProjectsRepository {
 
   async findAll(): Promise<Project[]> {
     const db = await this.getDbInstance();
-    const result = await db.select().from(projects).execute();
+    const result = await db.select().from(projects).orderBy(desc(projects.createdAt)).execute();
     return result as Project[];
   }
 

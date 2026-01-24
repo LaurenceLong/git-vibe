@@ -16,14 +16,13 @@ export async function pullRequestsRoutes(server: FastifyInstance) {
       const page = parseInt(pageStr || '1', 10);
       const limit = parseInt(limitStr || '10', 10);
 
-      let prs: Awaited<ReturnType<typeof pullRequestsRepository.findByProjectId>>;
+      let prs: Awaited<ReturnType<typeof pullRequestsRepository.findAll>>;
 
       if (projectId) {
         prs = await pullRequestsRepository.findByProjectId(projectId);
       } else {
-        // If no projectId, return all PRs (you might want to add a findAll method to repository)
-        // For now, we'll return an empty array if no projectId is provided
-        prs = [];
+        // If no projectId, return all PRs
+        prs = await pullRequestsRepository.findAll();
       }
 
       // Apply pagination

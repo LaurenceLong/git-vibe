@@ -26,7 +26,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { formatDateTime } from '@/lib/datetime';
+import { formatDateTime, sortDates } from '@/lib/datetime';
+import { useConfirmModal } from '@/components/ConfirmModal';
 
 export interface TaskManagementTabProps {
   workItemId: string;
@@ -125,13 +126,18 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
   const [showResumeDialog, setShowResumeDialog] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const { startTask, isLoading: isStarting } = useStartWorkItemTask(workItemId);
+  const { confirm } = useConfirmModal();
 
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
     try {
       setError(null);
       const response = await workItemsApi.getTasks(workItemId);
-      setTasks(response.data);
+      // Sort tasks by createdAt descending to get the latest first
+      const sortedTasks = [...(response.data || [])].sort((a, b) =>
+        sortDates(a.createdAt || '', b.createdAt || '', 'desc')
+      );
+      setTasks(sortedTasks);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
     } finally {
@@ -181,7 +187,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
 
   // Cancel task
   const handleCancel = async (taskId: string) => {
-    if (!window.confirm('Are you sure you want to cancel this task?')) {
+    if (!(await confirm({ message: 'Are you sure you want to cancel this task?' }))) {
       return;
     }
 
@@ -196,9 +202,10 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
   // Restart task
   const handleRestart = async (taskId: string) => {
     if (
-      !window.confirm(
-        'Are you sure you want to restart this task? This will create a new task with the same prompt.'
-      )
+      !(await confirm({
+        message:
+          'Are you sure you want to restart this task? This will create a new task with the same prompt.',
+      }))
     ) {
       return;
     }
@@ -343,6 +350,8 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
       <div className="space-y-3">
         {tasks.map((task, index) => {
           const isExpanded = expandedTasks.has(task.id);
+          // Number tasks in reverse order since they're sorted newest first
+          const taskNumber = tasks.length - index;
           return (
             <div
               key={task.id}
@@ -351,7 +360,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="mb-2 flex items-center space-x-2">
-                    <span className="text-xs font-medium text-gray-500">Task #{index + 1}</span>
+                    <span className="text-xs font-medium text-gray-500">Task #{taskNumber}</span>
                     <StatusBadge status={getStatusType(task.status)}>
                       <span className="flex items-center space-x-1">
                         {getStatusIcon(task.status)}

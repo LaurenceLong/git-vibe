@@ -137,7 +137,7 @@ function ToastContainer({
   removeToast: (id: string) => void;
 }) {
   return (
-    <div className="fixed right-4 top-4 z-50 flex flex-col gap-2">
+    <div className="fixed left-1/2 top-4 z-50 flex -translate-x-1/2 flex-col gap-2">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={() => removeToast(toast.id)} />
       ))}
@@ -205,7 +205,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg transition-all duration-300 ease-in-out ${variantStyles[toast.variant]} ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'} `}
+      className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg transition-all duration-300 ease-in-out ${variantStyles[toast.variant]} ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'} `}
       role="alert"
     >
       <div className="mt-0.5 flex-shrink-0">{iconMap[toast.variant]}</div>

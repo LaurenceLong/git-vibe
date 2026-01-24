@@ -3,10 +3,10 @@
  * All code agent implementations should extend this class
  */
 
-import { spawn, execSync } from 'node:child_process';
+import { spawn, execSync, exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { gitService } from './GitService.js';
 
 export type AgentModel = {
@@ -56,6 +56,7 @@ export type SessionData = Record<string, unknown>;
 
 export abstract class AgentAdapter<TSessionData extends SessionData = SessionData> {
   protected activeProcesses = new Map<string, ReturnType<typeof spawn>>();
+  protected processPids = new Map<string, number>(); // Track PID for each runId
   protected sessionCache = new Map<string, TSessionData>();
 
   /**
@@ -390,6 +391,7 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
 
     await logFile.close();
     this.activeProcesses.delete(runId);
+    this.processPids.delete(runId);
 
     if (onBeforeUpdate) {
       await onBeforeUpdate();
@@ -446,6 +448,7 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
     await stdoutFile.close();
     await stderrFile.close();
     this.activeProcesses.delete(runId);
+    this.processPids.delete(runId);
 
     if (onBeforeUpdate) {
       await onBeforeUpdate();
@@ -547,6 +550,41 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
   }
 
   /**
+   * Execute a command asynchronously and return output
+   * This version doesn't block the event loop
+   */
+  protected async execCommandAsync(
+    command: string,
+    options: {
+      cwd?: string;
+      encoding?: BufferEncoding;
+    } = {}
+  ): Promise<ProcessOutput> {
+    const execPromise = promisify(exec);
+    let stdout = '';
+    let stderr = '';
+    let exitCode: number | null = null;
+
+    try {
+      const result = await execPromise(command, {
+        ...options,
+        encoding: options.encoding || 'utf-8',
+      });
+      stdout = result.stdout || '';
+      stderr = result.stderr || '';
+      exitCode = 0;
+    } catch (error: unknown) {
+      // When exec fails, the error contains stdout, stderr, and code
+      const err = error as { stdout?: string; stderr?: string; message?: string; code?: number };
+      stdout = err.stdout || '';
+      stderr = err.stderr || err.message || 'Unknown error';
+      exitCode = err.code ?? 1;
+    }
+
+    return { stdout, stderr, exitCode };
+  }
+
+  /**
    * Cache session data for a run
    */
   protected cacheSession(runId: string, session: TSessionData): void {
@@ -558,6 +596,20 @@ export abstract class AgentAdapter<TSessionData extends SessionData = SessionDat
    */
   protected getCachedSession(runId: string): TSessionData | undefined {
     return this.sessionCache.get(runId);
+  }
+
+  /**
+   * Check if a PID is tracked in the cache
+   */
+  hasPid(runId: string): boolean {
+    return this.processPids.has(runId);
+  }
+
+  /**
+   * Get the PID for a run
+   */
+  getPid(runId: string): number | undefined {
+    return this.processPids.get(runId);
   }
 
   /**

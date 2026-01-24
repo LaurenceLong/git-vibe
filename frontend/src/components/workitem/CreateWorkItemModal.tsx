@@ -58,7 +58,7 @@ export function CreateWorkItemModal({
     resolver: zodResolver(CreateWorkItemSchema),
     defaultValues: {
       projectId,
-      type: 'issue',
+      type: 'feature-request',
       title: '',
       body: '',
     },

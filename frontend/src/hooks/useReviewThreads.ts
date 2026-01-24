@@ -36,6 +36,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewsApi } from '../lib/api';
 import { useToast } from '../components/Toast';
+import { extractErrorMessage } from '../lib/errorUtils';
 import type { ReviewThreadDTO, ReviewCommentDTO, AgentRunDTO } from 'git-vibe-shared';
 
 interface CreateThreadData {
@@ -108,8 +109,9 @@ export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult 
       queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Review thread created successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to create thread: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create thread');
+      showError(errorMessage);
     },
   });
 
@@ -123,8 +125,9 @@ export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult 
       queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Comment added successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to add comment: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to add comment');
+      showError(errorMessage);
     },
   });
 
@@ -138,8 +141,9 @@ export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult 
       queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Thread resolved successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to resolve thread: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to resolve thread');
+      showError(errorMessage);
     },
   });
 
@@ -153,8 +157,9 @@ export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult 
       queryClient.invalidateQueries({ queryKey: ['review-threads', pullRequestId] });
       success('Thread reopened successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to reopen thread: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to reopen thread');
+      showError(errorMessage);
     },
   });
 
@@ -169,8 +174,9 @@ export function useReviewThreads(pullRequestId: string): UseReviewThreadsResult 
       queryClient.invalidateQueries({ queryKey: ['agent-runs', pullRequestId] });
       success('Agent triggered successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to trigger agent: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to trigger agent');
+      showError(errorMessage);
     },
   });
 

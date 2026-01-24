@@ -12,4 +12,3 @@ export {
   reviewCommentToDTO,
   reviewCommentToDomain,
 } from './reviews.js';
-export { toDTO as targetRepoToDTO, toDomain as targetRepoToDomain } from './targetRepos.js';
