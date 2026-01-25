@@ -44,8 +44,8 @@ export interface FilesChangedTabProps {
  */
 export function FilesChangedTab({
   prId,
-  workItemId,
-  currentUserName = 'User',
+  workItemId: _workItemId,
+  currentUserName: _currentUserName = 'User',
   isActive = true,
 }: FilesChangedTabProps) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -55,7 +55,12 @@ export function FilesChangedTab({
     side: 'base' | 'head';
     filepath: string;
   } | null>(null);
-  const [showGeneralConversation] = useState(true);
+
+  // Handle inline comment submission
+  const handleCreateInlineComment = async () => {
+    // Placeholder - inline comment functionality is disabled
+    setCommentingLine(null);
+  };
 
   // Load diff - only when tab is active
   const {
@@ -217,7 +222,6 @@ export function FilesChangedTab({
             />
           </div>
         )}
-
       </div>
     </div>
   );

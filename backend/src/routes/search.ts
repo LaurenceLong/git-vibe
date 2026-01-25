@@ -6,6 +6,7 @@ import { toDTO as workItemToDTO } from '../mappers/workItems.js';
 import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
 import { projects, workItems, pullRequests } from '../models/schema.js';
 import { getDb } from '../db/client.js';
+import type { Project, WorkItem } from '../types/models.js';
 
 export async function searchRoutes(server: FastifyInstance) {
   // GET /api/search - Search across projects, work items, and pull requests
@@ -74,8 +75,8 @@ export async function searchRoutes(server: FastifyInstance) {
     }
 
     const payload = {
-      projects: matchingProjects.map(projectToDTO),
-      workItems: matchingWorkItems.map(workItemToDTO),
+      projects: matchingProjects.map((p) => projectToDTO(p as Project)),
+      workItems: matchingWorkItems.map((wi) => workItemToDTO(wi as WorkItem)),
       pullRequests: matchingPullRequests.map(pullRequestToDTO),
       projectNames,
     };

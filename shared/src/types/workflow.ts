@@ -1,389 +1,399 @@
 import { z } from 'zod';
 
-export type WorkflowNodeType = 'event' | 'agent' | 'git' | 'github' | 'ci';
-export type SessionMode = 'new' | 'reuse';
-export type TransitionTrigger = 'success' | 'failure' | 'conflict' | 'blocked';
-export type StepStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'skipped';
+// ============================================================================
+// Resource Types (Optimized Design - 7 allowed types only)
+// ============================================================================
 
-export const WorkflowNodeTypeSchema = z.enum(['event', 'agent', 'git', 'github', 'ci']);
-export const SessionModeSchema = z.enum(['new', 'reuse']);
-export const TransitionTriggerSchema = z.enum(['success', 'failure', 'conflict', 'blocked']);
+export type ResourceKind = 'workitem' | 'task' | 'pr_request' | 'worktree';
 
-export const NodeDisplaySchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-});
+export type ResourceStatus =
+  | 'pending'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'canceled'
+  | 'blocked';
 
-export const NodeSessionSchema = z.object({
-  mode: SessionModeSchema,
-  from: z.string().optional(),
-  export: z.boolean().optional(),
-});
+export const ResourceKindSchema = z.enum(['workitem', 'task', 'pr_request', 'worktree']);
 
-export const NodeInputSchema = z.object({
-  useWorkitemContext: z.boolean(),
-  extra: z.record(z.unknown()).optional(),
-});
-
-export const ArtifactSchema = z.object({
-  id: z.string(),
-  kind: z.enum(['log', 'json', 'text', 'patch', 'session']),
-  ref: z.string(),
-});
-
-export const NodeOutputsSchema = z.object({
-  exports: z.array(z.string()).optional(),
-  artifacts: z.array(ArtifactSchema).optional(),
-});
-
-export const RetryConfigSchema = z.object({
-  maxAttempts: z.number().int().positive(),
-  backoffSeconds: z.number().nonnegative(),
-});
-
-export const GateConditionSchema = z.object({
-  expr: z.string().optional(),
-});
-
-const WorkflowNodeBaseSchema = z.object({
-  id: z.string(),
-  type: WorkflowNodeTypeSchema,
-  immutable: z.boolean().optional(),
-  display: NodeDisplaySchema.optional(),
-  event: z.string().optional(),
-  session: NodeSessionSchema.optional(),
-  input: NodeInputSchema.optional(),
-  prompt: z.string().optional(),
-  action: z.string().optional(),
-  with: z.record(z.unknown()).optional(),
-  when: GateConditionSchema.optional(),
-  retry: RetryConfigSchema.optional(),
-  outputs: NodeOutputsSchema.optional(),
-});
-
-export const WorkflowNodeSchema = WorkflowNodeBaseSchema;
-
-export const SlotSchema = z.object({
-  id: z.string(),
-  after: z.string(),
-  before: z.string(),
-  allowInsert: z.boolean(),
-  allowedNodeTypes: z.array(WorkflowNodeTypeSchema),
-});
-
-const ExtensionNodeSchema = z
-  .object({
-    slot: z.string(),
-  })
-  .and(WorkflowNodeBaseSchema);
-
-export const ExtensionsSchema = z.object({
-  nodes: z.array(ExtensionNodeSchema),
-});
-
-export const TransitionSchema = z.object({
-  from: z.string(),
-  on: TransitionTriggerSchema,
-  to: z.string(),
-});
-
-export const SyncRuleSchema = z.object({
-  when: GateConditionSchema,
-  satisfyStep: z.string(),
-  setOutputs: z.record(z.unknown()).optional(),
-});
-
-export const SyncConfigSchema = z.object({
-  mode: z.literal('reconcile'),
-  sources: z.array(z.string()),
-  rules: z.array(SyncRuleSchema),
-});
-
-export const ControlSchema = z.object({
-  extraNodes: z.array(WorkflowNodeSchema).optional(),
-  transitions: z.array(TransitionSchema).optional(),
-  sync: SyncConfigSchema.optional(),
-});
-
-export const CommitPolicySchema = z.object({
-  requireIntentionalStaging: z.boolean(),
-  allowGitAddAll: z.boolean(),
-  requireCommitBody: z.boolean(),
-  message: z.object({
-    subjectMaxLen: z.number().int().positive(),
-  }),
-});
-
-export const CIPolicySchema = z.object({
-  requiredChecks: z.array(z.string()),
-});
-
-export const MergePolicySchema = z.object({
-  requireGreenChecks: z.boolean(),
-  method: z.enum(['merge', 'squash', 'rebase']),
-  onConflict: z.literal('transition'),
-});
-
-export const WorkflowPolicySchema = z.object({
-  commit: CommitPolicySchema,
-  ci: CIPolicySchema,
-  merge: MergePolicySchema,
-});
-
-export const WorkitemNormalizationSchema = z.object({
-  trimWhitespace: z.boolean(),
-  stripHtml: z.boolean(),
-  maxChars: z.number().int().positive(),
-});
-
-export const WorkitemContextSchema = z.object({
-  titleRef: z.string(),
-  descriptionRef: z.string(),
-  descriptionUserEditable: z.boolean(),
-  normalization: WorkitemNormalizationSchema,
-});
-
-export const WorkflowContextSchema = z.object({
-  workitem: WorkitemContextSchema,
-});
-
-export const PromptTemplatesSchema = z.record(z.string());
-
-export const PromptsConfigSchema = z.object({
-  templates: PromptTemplatesSchema,
-});
-
-const WorkflowBaseSchema = z.object({
-  version: z.number().int().positive(),
-  workflow: z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string(),
-    context: WorkflowContextSchema,
-    prompts: PromptsConfigSchema,
-    backbone: z.array(WorkflowNodeSchema),
-    slots: z.array(SlotSchema),
-    extensions: ExtensionsSchema,
-    control: ControlSchema,
-    policy: WorkflowPolicySchema,
-  }),
-});
-
-export const WorkflowSchema = WorkflowBaseSchema;
-
-export const StepStatusSchema = z.enum([
+export const ResourceStatusSchema = z.enum([
   'pending',
   'running',
   'succeeded',
   'failed',
+  'canceled',
   'blocked',
-  'skipped',
 ]);
 
-export const WorkflowRunSchema = z.object({
-  id: z.string(),
-  workflowId: z.string(),
-  workItemId: z.string(),
-  status: StepStatusSchema,
-  currentStepId: z.string().nullable(),
-  startedAt: z.string(),
-  finishedAt: z.string().nullable(),
-  createdAt: z.string(),
-});
+// ============================================================================
+// Resource Type Enum (Optimized Design)
+// ============================================================================
 
-export const StepExecutionSchema = z.object({
-  id: z.string(),
-  runId: z.string(),
-  nodeId: z.string(),
-  status: StepStatusSchema,
-  startedAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
-  errorMessage: z.string().nullable(),
-  outputs: z.record(z.unknown()),
-  artifacts: z.array(ArtifactSchema),
-});
+export type ResourceType =
+  | 'WorkItem'
+  | 'Worktree'
+  | 'Task'
+  | 'AgentRun'
+  | 'PullRequest'
+  | 'GitOps'
+  | 'CommandExec';
 
-export type WorkflowDTO = z.infer<typeof WorkflowSchema>;
-export type WorkflowRunDTO = z.infer<typeof WorkflowRunSchema>;
-export type StepExecutionDTO = z.infer<typeof StepExecutionSchema>;
+export const ResourceTypeSchema = z.enum([
+  'WorkItem',
+  'Worktree',
+  'Task',
+  'AgentRun',
+  'PullRequest',
+  'GitOps',
+  'CommandExec',
+]);
+
+// ============================================================================
+// Event Envelope (Uniform Format)
+// ============================================================================
+
+export interface EventSubject {
+  kind: ResourceKind;
+  id: string;
+}
+
+export interface EventCausedBy {
+  workflowRunId?: string;
+  nodeId?: string;
+  nodeRunId?: string;
+  attempt?: number;
+}
+
+export interface WorkflowEvent {
+  eventId: string;
+  type: string;
+  at: string; // ISO 8601 timestamp
+  subject: EventSubject;
+  resourceVersion?: number;
+  causedBy?: EventCausedBy;
+  workItemId?: string; // WorkItem ID for events related to work items
+  data: Record<string, unknown>;
+}
+
+// ============================================================================
+// NodeSpec Types (Optimized Design)
+// ============================================================================
+
+// Removed WorkflowNodeType - nodes are uniform in optimized design
+
+export type NodeRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'blocked';
+
+export const NodeRunStatusSchema = z.enum([
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'canceled',
+  'blocked',
+]);
 
 export interface NodeDisplay {
   name: string;
   description?: string;
 }
 
-export interface NodeSession {
-  mode: SessionMode;
-  from?: string;
-  export?: boolean;
+export interface NodeSubject {
+  kind: ResourceKind;
+  idRef: string; // Expression resolving to an id
 }
 
-export interface NodeInput {
-  useWorkitemContext: boolean;
-  extra?: Record<string, unknown>;
+export interface ListenRule {
+  on: string; // Event type pattern
+  when?: string; // Optional boolean expression
 }
 
-export interface Artifact {
+export interface NodeEmit {
+  type: string;
+  data: Record<string, unknown>;
+}
+
+export interface ResourceCallSpec {
+  resourceType: ResourceType; // One of 7 allowed resource types
+  idempotencyKey?: string; // Optional idempotency key
+  input: Record<string, unknown>;
+}
+
+export interface NodeTrigger {
+  when: string; // Boolean expression
+  call: ResourceCallSpec;
+  emit?: NodeEmit[];
+}
+
+export interface ResourcePatch {
+  [resourceKind: string]: Record<string, unknown>;
+}
+
+export interface OnResultRule {
+  when: string; // Boolean expression (evaluates against resource result event)
+  patch?: ResourcePatch; // Patches to apply (explicit per resource type)
+  emit?: NodeEmit[];
+}
+
+export interface NodeSpec {
   id: string;
-  kind: 'log' | 'json' | 'text' | 'patch' | 'session';
-  ref: string;
-}
-
-export interface NodeOutputs {
-  exports?: string[];
-  artifacts?: Artifact[];
-}
-
-export interface RetryConfig {
-  maxAttempts: number;
-  backoffSeconds: number;
-}
-
-export interface GateCondition {
-  expr?: string;
-}
-
-export interface WorkflowNode {
-  id: string;
-  type: WorkflowNodeType;
-  immutable?: boolean;
   display?: NodeDisplay;
-  event?: string;
-  session?: NodeSession;
-  input?: NodeInput;
-  prompt?: string;
-  action?: string;
-  with?: Record<string, unknown>;
-  when?: GateCondition;
-  retry?: RetryConfig;
-  outputs?: NodeOutputs;
+  subject: NodeSubject;
+  listens: ListenRule[];
+  trigger: NodeTrigger;
+  onResult: OnResultRule[];
+  retry?: {
+    maxAttempts: number;
+    backoffSeconds: number;
+  };
 }
+
+// ============================================================================
+// NodeRun (Execution Instance - Only Runtime Object)
+// ============================================================================
+
+export interface NodeRun {
+  runId: string;
+  workflowRunId: string;
+  nodeId: string;
+  resourceType: ResourceType;
+  subjectKind: ResourceKind;
+  subjectId: string;
+  subjectVersionAtStart: number;
+  status: NodeRunStatus;
+  attempt: number;
+  idempotencyKey?: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  error?: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+// ============================================================================
+// Workflow Structure (Optimized Design)
+// ============================================================================
 
 export interface Slot {
   id: string;
   after: string;
   before: string;
   allowInsert: boolean;
-  allowedNodeTypes: WorkflowNodeType[];
+  allowedNodeTypes: ResourceType[];
 }
 
-export interface ExtensionNode extends WorkflowNode {
-  slot: string;
+export interface ExecutorRegistry {
+  [executorName: string]: Record<string, never>;
 }
 
-export interface Extensions {
-  nodes: ExtensionNode[];
-}
-
-export interface Transition {
-  from: string;
-  on: TransitionTrigger;
-  to: string;
-}
-
-export interface SyncRule {
-  when: GateCondition;
-  satisfyStep: string;
-  setOutputs?: Record<string, unknown>;
-}
-
-export interface SyncConfig {
-  mode: 'reconcile';
-  sources: string[];
-  rules: SyncRule[];
-}
-
-export interface Control {
-  extraNodes?: WorkflowNode[];
-  transitions?: Transition[];
-  sync?: SyncConfig;
-}
-
-export interface CommitPolicy {
-  requireIntentionalStaging: boolean;
-  allowGitAddAll: boolean;
-  requireCommitBody: boolean;
-  message: {
-    subjectMaxLen: number;
+export interface WorkflowPolicies {
+  locks?: {
+    defaultLockScope?: 'workitem' | 'task' | 'pr_request';
+  };
+  git?: {
+    allowGitAddAll?: boolean;
+  };
+  merge?: {
+    requireGreenChecks?: boolean;
+    method?: 'merge' | 'squash' | 'rebase';
+  };
+  command?: {
+    allowedShells?: string[];
+    denyPatterns?: string[];
   };
 }
 
-export interface CIPolicy {
-  requiredChecks: string[];
+export interface WorkflowBackbone {
+  nodes: NodeSpec[];
+  slots: Slot[];
 }
 
-export interface MergePolicy {
-  requireGreenChecks: boolean;
-  method: 'merge' | 'squash' | 'rebase';
-  onConflict: 'transition';
+export interface WorkflowExtensions {
+  nodes: NodeSpec[];
 }
 
-export interface WorkflowPolicy {
-  commit: CommitPolicy;
-  ci: CIPolicy;
-  merge: MergePolicy;
-}
-
-export interface WorkitemNormalization {
-  trimWhitespace: boolean;
-  stripHtml: boolean;
-  maxChars: number;
-}
-
-export interface WorkitemContext {
-  titleRef: string;
-  descriptionRef: string;
-  descriptionUserEditable: boolean;
-  normalization: WorkitemNormalization;
-}
-
-export interface WorkflowContext {
-  workitem: WorkitemContext;
-}
-
-export interface PromptTemplates {
-  [templateId: string]: string;
-}
-
-export interface PromptsConfig {
-  templates: PromptTemplates;
+export interface WorkflowDefinition {
+  id: string;
+  name: string;
+  description: string;
+  backbone: WorkflowBackbone;
+  extensions: WorkflowExtensions;
+  executors: {
+    registry: ExecutorRegistry;
+  };
+  policies: WorkflowPolicies;
 }
 
 export interface Workflow {
   version: number;
-  workflow: {
-    id: string;
-    name: string;
-    description: string;
-    context: WorkflowContext;
-    prompts: PromptsConfig;
-    backbone: WorkflowNode[];
-    slots: Slot[];
-    extensions: Extensions;
-    control: Control;
-    policy: WorkflowPolicy;
-  };
+  workflow: WorkflowDefinition;
 }
+
+// ============================================================================
+// WorkflowRun (Execution Tracking)
+// ============================================================================
 
 export interface WorkflowRun {
   id: string;
   workflowId: string;
   workItemId: string;
-  status: StepStatus;
+  status: NodeRunStatus;
   currentStepId: string | null;
   startedAt: string;
   finishedAt: string | null;
   createdAt: string;
 }
 
-export interface StepExecution {
-  id: string;
-  runId: string;
-  nodeId: string;
-  status: StepStatus;
-  startedAt: string | null;
-  finishedAt: string | null;
-  errorMessage: string | null;
-  outputs: Record<string, unknown>;
-  artifacts: Artifact[];
-}
+// ============================================================================
+// Zod Schemas (for validation)
+// ============================================================================
+
+export const NodeDisplaySchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+});
+
+export const NodeSubjectSchema = z.object({
+  kind: ResourceKindSchema,
+  idRef: z.string(),
+});
+
+export const ListenRuleSchema = z.object({
+  on: z.string(),
+  when: z.string().optional(),
+});
+
+export const NodeEmitSchema = z.object({
+  type: z.string(),
+  data: z.record(z.unknown()),
+});
+
+export const ResourceCallSpecSchema = z.object({
+  resourceType: ResourceTypeSchema,
+  idempotencyKey: z.string().optional(),
+  input: z.record(z.unknown()),
+});
+
+export const NodeTriggerSchema = z.object({
+  when: z.string(),
+  call: ResourceCallSpecSchema,
+  emit: z.array(NodeEmitSchema).optional(),
+});
+
+export const OnResultRuleSchema = z.object({
+  when: z.string(),
+  patch: z.record(z.record(z.unknown())).optional(),
+  emit: z.array(NodeEmitSchema).optional(),
+});
+
+export const NodeSpecSchema: z.ZodType<NodeSpec> = z.object({
+  id: z.string(),
+  display: NodeDisplaySchema.optional(),
+  subject: NodeSubjectSchema,
+  listens: z.array(ListenRuleSchema),
+  trigger: NodeTriggerSchema,
+  onResult: z.array(OnResultRuleSchema),
+  retry: z
+    .object({
+      maxAttempts: z.number().int().positive(),
+      backoffSeconds: z.number().nonnegative(),
+    })
+    .optional(),
+});
+
+export const SlotSchema = z.object({
+  id: z.string(),
+  after: z.string(),
+  before: z.string(),
+  allowInsert: z.boolean(),
+  allowedNodeTypes: z.array(ResourceTypeSchema),
+});
+
+export const ExecutorRegistrySchema = z.record(z.record(z.never()));
+
+export const WorkflowPoliciesSchema = z.object({
+  locks: z
+    .object({
+      defaultLockScope: z.enum(['workitem', 'task', 'pr_request']).optional(),
+    })
+    .optional(),
+  git: z
+    .object({
+      allowGitAddAll: z.boolean().optional(),
+    })
+    .optional(),
+  merge: z
+    .object({
+      requireGreenChecks: z.boolean().optional(),
+      method: z.enum(['merge', 'squash', 'rebase']).optional(),
+    })
+    .optional(),
+  command: z
+    .object({
+      allowedShells: z.array(z.string()).optional(),
+      denyPatterns: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+
+export const WorkflowBackboneSchema = z.object({
+  nodes: z.array(NodeSpecSchema),
+  slots: z.array(SlotSchema),
+});
+
+export const WorkflowExtensionsSchema = z.object({
+  nodes: z.array(NodeSpecSchema),
+});
+
+export const WorkflowDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  backbone: WorkflowBackboneSchema,
+  extensions: WorkflowExtensionsSchema,
+  executors: z.object({
+    registry: ExecutorRegistrySchema,
+  }),
+  policies: WorkflowPoliciesSchema,
+});
+
+export const WorkflowSchema = z.object({
+  version: z.number().int().positive(),
+  workflow: WorkflowDefinitionSchema,
+});
+
+export const NodeRunSchema = z.object({
+  runId: z.string(),
+  workflowRunId: z.string(),
+  nodeId: z.string(),
+  resourceType: ResourceTypeSchema,
+  subjectKind: ResourceKindSchema,
+  subjectId: z.string(),
+  subjectVersionAtStart: z.number(),
+  status: NodeRunStatusSchema,
+  attempt: z.number(),
+  idempotencyKey: z.string().optional(),
+  input: z.record(z.unknown()),
+  output: z.record(z.unknown()),
+  error: z.string().optional(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+});
+
+export const WorkflowRunSchema = z.object({
+  id: z.string(),
+  workflowId: z.string(),
+  workItemId: z.string(),
+  status: NodeRunStatusSchema,
+  currentStepId: z.string().nullable(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+// ============================================================================
+// Type Exports
+// ============================================================================
+
+export type WorkflowDTO = z.infer<typeof WorkflowSchema>;
+export type WorkflowRunDTO = z.infer<typeof WorkflowRunSchema>;
+export type NodeRunDTO = z.infer<typeof NodeRunSchema>;

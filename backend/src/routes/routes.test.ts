@@ -17,12 +17,7 @@ import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  ProjectSchema,
-  WorkItemSchema,
-  PullRequestSchema,
-  AgentRunSchema,
-} from 'git-vibe-shared';
+import { ProjectSchema, WorkItemSchema, PullRequestSchema, AgentRunSchema } from 'git-vibe-shared';
 
 // Helper to create a test server
 async function createTestServer() {
@@ -76,7 +71,6 @@ describe('Backend Routes - Response Schema Validation', () => {
         id: uuidv4(),
         name: `test-route-project-${Date.now()}`,
         sourceRepoPath: '/tmp/test/source',
-        mirrorRepoPath: '/tmp/test/mirror.git',
         mirrorRepoPath: '/tmp/test/mirror.git',
         relayRepoPath: '/tmp/test/relay',
         defaultBranch: 'main',
@@ -409,5 +403,4 @@ describe('Backend Routes - Response Schema Validation', () => {
       expect(result.success).toBe(true);
     });
   });
-
 });

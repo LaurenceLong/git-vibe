@@ -66,35 +66,6 @@ export async function runMigrations() {
     }[];
     const executedSet = new Set(executedMigrations.map((m) => m.filename));
 
-    // Clean up any old migration entries from previous incomplete runs
-    // Since this project hasn't been released, we can safely reset migration tracking
-    // if the schema is incomplete
-    const requiredTables = [
-      'projects',
-      'work_items',
-      'pull_requests',
-      'review_threads',
-      'review_comments',
-      'agent_runs',
-      'workflows',
-      'workflow_runs',
-      'step_executions',
-    ];
-    const existingTables = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-      .all() as { name: string }[];
-    const existingTableNames = new Set(existingTables.map((t) => t.name));
-
-    // Check if all required tables exist
-    const allTablesExist = requiredTables.every((table) => existingTableNames.has(table));
-
-    // If we have migration records but tables are missing, reset the migration tracking
-    if (executedSet.size > 0 && !allTablesExist) {
-      console.log('Detected incomplete schema, resetting migration tracking');
-      sqlite.prepare('DELETE FROM _migrations').run();
-      executedSet.clear();
-    }
-
     for (const file of files) {
       if (executedSet.has(file)) {
         console.log(`Skipping already executed migration: ${file}`);

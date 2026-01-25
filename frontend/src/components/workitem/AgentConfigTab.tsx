@@ -1,33 +1,30 @@
 /**
  * AgentConfigTab Component
  *
- * Displays agent configuration form and agent run history for this WorkItem
+ * Displays agent run history for this WorkItem
  *
  * Features:
- * - Display agent configuration form
- * - Allow selecting agent type
- * - Configure agent parameters
  * - Show agent run history for this WorkItem
- * - Trigger agent run button
  * - Show agent run status (queued/running/succeeded/failed)
+ * - Display detailed agent run information
  * - Display agent run logs
- * - Reuse existing AgentRunConfigForm component if possible
+ * - Cancel running agent runs
+ * - Note: Agent runs are triggered by workflows, not manually
  */
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agentRunsApi } from '@/lib/api';
 import { AgentRun, WorktreeStatus } from '@/types';
-import { AgentRunConfigForm } from '@/components/agent/AgentRunConfigForm';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Bot, AlertTriangle } from 'lucide-react';
+import { Bot, AlertTriangle, ChevronDown, ChevronUp, Clock, CheckCircle } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { extractErrorMessage } from '@/lib/errorUtils';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { formatDateTime, formatDuration } from '@/lib/datetime';
+import { queryKeys } from '@/lib/queryKeys';
 
 export interface AgentConfigTabProps {
   workItemId: string;
@@ -45,8 +42,8 @@ export function AgentConfigTab({
   worktreeStatus = 'present',
   isActive = true,
 }: AgentConfigTabProps) {
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
+  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
   const { confirm } = useConfirmModal();
@@ -54,9 +51,9 @@ export function AgentConfigTab({
   // Track which runs are currently being polled
   const [pollingRuns, setPollingRuns] = useState<Set<string>>(new Set());
 
-  // Fetch agent runs for this WorkItem - only when tab is active
+  // Fetch agent runs (tasks) for this WorkItem - standard key ['tasks', workItemId]
   const { data: agentRuns, isLoading } = useQuery({
-    queryKey: ['agent-runs', workItemId],
+    queryKey: queryKeys.tasks(workItemId),
     queryFn: async () => {
       const response = await agentRunsApi.listByWorkItem(workItemId);
       return (response.data || []) as AgentRun[];
@@ -64,10 +61,7 @@ export function AgentConfigTab({
     enabled: isActive,
     refetchInterval: (data) => {
       if (!isActive) return false;
-      // Ensure data is an array before calling .some()
-      if (!Array.isArray(data)) {
-        return false;
-      }
+      if (!Array.isArray(data)) return false;
       const hasActiveRuns = data.some(
         (run: AgentRun) => run.status === 'queued' || run.status === 'running'
       );
@@ -92,7 +86,8 @@ export function AgentConfigTab({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', workItemId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
       success('Agent run cancelled successfully');
     },
     onError: (err: unknown) => {
@@ -100,51 +95,6 @@ export function AgentConfigTab({
       showError(errorMessage);
     },
   });
-
-  // Trigger agent run mutation
-  const triggerMutation = useMutation({
-    mutationFn: async (data: {
-      agentKey: string;
-      inputSummary?: string;
-      prompt: string;
-      config: { executablePath: string; baseArgs?: string[] };
-    }) => {
-      const response = await agentRunsApi.trigger(workItemId, {
-        agentKey: data.agentKey,
-        inputSummary: data.inputSummary,
-        prompt: data.prompt,
-        config: data.config,
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', workItemId] });
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      success('Agent run triggered successfully');
-      setIsConfigModalOpen(false);
-    },
-    onError: (err: unknown) => {
-      const errorMessage = extractErrorMessage(err, 'Failed to trigger agent run');
-      showError(errorMessage);
-    },
-  });
-
-  const handleOpenConfigModal = () => {
-    setIsConfigModalOpen(true);
-  };
-
-  const handleCloseConfigModal = () => {
-    setIsConfigModalOpen(false);
-  };
-
-  const handleTriggerRun = async (data: {
-    agentKey: string;
-    inputSummary?: string;
-    prompt: string;
-    config: { executablePath: string; baseArgs?: string[] };
-  }) => {
-    await triggerMutation.mutateAsync(data);
-  };
 
   const handleCancelRun = async (runId: string) => {
     if (await confirm({ message: 'Are you sure you want to cancel this agent run?' })) {
@@ -163,6 +113,27 @@ export function AgentConfigTab({
       }
       return newSet;
     });
+  };
+
+  // Toggle expanded state for prompt
+  const togglePromptExpanded = (runId: string) => {
+    setExpandedPrompts((prev) => {
+      const next = new Set(prev);
+      if (next.has(runId)) {
+        next.delete(runId);
+      } else {
+        next.add(runId);
+      }
+      return next;
+    });
+  };
+
+  // Check if prompt has multiple lines or exceeds 5 lines
+  const hasMultipleLines = (text: string | null | undefined): boolean => {
+    if (!text) return false;
+    const lines = text.split('\n');
+    // Show expand button if there are more than 5 lines, or if it's multi-line with substantial content
+    return lines.length > 5 || (lines.length > 1 && text.length > 200);
   };
 
   // Get status type for badge
@@ -210,18 +181,13 @@ export function AgentConfigTab({
         </div>
       )}
 
-      {/* Header with trigger button */}
+      {/* Header */}
       <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Agent Runs</h2>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleOpenConfigModal}
-            disabled={!isWorktreePresent}
-          >
-            Trigger Agent Run
-          </Button>
+          <p className="mt-1 text-sm text-gray-600">
+            Agent runs are triggered automatically by workflows
+          </p>
         </div>
 
         {/* Agent Runs List */}
@@ -241,50 +207,66 @@ export function AgentConfigTab({
                   {/* Run Header */}
                   <div className="mb-2 flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="mb-1 flex items-center space-x-2">
+                      <div className="mb-2 flex items-center space-x-2">
                         <StatusBadge status={getStatusType(run.status)}>
                           {run.status}
                           {isPolling && <span className="ml-1 inline-block animate-pulse">●</span>}
                         </StatusBadge>
                         <span className="font-semibold text-gray-900">{run.agentKey}</span>
                       </div>
-                      <div className="text-sm text-gray-600">
-                        {run.startedAt ? formatDateTime(run.startedAt) : 'Not started'}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {(run.status === 'queued' || run.status === 'running') && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleCancelRun(run.id)}
-                          loading={cancelMutation.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => toggleRunExpansion(run.id)}>
-                        {isExpanded ? '▼' : '▶'}
-                      </Button>
-                    </div>
-                  </div>
 
-                  {/* Run Details */}
-                  {isExpanded && (
-                    <div className="mt-3 space-y-3">
-                      {/* Input Summary */}
+                      {/* Summary */}
                       {run.inputSummary && (
-                        <div>
-                          <h4 className="mb-1 text-sm font-medium text-gray-700">Summary</h4>
-                          <p className="text-sm text-gray-600">{run.inputSummary}</p>
+                        <div className="mb-2">
+                          <div className="relative">
+                            <p
+                              className={`whitespace-pre-wrap text-sm text-gray-700 ${
+                                expandedPrompts.has(run.id) ? '' : 'line-clamp-5'
+                              }`}
+                            >
+                              {run.inputSummary}
+                            </p>
+                            {hasMultipleLines(run.inputSummary) && (
+                              <button
+                                onClick={() => togglePromptExpanded(run.id)}
+                                className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                              >
+                                {expandedPrompts.has(run.id) ? 'Show less' : 'Show more'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
 
-                      {/* Run Details */}
-                      <div className="grid grid-cols-2 gap-2 text-sm">
+                      {/* Metadata Grid */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 sm:grid-cols-4">
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            <span className="font-medium">Started:</span>{' '}
+                            {run.startedAt ? formatDateTime(run.startedAt) : 'Not started'}
+                          </span>
+                        </div>
+                        {run.finishedAt && (
+                          <div className="flex items-center space-x-1">
+                            <CheckCircle className="h-3 w-3" />
+                            <span>
+                              <span className="font-medium">Finished:</span>{' '}
+                              {formatDateTime(run.finishedAt)}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <span className="font-medium">Duration:</span> {getDuration(run)}
                         </div>
+                        {run.sessionId && (
+                          <div>
+                            <span className="font-medium">Session:</span>{' '}
+                            <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">
+                              {run.sessionId.slice(0, 8)}
+                            </code>
+                          </div>
+                        )}
                         {run.headShaBefore && (
                           <div>
                             <span className="font-medium">Before SHA:</span>{' '}
@@ -301,18 +283,41 @@ export function AgentConfigTab({
                             </code>
                           </div>
                         )}
-                        {run.finishedAt && (
-                          <div>
-                            <span className="font-medium">Finished:</span>{' '}
-                            {formatDateTime(run.finishedAt)}
-                          </div>
-                        )}
                       </div>
+                    </div>
+                    <div className="ml-4 flex items-center space-x-2">
+                      {(run.status === 'queued' || run.status === 'running') && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleCancelRun(run.id)}
+                          loading={cancelMutation.isPending}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleRunExpansion(run.id)}
+                        title={isExpanded ? 'Collapse details' : 'Expand details'}
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
 
+                  {/* Run Details - Expanded */}
+                  {isExpanded && (
+                    <div className="mt-3 border-t pt-3">
                       {/* Logs */}
                       {run.log && (
                         <div>
-                          <h4 className="mb-1 text-sm font-medium text-gray-700">Logs</h4>
+                          <h4 className="mb-2 text-sm font-medium text-gray-700">Logs</h4>
                           <div className="max-h-64 overflow-auto rounded-md border bg-gray-50 p-3">
                             <pre className="whitespace-pre-wrap font-mono text-xs">{run.log}</pre>
                           </div>
@@ -325,6 +330,11 @@ export function AgentConfigTab({
                           Logs will appear as the agent runs...
                         </div>
                       )}
+
+                      {/* No logs message for completed runs */}
+                      {!run.log && run.status !== 'queued' && run.status !== 'running' && (
+                        <div className="text-sm text-gray-500">No logs available</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -335,34 +345,10 @@ export function AgentConfigTab({
           <EmptyState
             icon={Bot}
             title="No agent runs found"
-            description="Agent runs will appear here when agents are executed"
-            action={
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleOpenConfigModal}
-                disabled={!isWorktreePresent}
-              >
-                Trigger Agent Run
-              </Button>
-            }
+            description="Agent runs will appear here when agents are executed by workflows"
           />
         )}
       </div>
-
-      {/* Trigger Agent Run Modal */}
-      <Modal
-        isOpen={isConfigModalOpen}
-        onClose={handleCloseConfigModal}
-        title="Trigger Agent Run"
-        size="lg"
-      >
-        <AgentRunConfigForm
-          onSubmit={handleTriggerRun}
-          onCancel={handleCloseConfigModal}
-          isLoading={triggerMutation.isPending}
-        />
-      </Modal>
     </div>
   );
 }

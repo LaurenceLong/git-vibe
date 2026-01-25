@@ -1,4 +1,4 @@
-import { gitService } from './GitService.js';
+import { gitService } from './git/GitService.js';
 import type { WorkItem, Project } from '../types/models.js';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -36,7 +36,9 @@ export class WorkspaceService {
    */
   async initWorkspace(workItemId: string, project: Project): Promise<WorkspaceState> {
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
-    const baseBranch = project.defaultBranch;
+    // Per git_sync_flow_design: when using relay repo, worktrees branch from relay (integration branch)
+    // so PR merge targets relay; manual sync then pushes relay → mirror → source
+    const baseBranch = project.relayRepoPath ? 'relay' : project.defaultBranch;
 
     // Step 1: Ensure relay repo is present and clean
     await gitService.validateRepo(repoPath);
@@ -76,15 +78,15 @@ export class WorkspaceService {
           headSha,
           workspaceStatus: 'ready',
         };
-      } else {
-        // Worktree is registered but directory is missing, prune stale worktree
-        try {
-          gitService.pruneWorktrees(repoPath);
-        } catch (error) {
-          console.warn(
-            `Warning when pruning worktrees: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
+      }
+    } else {
+      // Worktree is registered but directory is missing, prune stale worktree
+      try {
+        gitService.pruneWorktrees(repoPath);
+      } catch (error) {
+        console.warn(
+          `Warning when pruning worktrees: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
 
@@ -94,6 +96,7 @@ export class WorkspaceService {
         .access(worktreePath)
         .then(() => true)
         .catch(() => false);
+
       if (dirExists) {
         // Directory exists but is not a valid worktree, remove it
         await fs.rm(worktreePath, { recursive: true, force: true });
@@ -134,7 +137,7 @@ export class WorkspaceService {
 
   /**
    * Refresh cached head SHA for a WorkItem
-   * Returns the new head SHA - workflow will update WorkItem
+   * Returns new head SHA - workflow will update WorkItem
    */
   async refreshHeadSha(worktreePath: string): Promise<string> {
     // Get current head SHA from worktree
@@ -169,22 +172,43 @@ export class WorkspaceService {
 
   /**
    * Ensure workspace exists (idempotent)
-   * Returns workspace state - workflow will update WorkItem
+   * Returns updated WorkItem with workspace state
    */
-  async ensureWorkspace(workItem: WorkItem, project: Project): Promise<WorkspaceState> {
+  async ensureWorkspace(workItem: WorkItem, project: Project): Promise<WorkItem> {
     // Check if workspace already exists
     const existingState = await this.getWorkspaceState(workItem, project);
     if (existingState) {
-      return existingState;
+      return {
+        ...workItem,
+        worktreePath: existingState.worktreePath,
+        headBranch: existingState.headBranch,
+        baseBranch: existingState.baseBranch,
+        baseSha: existingState.baseSha,
+        headSha: existingState.headSha,
+        workspaceStatus: existingState.workspaceStatus,
+      };
     }
 
     // Initialize workspace
-    return await this.initWorkspace(workItem.id, project);
+    const workspaceState = await this.initWorkspace(workItem.id, project);
+    if (workspaceState) {
+      // Return updated WorkItem with workspace state
+      return {
+        ...workItem,
+        worktreePath: workspaceState.worktreePath,
+        headBranch: workspaceState.headBranch,
+        baseBranch: workspaceState.baseBranch,
+        baseSha: workspaceState.baseSha,
+        headSha: workspaceState.headSha,
+        workspaceStatus: workspaceState.workspaceStatus,
+      };
+    }
+    return workItem;
   }
 
   /**
    * Remove worktree for a WorkItem
-   * Does not delete the branch, only removes the worktree
+   * Does not delete branch, only removes worktree
    * Returns updated workspace state (workflow will persist)
    */
   async removeWorktree(workItem: WorkItem, project: Project): Promise<Partial<WorkspaceState>> {
@@ -215,17 +239,17 @@ export class WorkspaceService {
   /**
    * Delete both worktree and branch for a WorkItem
    * Use this when permanently deleting a WorkItem
-   * Does not update the WorkItem in the database (since it's being deleted)
+   * Does not update WorkItem in database (since it's being deleted)
    */
   async deleteWorkspace(workItem: WorkItem, project: Project): Promise<void> {
     if (!workItem.worktreePath) {
-      // No workspace to delete
+      // No worktree to delete
       return;
     }
 
     const repoPath = project.relayRepoPath || project.sourceRepoPath;
 
-    // Remove worktree directly (don't call removeWorktree as it tries to update the WorkItem)
+    // Remove worktree directly (don't call removeWorktree as it tries to update WorkItem)
     try {
       const worktreeStatus = gitService.getWorktreeStatus(repoPath, workItem.worktreePath);
       if (worktreeStatus === 'present') {
@@ -242,6 +266,7 @@ export class WorkspaceService {
         .access(workItem.worktreePath)
         .then(() => true)
         .catch(() => false);
+
       if (dirExists) {
         await fs.rm(workItem.worktreePath, { recursive: true, force: true });
       }

@@ -4,14 +4,6 @@
  */
 
 /**
- * Default date format options for date-time display.
- */
-const DEFAULT_DATETIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-};
-
-/**
  * Default date format options for date-only display.
  */
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {

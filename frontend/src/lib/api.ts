@@ -99,8 +99,15 @@ export const projectsApi = {
 };
 
 export const pullRequestsApi = {
-  list: async (projectId?: string, page?: number, limit?: number) => {
-    const response = await api.get('/pull-requests', { params: { projectId, page, limit } });
+  list: async (
+    projectId?: string,
+    page?: number,
+    limit?: number,
+    status?: 'open' | 'merged' | 'closed' | 'all'
+  ) => {
+    const response = await api.get('/pull-requests', {
+      params: { projectId, page, limit, status: status && status !== 'all' ? status : undefined },
+    });
     return {
       ...response,
       data: createPaginatedResponseSchema(PullRequestSchema).parse(response.data),
@@ -348,6 +355,17 @@ export const workflowsApi = {
   getRunSteps: async (runId: string) => {
     const response = await api.get(`/workflow-runs/${runId}/steps`);
     return response;
+  },
+};
+
+export const settingsApi = {
+  get: async () => {
+    const response = await api.get('/settings');
+    return response.data as { defaultAgent: string; agentParams: Record<string, unknown> };
+  },
+  update: async (data: { defaultAgent?: string; agentParams?: Record<string, unknown> }) => {
+    const response = await api.patch('/settings', data);
+    return response.data as { defaultAgent: string; agentParams: Record<string, unknown> };
   },
 };
 

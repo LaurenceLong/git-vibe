@@ -25,6 +25,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Bot, AlertTriangle } from 'lucide-react';
 import { formatDateTime, formatDuration } from '@/lib/datetime';
+import { queryKeys } from '@/lib/queryKeys';
 
 /**
  * Props for the ChecksTab component
@@ -76,7 +77,10 @@ export function ChecksTab({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', 'workitem', workItemId] });
+      if (workItemId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
+      }
       success('Agent run cancelled successfully');
     },
     onError: (err: unknown) => {
@@ -93,8 +97,7 @@ export function ChecksTab({
       prompt: string;
       config: { executablePath: string; baseArgs?: string[] };
     }) => {
-      // Use workItemId if available, otherwise fall back to prId for backward compatibility
-      const targetId = workItemId || prId;
+      const targetId = workItemId ?? prId;
       const response = await agentRunsApi.trigger(targetId, {
         ...data,
         inputSummary: data.inputSummary || undefined,
@@ -102,7 +105,10 @@ export function ChecksTab({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-runs', 'workitem', workItemId] });
+      if (workItemId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
+      }
       success('Agent run triggered successfully');
       setIsConfigModalOpen(false);
     },

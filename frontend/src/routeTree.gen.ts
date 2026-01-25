@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ProjectsProjectNameRouteImport } from './routes/projects/$projectName'
@@ -20,6 +22,16 @@ import { Route as ProjectsProjectNameDashboardRouteImport } from './routes/proje
 import { Route as ProjectsProjectNameCodeRouteImport } from './routes/projects/$projectName.code'
 import { Route as ProjectsProjectNameActionsRouteImport } from './routes/projects/$projectName.actions'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -79,6 +91,8 @@ const ProjectsProjectNameActionsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/settings': typeof SettingsRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/projects': typeof ProjectsIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
@@ -91,6 +105,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/settings': typeof SettingsRoute
   '/projects': typeof ProjectsIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
   '/projects/$projectName/code': typeof ProjectsProjectNameCodeRoute
@@ -103,6 +119,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/settings': typeof SettingsRoute
   '/projects/$projectName': typeof ProjectsProjectNameRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
   '/projects/$projectName/actions': typeof ProjectsProjectNameActionsRoute
@@ -117,6 +135,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/dashboard'
+    | '/settings'
     | '/projects/$projectName'
     | '/projects'
     | '/projects/$projectName/actions'
@@ -129,6 +149,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/dashboard'
+    | '/settings'
     | '/projects'
     | '/projects/$projectName/actions'
     | '/projects/$projectName/code'
@@ -140,6 +162,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/dashboard'
+    | '/settings'
     | '/projects/$projectName'
     | '/projects/'
     | '/projects/$projectName/actions'
@@ -153,12 +177,28 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRoute
+  SettingsRoute: typeof SettingsRoute
   ProjectsProjectNameRoute: typeof ProjectsProjectNameRouteWithChildren
   ProjectsIndexRoute: typeof ProjectsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -257,6 +297,8 @@ const ProjectsProjectNameRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRoute,
+  SettingsRoute: SettingsRoute,
   ProjectsProjectNameRoute: ProjectsProjectNameRouteWithChildren,
   ProjectsIndexRoute: ProjectsIndexRoute,
 }

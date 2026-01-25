@@ -251,11 +251,12 @@ export function SearchDropdown({ isOpen, onClose, query }: SearchDropdownProps) 
                 </div>
                 {result.type === 'workitem' && (
                   <>
-                    {(result.data as WorkItem).projectId && projectNames[(result.data as WorkItem).projectId] && (
-                      <p className="mt-0.5 truncate text-xs text-gray-500">
-                        Project: {projectNames[(result.data as WorkItem).projectId]}
-                      </p>
-                    )}
+                    {(result.data as WorkItem).projectId &&
+                      projectNames[(result.data as WorkItem).projectId] && (
+                        <p className="mt-0.5 truncate text-xs text-gray-500">
+                          Project: {projectNames[(result.data as WorkItem).projectId]}
+                        </p>
+                      )}
                     {(result.data as WorkItem).body && (
                       <p className="mt-0.5 truncate text-xs text-gray-500">
                         {(result.data as WorkItem).body}
@@ -265,11 +266,12 @@ export function SearchDropdown({ isOpen, onClose, query }: SearchDropdownProps) 
                 )}
                 {result.type === 'pullrequest' && (
                   <>
-                    {(result.data as PullRequest).projectId && projectNames[(result.data as PullRequest).projectId] && (
-                      <p className="mt-0.5 truncate text-xs text-gray-500">
-                        Project: {projectNames[(result.data as PullRequest).projectId]}
-                      </p>
-                    )}
+                    {(result.data as PullRequest).projectId &&
+                      projectNames[(result.data as PullRequest).projectId] && (
+                        <p className="mt-0.5 truncate text-xs text-gray-500">
+                          Project: {projectNames[(result.data as PullRequest).projectId]}
+                        </p>
+                      )}
                     {(result.data as PullRequest).description && (
                       <p className="mt-0.5 truncate text-xs text-gray-500">
                         {(result.data as PullRequest).description}

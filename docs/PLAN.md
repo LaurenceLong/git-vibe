@@ -39,35 +39,43 @@
 ## 1) Domain Model (Concepts)
 
 ### 1.1 WorkItem
+
 Represents a unit of work and owns a persistent workspace.
 
 **Key responsibilities**
+
 - Own the workspace (worktree path + head branch)
 - Provide a stable target for agent runs
 - Provide metadata for PR creation and review
 
 ### 1.2 Pull Request (PR)
+
 A first-class entity controlling review and merge.
 
 **Key responsibilities**
+
 - Define base and head (branch and/or SHA)
 - Render diff and commits
 - Track approvals and merge gates
 - Execute merge into base branch under controlled rules
 
 ### 1.3 AgentRun
+
 An immutable-ish execution record per run attempt.
 
 **Key responsibilities**
+
 - Track status, logs, timestamps
 - Record head SHA before and after
 - Persist `session_id` (required)
 - Associate to a WorkItem (and indirectly to its PR)
 
 ### 1.4 TargetRepo
+
 A destination repository for importing patches.
 
 **Key responsibilities**
+
 - Store target repository path and default branch
 - Track import history from PRs
 
@@ -89,7 +97,9 @@ A destination repository for importing patches.
 ## 3) Git Model & Repository Layout
 
 ### 3.1 Repositories
+
 GitVibe uses a **relay repository** (local or server-side) as the execution environment:
+
 - Holds a clone of the "project repo" (or a managed repo)
 - Creates worktrees for WorkItems
 - Runs agents in worktrees
@@ -99,14 +109,17 @@ GitVibe uses a **relay repository** (local or server-side) as the execution envi
 > This PLAN assumes GitVibe controls the repo locally (relay) for simplicity and reliability.
 
 ### 3.2 Branch Strategy
+
 - Base branch: typically `main` (configurable per project via `default_branch`)
 - WorkItem head branch: `wi/<work_item_id>` (deterministic, same WorkItem always gets same branch)
 - Worktree directory: `<storage_base_dir>/worktrees/<work_item_id>/`
 
 ### 3.3 Base SHA Strategy
+
 PR diff correctness depends on base selection.
 
 Recommended:
+
 - On PR creation, store a **frozen `base_sha`** from `base_branch`.
 - Allow explicit "Update base" action later if desired.
 
@@ -118,6 +131,7 @@ Recommended:
 > Use UUIDs if preferred; examples use integer IDs for readability.
 
 ### 4.1 projects
+
 - `id` (UUID)
 - `name` (unique)
 - `source_repo_path` (path to source repository)
@@ -130,6 +144,7 @@ Recommended:
 - timestamps
 
 ### 4.2 work_items
+
 - `id` (UUID)
 - `project_id` (foreign key)
 - `type` (`issue` | `feature-request`)
@@ -149,10 +164,12 @@ Recommended:
 - timestamps
 
 Constraints:
+
 - unique `(project_id, head_branch)` (enforced via index)
 - unique `worktree_path` (enforced via index)
 
 ### 4.3 pull_requests
+
 - `id` (UUID)
 - `project_id` (foreign key)
 - `work_item_id` (unique, enforcing 1:1 by default)
@@ -169,11 +186,13 @@ Constraints:
 - timestamps
 
 Constraints:
+
 - unique `work_item_id` (enforced)
 
 Note: Base SHA and head SHA are tracked in the WorkItem, not duplicated in PR table.
 
 ### 4.4 agent_runs
+
 - `id` (UUID)
 - `project_id` (foreign key)
 - `work_item_id` (foreign key)
@@ -195,11 +214,13 @@ Note: Base SHA and head SHA are tracked in the WorkItem, not duplicated in PR ta
 - timestamps
 
 Indexes:
+
 - `(work_item_id)` (for listing runs per work item)
 - `(session_id)` (for session-based queries)
 - `(status)` (for filtering by status)
 
 ### 4.5 review_threads
+
 - `id` (UUID)
 - `pull_request_id` (foreign key)
 - `status` (`open` | `resolved` | `outdated`)
@@ -208,12 +229,14 @@ Indexes:
 - timestamps
 
 ### 4.6 review_comments
+
 - `id` (UUID)
 - `thread_id` (foreign key)
 - `body` (comment text)
 - timestamps
 
 ### 4.7 target_repos
+
 - `id` (UUID)
 - `name`
 - `repo_path` (unique, path to target repository)
@@ -221,6 +244,7 @@ Indexes:
 - timestamps
 
 ### 4.8 imports
+
 - `id` (UUID)
 - `pull_request_id` (foreign key)
 - `target_repo_id` (foreign key)
@@ -236,6 +260,7 @@ Indexes:
 - timestamps
 
 ### 4.9 approvals (optional MVP+)
+
 - `id`
 - `pull_request_id`
 - `user_id`
@@ -247,6 +272,7 @@ Indexes:
 ## 5) API Surface (Minimal)
 
 ### 5.1 Projects
+
 - `GET /api/projects` - List all projects with pagination
 - `POST /api/projects` - Create a project
 - `GET /api/projects/:id` - Get project details
@@ -259,11 +285,13 @@ Indexes:
 - `POST /api/models/refresh` - Refresh model cache
 
 ### 5.2 Target Repos
+
 - `GET /api/target-repos` - List all target repos
 - `POST /api/target-repos` - Create a target repo
 - `GET /api/target-repos/:id` - Get target repo details
 
 ### 5.3 WorkItems
+
 - `GET /api/workitems` - List work items with optional project filter and pagination
 - `POST /api/projects/:projectId/work-items` - Create a work item
 - `GET /api/workitems/:id` - Get work item details
@@ -280,6 +308,7 @@ Indexes:
 - `POST /api/workitems/:id/create-pr` - Create PR from work item
 
 ### 5.4 Pull Requests
+
 - `GET /api/pull-requests` - List PRs (with optional project filter and pagination)
 - `GET /api/pull-requests/:id` - Get PR details
 - `GET /api/pull-requests/:id/diff` - Get PR diff
@@ -292,6 +321,7 @@ Indexes:
 - `GET /api/pull-requests/:id/patch` - Export patch (optional)
 
 ### 5.5 Agent Runs
+
 - `GET /api/agent-runs/:id` - Get run status and logs
 - `POST /api/agent-runs/:id/cancel` - Cancel running agent
 - `GET /api/agent-runs/:id/stdout` - Get stdout log
@@ -299,6 +329,7 @@ Indexes:
 - `GET /api/agent-runs/:id/logs` - Get both stdout and stderr logs
 
 ### 5.6 Reviews
+
 - `GET /api/pull-requests/:id/reviews/threads` - List review threads
 - `POST /api/pull-requests/:id/reviews/threads` - Create thread
 - `GET /api/pull-requests/:id/reviews/threads/:threadId` - Get thread details
@@ -313,11 +344,14 @@ Indexes:
 ## 6) Workspace Initialization (Deterministic & Idempotent)
 
 ### 6.1 When to init
+
 Recommended default:
+
 - Initialize workspace automatically on the first AgentRun request
 - Still provide explicit init endpoint for admin/troubleshooting
 
 ### 6.2 Initialization steps (relay repo)
+
 Given `project.repo_path` and `work_item`:
 
 1. Ensure relay repo is present and clean enough for operations.
@@ -333,6 +367,7 @@ Given `project.repo_path` and `work_item`:
    - `workspace_status=ready`
 
 Idempotency:
+
 - If worktree exists and is valid, return success and refresh `head_sha`.
 
 ---
@@ -340,7 +375,9 @@ Idempotency:
 ## 7) AgentRun Execution Model (Serialized per WorkItem)
 
 ### 7.1 Locking
+
 Before starting a run:
+
 - Acquire WorkItem lock:
   - if `lock_owner_run_id` is set and not expired → reject (409 Conflict)
   - else set `lock_owner_run_id = runId` and `lock_expires_at = now + TTL`
@@ -348,12 +385,15 @@ Before starting a run:
 - Release lock in `finally` on success/failure/cancel
 
 Also enforce:
+
 - Only one `agent_runs.status in (queued, running)` per work item.
 
 ### 7.2 session_id policy
+
 session_id must be known before spawning the agent.
 
 Recommended default policy options (pick one and document it):
+
 - **WorkItem-scoped session** (best for "continuous conversation"):
   - `session_id = "wi-" + work_item_id`
 - **Run-scoped session** (best for strict audit isolation):
@@ -362,6 +402,7 @@ Recommended default policy options (pick one and document it):
 This PLAN assumes **WorkItem-scoped** unless caller overrides.
 
 ### 7.3 Run steps (Implementation)
+
 1. Check project concurrency limit (enforced per project, not just per WorkItem)
 2. Ensure workspace initialized (`worktree_path` exists via `ensureWorkspace`)
 3. Acquire WorkItem lock (with TTL for crash recovery)
@@ -384,7 +425,9 @@ This PLAN assumes **WorkItem-scoped** unless caller overrides.
 9. Error handling: On failure, still attempt finalization but mark status as `failed`
 
 ### 7.4 Failure behavior
+
 If agent fails:
+
 - Still attempt to capture logs
 - Still attempt to stage/commit? Recommended:
   - **Do NOT auto-commit on failure** by default to avoid committing partial changes.
@@ -396,22 +439,30 @@ If agent fails:
 ## 8) PR Diff, Commits, and Review
 
 ### 8.1 Diff computation
+
 PR diff is computed from frozen base SHA to current head SHA:
+
 - `git diff --no-color <base_sha>..<head_sha>`
 
 ### 8.2 Commits list
+
 Option A (simple):
+
 - `git log --oneline <base_sha>..<head_sha>`
 
 Option B (more GitHub-like):
+
 - compute merge-base and list commits reachable from head not from base.
 
 ### 8.3 Review gates (MVP)
+
 Define a mergeability function that returns:
+
 - `mergeable: true/false`
 - `reasons: []` (strings)
 
 Minimal checks:
+
 - PR.status == open
 - No AgentRun running for WorkItem
 - Workspace lock is free
@@ -423,25 +474,31 @@ Minimal checks:
 ## 9) Merge Implementation (PR is the control plane)
 
 ### 9.1 Coordination with AgentRun
+
 Merging must coordinate with WorkItem lock:
+
 - Acquire the same WorkItem lock for merge
 - Reject merge if a run is currently running
 
 ### 9.2 Merge strategies
+
 Given PR `base_branch`, `head_branch` in relay repo.
 
 #### Strategy: merge commit
+
 - `git checkout <base_branch>`
 - `git merge --no-ff <head_branch> -m "Merge PR #<id>: <title>"`
 - record `merge_commit_sha`
 
 #### Strategy: squash
+
 - `git checkout <base_branch>`
 - `git merge --squash <head_branch>`
 - `git commit -m "Squash PR #<id>: <title>"`
 - record `merge_commit_sha`
 
 #### Strategy: rebase
+
 - `git checkout <head_branch>`
 - `git rebase <base_branch>`
 - `git checkout <base_branch>`
@@ -449,7 +506,9 @@ Given PR `base_branch`, `head_branch` in relay repo.
 - record resulting base HEAD as merge sha
 
 ### 9.3 Conflict handling
+
 Before merge, test mergeability:
+
 - `git checkout <base_branch>`
 - `git merge --no-commit --no-ff <head_branch>` (dry-ish)
 - If conflicts:
@@ -459,6 +518,7 @@ Before merge, test mergeability:
   - abort (if just testing) and proceed with chosen strategy
 
 ### 9.4 Post-merge updates
+
 - Set PR status to `merged`
 - Set WorkItem status optionally to `closed`
 - Update cached SHAs
@@ -471,6 +531,7 @@ Before merge, test mergeability:
 ## 10) Mermaid Diagrams (Agent Workflow & PR Lifecycle)
 
 ### 10.1 Overall System Flow
+
 ```mermaid
 flowchart TB
   U[User] --> UI[GitVibe UI]
@@ -484,6 +545,7 @@ flowchart TB
 ```
 
 ### 10.2 WorkItem Workspace Initialization
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -502,6 +564,7 @@ sequenceDiagram
 ```
 
 ### 10.3 AgentRun (Serialized) — Detailed
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -553,6 +616,7 @@ sequenceDiagram
 ```
 
 ### 10.4 Resume Semantics (sessionId-driven)
+
 ```mermaid
 stateDiagram-v2
   [*] --> NoRunYet
@@ -569,6 +633,7 @@ stateDiagram-v2
 > This keeps execution history immutable and audit-friendly while enabling conversation continuity.
 
 ### 10.5 PR Lifecycle & Merge Gate
+
 ```mermaid
 stateDiagram-v2
   [*] --> Open
@@ -599,26 +664,33 @@ flowchart LR
 ## 11) Implementation Notes (Pragmatic)
 
 ### 11.1 Deterministic commit messages
+
 For auto-commits, use a consistent format:
+
 - `AgentRun <id>: <input_summary>`
-Where `input_summary` is the first 200 characters of the prompt. Full prompt and config stored in `input_json`.
+  Where `input_summary` is the first 200 characters of the prompt. Full prompt and config stored in `input_json`.
 
 ### 11.2 Large logs
+
 Prefer `log_path`, `stdout_path`, and `stderr_path` on disk with rotation; store a small tail in DB if needed.
 
 ### 11.3 Lock TTL and crash recovery
+
 - Use a TTL on the WorkItem lock (default: 6 hours)
 - Lock is released in `finally` block after agent completion
 - If TTL expires, new runs can acquire lock (previous run may be marked as failed if detected)
 - Current implementation: Lock released immediately after finalization, no heartbeat renewal (simplified)
 
 ### 11.4 Security
+
 - Run agents in a sandbox where possible
 - Validate prompts/instructions storage (PII/secret handling)
 - Restrict file system scope to worktree
 
 ### 11.5 Storage Configuration
+
 Storage paths are configurable via environment variables:
+
 - `STORAGE_BASE_DIR`: Base directory for all GitVibe data
 - Defaults to system temp directory (`/tmp/git-vibe` on Unix, `%TEMP%\git-vibe` on Windows)
 
@@ -629,6 +701,7 @@ Storage paths are configurable via environment variables:
 ### ✅ MVP Scope (Complete)
 
 **Core Features**
+
 - ✅ WorkItem CRUD
 - ✅ Workspace init (implicit on first agent run)
 - ✅ PR open + PR view (diff + commits)
@@ -646,6 +719,7 @@ Storage paths are configurable via environment variables:
 - ✅ Patch export endpoint (GET /pull-requests/:id/patch)
 
 **Additional Features Implemented**
+
 - ✅ Models cache for agent adapters
 - ✅ Review comment addressing (agent correction)
 - ✅ Import job tracking and history
@@ -656,6 +730,7 @@ Storage paths are configurable via environment variables:
 - ✅ Source repository sync functionality
 
 ### 🔄 Nice-to-have (Future Enhancements)
+
 - Approvals / required reviewers
 - GitHub integration (sync PR / statuses)
 - Distributed runners across machines (job queue + remote workspace)
@@ -667,6 +742,7 @@ Storage paths are configurable via environment variables:
 ---
 
 ## 13) Non-goals (for initial release)
+
 - Multiple workspaces per WorkItem
 - Concurrent agents on the same WorkItem (enforced by lock)
 - Fully GitHub-compatible review comment threading (basic threading implemented)
@@ -681,6 +757,7 @@ Storage paths are configurable via environment variables:
 ### 14.1 Tech Stack
 
 **Backend**
+
 - Node.js 20+ + TypeScript
 - Fastify web framework
 - SQLite database with Drizzle ORM
@@ -689,6 +766,7 @@ Storage paths are configurable via environment variables:
 - Zod for validation
 
 **Frontend**
+
 - React 18 + TypeScript
 - Vite build tool
 - TanStack Query for data fetching
@@ -698,15 +776,19 @@ Storage paths are configurable via environment variables:
 - Lucide React for icons
 
 **Shared**
+
 - TypeScript types and Zod schemas
 - Shared between backend and frontend
 
 ### 14.2 Agent Adapters
+
 Two agent adapters are implemented:
+
 - **OpenCodeAgentAdapter**: For OpenCode CLI agent
 - **ClaudeCodeAgentAdapter**: For Claude Code agent
 
 Both extend `AgentAdapter` base class and implement:
+
 - `validate()`: Check executable availability
 - `run()`: Execute agent with prompt
 - `correctWithReviewComments()`: Resume/correct with review feedback
@@ -715,14 +797,18 @@ Both extend `AgentAdapter` base class and implement:
 - `getStatus()`: Check run status
 
 ### 14.3 Project Concurrency
+
 Projects have a `max_agent_concurrency` setting (default: 3) that limits concurrent agent runs across all WorkItems in a project. This is tracked in-memory by `AgentService`.
 
 ### 14.4 Storage Configuration
+
 Storage paths are configurable via environment variables:
+
 - `STORAGE_BASE_DIR`: Base directory for all GitVibe data
 - Defaults to system temp directory (`/tmp/git-vibe` on Unix, `%TEMP%\git-vibe` on Windows)
 
 Directory structure:
+
 ```
 git-vibe/
 ├── data/
@@ -736,14 +822,18 @@ git-vibe/
 ```
 
 ### 14.5 Database Migrations
+
 Two migration systems supported:
+
 1. **Drizzle Kit migrations** (recommended): Uses `drizzle-kit generate` and `drizzle-orm/migrator`
 2. **Raw SQL migrations**: Fallback for `.sql` files in `drizzle/` directory
 
 Migration system auto-detects which to use based on presence of `drizzle/meta/_journal.json`.
 
 ### 14.6 Git Service Architecture
+
 Git operations are organized into specialized services:
+
 - **GitService**: Main facade for all Git operations
 - **GitWorktreeService**: Worktree-specific operations
 - **GitCommitService**: Commit, log, and diff operations
@@ -753,13 +843,16 @@ Git operations are organized into specialized services:
 This separation provides better organization and testability.
 
 ### 14.7 Frontend Architecture
+
 The frontend is organized into:
+
 - **Routes**: TanStack Router routes for pages
 - **Components**: Reusable UI components organized by feature
 - **Hooks**: Custom React hooks for data fetching and state management
 - **Lib**: API client and utility functions
 
 Key components:
+
 - Project shell with tab navigation (Overview, Code, Pull Requests, WorkItems, Settings, Actions)
 - PR detail view with tabs (Overview, Diff, Commits, Files Changed, Checks, Reviews)
 - WorkItem detail view with tabs (Discussion, Log Detail, PR Status, Task Management, Agent Config)
@@ -771,6 +864,7 @@ Key components:
 ## 15) Development Workflow
 
 ### 15.1 Setup
+
 ```bash
 # Install dependencies
 npm run install:all
@@ -783,10 +877,12 @@ npm run dev
 ```
 
 This starts:
+
 - Backend API server at `http://127.0.0.1:11031`
 - Frontend UI at `http://localhost:11990`
 
 ### 15.2 Building
+
 ```bash
 # Build all packages
 npm run build
@@ -798,6 +894,7 @@ npm run build:shared
 ```
 
 ### 15.3 Testing
+
 ```bash
 # Run tests (Vitest)
 cd backend && npm test
@@ -807,6 +904,7 @@ cd backend && npm run test:run
 ```
 
 ### 15.4 Linting and Formatting
+
 ```bash
 # Lint all packages
 npm run lint
@@ -827,6 +925,7 @@ npm run format:backend
 See the separate API documentation or the frontend `api.ts` file for complete API reference.
 
 Key endpoints:
+
 - Projects: `/api/projects`
 - Target Repos: `/api/target-repos`
 - WorkItems: `/api/workitems`
@@ -839,25 +938,33 @@ Key endpoints:
 ## 17) Troubleshooting
 
 ### 17.1 Agent Not Found
+
 If you get "Executable not found" errors:
+
 1. Verify the agent executable is in your PATH
 2. Or provide the full path in project settings
 3. Check that the executable has execute permissions
 
 ### 17.2 Workspace Lock Issues
+
 If a WorkItem is stuck in locked state:
+
 1. Check if an agent run is actually running
 2. If not, the lock TTL will expire (default: 6 hours)
 3. Or manually release the lock via database
 
 ### 17.3 Git Worktree Errors
+
 If worktree operations fail:
+
 1. Ensure the relay repository path is correct
 2. Check that the repository is a valid Git repo
 3. Run `git worktree prune` to clean up stale worktrees
 
 ### 17.4 Merge Conflicts
+
 If merge fails due to conflicts:
+
 1. Update the PR base to the latest base branch
 2. Rebase the head branch onto the new base
 3. Resolve conflicts manually in the worktree
@@ -868,6 +975,7 @@ If merge fails due to conflicts:
 ## 18) Contributing
 
 When contributing to GitVibe:
+
 1. Follow the existing code style (ESLint + Prettier)
 2. Add tests for new features
 3. Update this PLAN.md for architectural changes

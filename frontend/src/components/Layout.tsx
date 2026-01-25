@@ -13,6 +13,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isProjectsIndexPage =
     location.pathname === '/projects' || location.pathname === '/projects/';
 
+  // Check if we're on global dashboard or settings (same level as projects)
+  const isDashboardPage = location.pathname === '/dashboard' || location.pathname === '/dashboard/';
+  const isSettingsPage = location.pathname === '/settings' || location.pathname === '/settings/';
+  const isGlobalTopLevelPage = isProjectsIndexPage || isDashboardPage || isSettingsPage;
+
   // Determine active tab from current path
   const getActiveTab = (): string => {
     const path = location.pathname;
@@ -38,8 +43,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           path: `/projects/${projectName}/pullrequests`,
         },
         { id: 'actions', label: 'Actions', path: `/projects/${projectName}/actions` },
-        { id: 'dashboard', label: 'Dashboard', path: `/projects/${projectName}/dashboard` },
         { id: 'settings', label: 'Settings', path: `/projects/${projectName}/settings` },
+        { id: 'dashboard', label: 'Dashboard', path: `/projects/${projectName}/dashboard` },
       ]
     : [];
 
@@ -64,10 +69,38 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                 </div>
               )}
+              {isGlobalTopLevelPage && !isProjectPage && (
+                <nav className="flex items-center space-x-4 text-sm">
+                  <Link
+                    to="/projects"
+                    className={`font-medium ${
+                      isProjectsIndexPage ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Projects
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className={`font-medium ${
+                      isSettingsPage ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Settings
+                  </Link>
+                  <Link
+                    to="/dashboard"
+                    className={`font-medium ${
+                      isDashboardPage ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                </nav>
+              )}
             </div>
 
             {/* Search bar */}
-            {(isProjectPage || isProjectsIndexPage) && (
+            {(isProjectPage || isGlobalTopLevelPage) && (
               <div className="ml-8 max-w-md flex-1">
                 <SearchInput projectId={projectName ?? undefined} />
               </div>

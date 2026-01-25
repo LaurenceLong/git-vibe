@@ -19,7 +19,6 @@ export interface SettingsTabProps {
 
 export function SettingsTab({ project }: SettingsTabProps) {
   const [name, setName] = useState(project.name);
-  const [defaultBranch, setDefaultBranch] = useState(project.defaultBranch);
   const [defaultAgent, setDefaultAgent] = useState<AgentKey>(project.defaultAgent || 'opencode');
   const [agentParams, setAgentParams] = useState<AgentParams>({});
   const [isEditing, setIsEditing] = useState(false);
@@ -46,12 +45,8 @@ export function SettingsTab({ project }: SettingsTabProps) {
   const { models, isLoading: isLoadingModels, refetch: refetchModels } = useModels(defaultAgent);
 
   const updateProjectMutation = useMutation({
-    mutationFn: (data: {
-      name?: string;
-      defaultBranch?: string;
-      defaultAgent?: AgentKey;
-      agentParams?: AgentParams;
-    }) => projectsApi.update(project.id, data),
+    mutationFn: (data: { name?: string; defaultAgent?: AgentKey; agentParams?: AgentParams }) =>
+      projectsApi.update(project.id, data),
     onSuccess: () => {
       setMessage({ type: 'success', text: 'Settings saved successfully' });
       setIsEditing(false);
@@ -71,15 +66,8 @@ export function SettingsTab({ project }: SettingsTabProps) {
       return;
     }
 
-    if (!defaultBranch.trim()) {
-      setMessage({ type: 'error', text: 'Default branch is required' });
-      setTimeout(() => setMessage(null), 3000);
-      return;
-    }
-
     updateProjectMutation.mutate({
       name: name !== project.name ? name : undefined,
-      defaultBranch: defaultBranch !== project.defaultBranch ? defaultBranch : undefined,
       defaultAgent: defaultAgent !== project.defaultAgent ? defaultAgent : undefined,
       agentParams: Object.keys(agentParams).length > 0 ? agentParams : undefined,
     });
@@ -87,7 +75,6 @@ export function SettingsTab({ project }: SettingsTabProps) {
 
   const handleCancel = () => {
     setName(project.name);
-    setDefaultBranch(project.defaultBranch);
     setDefaultAgent(project.defaultAgent || 'opencode');
     if (project.agentParams) {
       try {
@@ -117,7 +104,7 @@ export function SettingsTab({ project }: SettingsTabProps) {
 
   const agentOptions: SelectOption[] = [
     { value: 'opencode', label: 'OpenCode' },
-    { value: 'claudcode', label: 'ClaudeCode' },
+    { value: 'claudecode', label: 'ClaudeCode' },
   ];
 
   // Build model options from fetched models
@@ -161,23 +148,15 @@ export function SettingsTab({ project }: SettingsTabProps) {
             />
           </div>
 
-          {/* Default Branch */}
+          {/* Default Branch (read-only, set at project creation) */}
           <div className="mb-4">
-            <label
-              htmlFor="default-branch"
-              className="mb-2 block text-sm font-medium text-gray-700"
-            >
-              Default Branch
-            </label>
-            <input
-              id="default-branch"
-              type="text"
-              value={defaultBranch}
-              onChange={(e) => setDefaultBranch(e.target.value)}
-              disabled={!isEditing}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-              placeholder="e.g., main, master"
-            />
+            <label className="mb-2 block text-sm font-medium text-gray-700">Default Branch</label>
+            <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {project.defaultBranch}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Default branch is set when the project is created and cannot be changed
+            </p>
           </div>
 
           {/* Default Agent */}

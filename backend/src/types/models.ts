@@ -4,11 +4,14 @@ import type {
   PullRequest as SharedPullRequest,
   ReviewThread as SharedReviewThread,
   ReviewComment as SharedReviewComment,
+  Task as SharedTask,
+  Worktree as SharedWorktree,
+  GitOp as SharedGitOp,
   AgentRun as SharedAgentRun,
   AgentParams as SharedAgentParams,
   Workflow as SharedWorkflow,
   WorkflowRun as SharedWorkflowRun,
-  StepExecution as SharedStepExecution,
+  NodeRun as SharedNodeRun,
   WorkItemType,
   WorkItemStatus,
   WorkspaceStatus,
@@ -17,10 +20,7 @@ import type {
   ReviewThreadStatus,
   ReviewThreadSeverity,
   AgentKey,
-  StepStatus,
-  WorkflowNodeType,
-  SessionMode,
-  TransitionTrigger,
+  NodeRunStatus,
 } from 'git-vibe-shared';
 
 export type WorkItem = Omit<SharedWorkItem, 'createdAt' | 'updatedAt' | 'lockExpiresAt'> & {
@@ -51,6 +51,21 @@ export type ReviewComment = Omit<SharedReviewComment, 'createdAt'> & {
   createdAt: Date;
 };
 
+export type Task = Omit<SharedTask, 'createdAt' | 'updatedAt'> & {
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Worktree = Omit<SharedWorktree, 'createdAt' | 'updatedAt'> & {
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type GitOp = Omit<SharedGitOp, 'createdAt' | 'updatedAt'> & {
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type AgentRun = Omit<
   SharedAgentRun,
   'createdAt' | 'updatedAt' | 'startedAt' | 'finishedAt'
@@ -59,6 +74,7 @@ export type AgentRun = Omit<
   updatedAt: Date;
   startedAt: Date | null;
   finishedAt: Date | null;
+  nodeRunId: string | null; // Link to NodeRun that started this AgentRun
 };
 
 export type Workflow = SharedWorkflow;
@@ -69,8 +85,7 @@ export type WorkflowRun = Omit<SharedWorkflowRun, 'createdAt' | 'startedAt' | 'f
   finishedAt: Date | null;
 };
 
-export type StepExecution = Omit<SharedStepExecution, 'createdAt' | 'startedAt' | 'finishedAt'> & {
-  createdAt: Date;
+export type NodeRun = Omit<SharedNodeRun, 'startedAt' | 'finishedAt'> & {
   startedAt: Date | null;
   finishedAt: Date | null;
 };
@@ -84,10 +99,7 @@ export type {
   ReviewThreadStatus,
   ReviewThreadSeverity,
   AgentKey,
-  StepStatus,
-  WorkflowNodeType,
-  SessionMode,
-  TransitionTrigger,
+  NodeRunStatus,
 };
 
 export type ToShared<T extends { createdAt: Date; updatedAt: Date }> = Omit<

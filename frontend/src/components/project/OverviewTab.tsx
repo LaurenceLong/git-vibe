@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { workItemsApi, projectsApi, pullRequestsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +36,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
   const { confirm } = useConfirmModal();
 
   const { data: workItems, isLoading: isLoadingWorkItems } = useQuery({
-    queryKey: ['workitems', project.id],
+    queryKey: queryKeys.workitems({ projectId: project.id }),
     queryFn: () => workItemsApi.list(project.id).then((res) => res.data.data),
   });
 

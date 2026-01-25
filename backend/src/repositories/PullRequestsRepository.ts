@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
+import { PR_STATUS_OPEN, PR_STATUS_MERGED, PR_STATUS_CLOSED } from 'git-vibe-shared';
 import { pullRequests } from '../models/schema.js';
 import type { PullRequest } from '../types/models.js';
 import { getDb } from '../db/client.js';
@@ -33,7 +34,7 @@ export class PullRequestsRepository {
         workItemId: data.workItemId,
         title: data.title,
         description: data.description || null,
-        status: data.status || 'open',
+        status: data.status || PR_STATUS_OPEN,
         sourceBranch: data.sourceBranch,
         targetBranch: data.targetBranch,
         mergeStrategy: data.mergeStrategy || 'merge',
@@ -64,7 +65,11 @@ export class PullRequestsRepository {
 
   async findAll(): Promise<PullRequest[]> {
     const db = await this.getDbInstance();
-    const result = await db.select().from(pullRequests).execute();
+    const result = await db
+      .select()
+      .from(pullRequests)
+      .orderBy(desc(pullRequests.createdAt))
+      .execute();
     return result as PullRequest[];
   }
 
@@ -74,6 +79,7 @@ export class PullRequestsRepository {
       .select()
       .from(pullRequests)
       .where(eq(pullRequests.projectId, projectId))
+      .orderBy(desc(pullRequests.createdAt))
       .execute();
 
     return result as PullRequest[];
@@ -125,11 +131,11 @@ export class PullRequestsRepository {
     }
 
     // Check if PR is already merged or closed
-    if (pr.status === 'merged') {
+    if (pr.status === PR_STATUS_MERGED) {
       return { canMerge: false, reason: 'Pull request is already merged' };
     }
 
-    if (pr.status === 'closed') {
+    if (pr.status === PR_STATUS_CLOSED) {
       return { canMerge: false, reason: 'Pull request is closed' };
     }
 

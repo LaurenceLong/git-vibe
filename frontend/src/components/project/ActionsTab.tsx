@@ -15,7 +15,6 @@ import { CheckCircle, Clock, FileCode } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { formatDateTime } from '@/lib/datetime';
 
 export type ViewMode = 'runs' | 'run-details' | 'config';
 
@@ -42,7 +41,6 @@ export function ActionsTab({
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(initialWorkflowId);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId);
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
-  const [showConfig, setShowConfig] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StepStatus | 'all'>('all');
 
@@ -115,7 +113,6 @@ export function ActionsTab({
   };
 
   const handleShowConfig = () => {
-    setShowConfig(true);
     setViewMode('config');
     onSelectionChange?.({
       workflowId: selectedWorkflowId,
@@ -125,7 +122,6 @@ export function ActionsTab({
   };
 
   const handleCloseConfig = () => {
-    setShowConfig(false);
     setViewMode('runs');
     onSelectionChange?.({
       workflowId: selectedWorkflowId,
@@ -134,12 +130,12 @@ export function ActionsTab({
     });
   };
 
-  const getLastRunTime = (workflowId: string): string | null => {
+  const getLastRunTime = (_workflowId: string): string | null => {
     // TODO: Fetch last run time from API when available
     return null;
   };
 
-  const getWorkflowStatus = (workflow: any): 'active' | 'inactive' => {
+  const getWorkflowStatus = (_workflow: any): 'active' | 'inactive' => {
     // TODO: Determine status based on runs or other criteria
     return 'active';
   };

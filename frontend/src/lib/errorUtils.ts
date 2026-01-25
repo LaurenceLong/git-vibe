@@ -19,11 +19,11 @@ export function extractErrorMessage(
   // Handle axios errors
   if (error && typeof error === 'object' && 'isAxiosError' in error) {
     const axiosError = error as AxiosError<{ message?: string; error?: boolean }>;
-    
+
     // Try to get message from response.data.message
     if (axiosError.response?.data) {
       const data = axiosError.response.data;
-      
+
       // Handle object responses with message field
       if (typeof data === 'object' && data !== null) {
         if ('message' in data && typeof data.message === 'string' && data.message) {
@@ -34,29 +34,29 @@ export function extractErrorMessage(
           return data.error;
         }
       }
-      
+
       // Handle string responses
       if (typeof data === 'string' && data) {
         return data;
       }
     }
-    
+
     // Fallback to axios error message
     if (axiosError.message) {
       return axiosError.message;
     }
   }
-  
+
   // Handle standard Error objects
   if (error instanceof Error) {
     return error.message || fallbackMessage;
   }
-  
+
   // Handle string errors
   if (typeof error === 'string') {
     return error;
   }
-  
+
   // Fallback
   return fallbackMessage;
 }

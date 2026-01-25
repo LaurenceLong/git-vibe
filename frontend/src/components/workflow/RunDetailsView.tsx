@@ -148,18 +148,13 @@ export function RunDetailsView({ runId, workflow, onClose }: RunDetailsViewProps
   // Map node IDs to names from workflow definition
   const nodeNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    if (workflow?.workflow?.backbone) {
-      workflow.workflow.backbone.forEach((node) => {
+    if (workflow?.workflow?.backbone?.nodes) {
+      workflow.workflow.backbone.nodes.forEach((node) => {
         map.set(node.id, node.display?.name || node.id);
       });
     }
     if (workflow?.workflow?.extensions?.nodes) {
       workflow.workflow.extensions.nodes.forEach((node) => {
-        map.set(node.id, node.display?.name || node.id);
-      });
-    }
-    if (workflow?.workflow?.control?.extraNodes) {
-      workflow.workflow.control.extraNodes.forEach((node) => {
         map.set(node.id, node.display?.name || node.id);
       });
     }
@@ -196,8 +191,8 @@ export function RunDetailsView({ runId, workflow, onClose }: RunDetailsViewProps
     const centerX = 400; // Center position for backbone nodes
 
     // Add backbone nodes
-    if (wf.backbone) {
-      wf.backbone.forEach((node, idx) => {
+    if (wf.backbone?.nodes) {
+      wf.backbone.nodes.forEach((node, idx) => {
         allNodeIds.add(node.id);
         const step = stepMap.get(node.id);
         const status = step?.status || 'pending';
@@ -216,7 +211,7 @@ export function RunDetailsView({ runId, workflow, onClose }: RunDetailsViewProps
             label: node.display?.name || node.id,
             status,
             duration,
-            nodeType: node.type,
+            nodeType: node.trigger?.call?.resourceType || 'unknown',
             stepId: step?.id,
           },
         });
@@ -245,7 +240,7 @@ export function RunDetailsView({ runId, workflow, onClose }: RunDetailsViewProps
               label: node.display?.name || node.id,
               status,
               duration,
-              nodeType: node.type,
+              nodeType: node.trigger?.call?.resourceType || 'unknown',
               stepId: step?.id,
             },
           });
@@ -257,10 +252,10 @@ export function RunDetailsView({ runId, workflow, onClose }: RunDetailsViewProps
     const dagEdges: Edge[] = [];
 
     // Backbone sequential edges
-    if (wf.backbone && wf.backbone.length > 1) {
-      for (let i = 0; i < wf.backbone.length - 1; i++) {
-        const from = wf.backbone[i]!.id;
-        const to = wf.backbone[i + 1]!.id;
+    if (wf.backbone?.nodes && wf.backbone.nodes.length > 1) {
+      for (let i = 0; i < wf.backbone.nodes.length - 1; i++) {
+        const from = wf.backbone.nodes[i]!.id;
+        const to = wf.backbone.nodes[i + 1]!.id;
         dagEdges.push({
           id: `backbone:${from}->${to}`,
           source: from,
@@ -270,21 +265,8 @@ export function RunDetailsView({ runId, workflow, onClose }: RunDetailsViewProps
       }
     }
 
-    // Control transitions
-    if (wf.control?.transitions) {
-      wf.control.transitions.forEach((transition) => {
-        if (allNodeIds.has(transition.from) && allNodeIds.has(transition.to)) {
-          dagEdges.push({
-            id: `transition:${transition.from}:${transition.on}:${transition.to}`,
-            source: transition.from,
-            target: transition.to,
-            label: transition.on,
-            animated: transition.on === 'conflict',
-            style: transition.on === 'conflict' ? { stroke: '#ef4444' } : undefined,
-          });
-        }
-      });
-    }
+    // Note: Transitions are handled through event listening in the optimized workflow design
+    // Nodes connect via listens/onResult rules, not explicit transitions
 
     return { nodes: dagNodes, edges: dagEdges };
   }, [workflow, stepsWithNames]);

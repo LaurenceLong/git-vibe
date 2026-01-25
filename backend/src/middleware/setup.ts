@@ -5,7 +5,7 @@ import { ensureStorageDirectories } from '../utils/storage.js';
 export async function createServer() {
   const server = Fastify({
     logger: {
-      level: process.env.LOG_LEVEL || 'info',
+      level: process.env.LOG_LEVEL || 'warn',
       transport: {
         target: 'pino-pretty',
         options: {

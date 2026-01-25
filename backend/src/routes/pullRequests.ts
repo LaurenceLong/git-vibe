@@ -4,43 +4,49 @@ import { pullRequestsRepository } from '../repositories/PullRequestsRepository.j
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { prService } from '../services/PRService.js';
-import { gitService } from '../services/GitService.js';
+import { gitService } from '../services/git/GitService.js';
 import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
 
 export async function pullRequestsRoutes(server: FastifyInstance) {
-  // GET /api/pull-requests - List PRs (with optional project filter and pagination)
-  server.get<{ Querystring: { projectId?: string; page?: string; limit?: string } }>(
-    '/api/pull-requests',
-    async (request) => {
-      const { projectId, page: pageStr, limit: limitStr } = request.query;
-      const page = parseInt(pageStr || '1', 10);
-      const limit = parseInt(limitStr || '10', 10);
+  // GET /api/pull-requests - List PRs (with optional project, status filter and pagination)
+  server.get<{
+    Querystring: { projectId?: string; status?: string; page?: string; limit?: string };
+  }>('/api/pull-requests', async (request) => {
+    const { projectId, status: statusFilter, page: pageStr, limit: limitStr } = request.query;
+    const page = parseInt(pageStr || '1', 10);
+    const limit = parseInt(limitStr || '10', 10);
 
-      let prs: Awaited<ReturnType<typeof pullRequestsRepository.findAll>>;
+    let prs: Awaited<ReturnType<typeof pullRequestsRepository.findAll>>;
 
-      if (projectId) {
-        prs = await pullRequestsRepository.findByProjectId(projectId);
-      } else {
-        // If no projectId, return all PRs
-        prs = await pullRequestsRepository.findAll();
-      }
-
-      // Apply pagination
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedPRs = prs.slice(startIndex, endIndex);
-
-      return {
-        data: paginatedPRs.map(pullRequestToDTO),
-        pagination: {
-          page,
-          limit,
-          total: prs.length,
-          totalPages: Math.ceil(prs.length / limit),
-        },
-      };
+    if (projectId) {
+      prs = await pullRequestsRepository.findByProjectId(projectId);
+    } else {
+      prs = await pullRequestsRepository.findAll();
     }
-  );
+
+    // Filter by status if provided (before pagination so each page has full page of matching items)
+    if (statusFilter && statusFilter !== 'all') {
+      const validStatuses = ['open', 'merged', 'closed'] as const;
+      if (validStatuses.includes(statusFilter as (typeof validStatuses)[number])) {
+        prs = prs.filter((pr) => pr.status === statusFilter);
+      }
+    }
+
+    const total = prs.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedPRs = prs.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedPRs.map(pullRequestToDTO),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  });
 
   // GET /api/pull-requests/:id - Get PR details
   server.get<{ Params: { id: string } }>('/api/pull-requests/:id', async (request, reply) => {

@@ -17,11 +17,15 @@ import {
   GetOrCreateManualWorkItemDTOSchema,
   ProjectsListResponseSchema,
   ProjectStatsSchema,
+  WORKITEM_STATUS_OPEN,
+  PR_STATUS_OPEN,
+  PR_STATUS_MERGED,
 } from 'git-vibe-shared';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
+import { settingsRepository } from '../repositories/SettingsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
-import { gitService } from '../services/GitService.js';
+import { gitService } from '../services/git/GitService.js';
 import { modelsCache } from '../services/ModelsCache.js';
 import { workspaceService } from '../services/WorkspaceService.js';
 import { prService } from '../services/PRService.js';
@@ -53,7 +57,8 @@ export async function projectsRoutes(server: FastifyInstance) {
       const defaultBranch = body.defaultBranch || gitService.getCurrentBranch(body.sourceRepoPath);
 
       // Auto-detect sourceRepoUrl from git remote if not provided
-      const sourceRepoUrl = body.sourceRepoUrl || gitService.getRemoteUrl(body.sourceRepoPath) || undefined;
+      const sourceRepoUrl =
+        body.sourceRepoUrl || gitService.getRemoteUrl(body.sourceRepoPath) || undefined;
 
       // Determine mirror repo path (shared by projects with same source path)
       const mirrorRepoPath = gitService.getMirrorRepoPath(body.sourceRepoPath);
@@ -63,7 +68,32 @@ export async function projectsRoutes(server: FastifyInstance) {
 
       // Create relay repo using mirror repo architecture
       const projectId = uuidv4();
-      await gitService.createRelayRepo(body.sourceRepoPath, relayRepoPath, mirrorRepoPath, projectId, defaultBranch);
+      await gitService.createRelayRepo(
+        body.sourceRepoPath,
+        relayRepoPath,
+        mirrorRepoPath,
+        projectId,
+        defaultBranch
+      );
+
+      // Use global default settings when project does not specify defaultAgent/agentParams
+      let defaultAgent = body.defaultAgent;
+      let agentParams = body.agentParams;
+      if (defaultAgent === undefined || agentParams === undefined) {
+        const globalSettings = await settingsRepository.getGlobalSettings();
+        if (defaultAgent === undefined)
+          defaultAgent = globalSettings.defaultAgent as 'opencode' | 'claudecode';
+        if (agentParams === undefined) {
+          try {
+            agentParams = JSON.parse(globalSettings.defaultAgentParams || '{}') as Record<
+              string,
+              unknown
+            >;
+          } catch {
+            agentParams = {};
+          }
+        }
+      }
 
       const project = await projectsRepository.create({
         id: projectId,
@@ -73,8 +103,11 @@ export async function projectsRoutes(server: FastifyInstance) {
         mirrorRepoPath,
         relayRepoPath,
         defaultBranch,
-        defaultAgent: body.defaultAgent || 'opencode',
-        agentParams: body.agentParams ? JSON.stringify(body.agentParams) : undefined,
+        defaultAgent: defaultAgent || 'opencode',
+        agentParams:
+          agentParams && Object.keys(agentParams).length > 0
+            ? JSON.stringify(agentParams)
+            : undefined,
       });
 
       return reply.status(201).send(projectToDTO(project));
@@ -110,7 +143,9 @@ export async function projectsRoutes(server: FastifyInstance) {
         const allWorkItems = await workItemsRepository.findAll();
         const allPullRequests = await pullRequestsRepository.findAll();
         const relevantWorkItems = allWorkItems.filter((wi) => projectIds.includes(wi.projectId));
-        const relevantPullRequests = allPullRequests.filter((pr) => projectIds.includes(pr.projectId));
+        const relevantPullRequests = allPullRequests.filter((pr) =>
+          projectIds.includes(pr.projectId)
+        );
 
         const statsMap: Record<string, z.infer<typeof ProjectStatsSchema>> = {};
         for (const projectId of projectIds) {
@@ -120,9 +155,11 @@ export async function projectsRoutes(server: FastifyInstance) {
           );
           statsMap[projectId] = ProjectStatsSchema.parse({
             workItems: projectWorkItems.length,
-            openWorkItems: projectWorkItems.filter((wi) => wi.status === 'open').length,
+            openWorkItems: projectWorkItems.filter((wi) => wi.status === WORKITEM_STATUS_OPEN)
+              .length,
             pullRequests: projectPullRequests.length,
-            openPullRequests: projectPullRequests.filter((pr) => pr.status === 'open').length,
+            openPullRequests: projectPullRequests.filter((pr) => pr.status === PR_STATUS_OPEN)
+              .length,
           });
         }
         statistics = statsMap;
@@ -214,18 +251,18 @@ export async function projectsRoutes(server: FastifyInstance) {
       const { agent = 'opencode' } = request.query;
 
       // Validate agent parameter
-      if (agent !== 'opencode' && agent !== 'claudcode') {
+      if (agent !== 'opencode' && agent !== 'claudecode') {
         return reply.status(400).send({
           error: true,
-          message: 'Invalid agent parameter. Must be "opencode" or "claudcode"',
+          message: 'Invalid agent parameter. Must be "opencode" or "claudecode"',
         });
       }
 
       // Initialize cache for the agent if not already initialized
-      await modelsCache.initialize(agent as 'opencode' | 'claudcode');
+      await modelsCache.initialize(agent as 'opencode' | 'claudecode');
 
       // Get models from cache
-      const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
+      const models = modelsCache.getModels(agent as 'opencode' | 'claudecode');
       const response = ModelsResponseSchema.parse({ data: models });
       return reply.status(200).send(response);
     } catch (error) {
@@ -244,16 +281,16 @@ export async function projectsRoutes(server: FastifyInstance) {
         const { agent = 'opencode' } = request.query;
 
         // Validate agent parameter
-        if (agent !== 'opencode' && agent !== 'claudcode') {
+        if (agent !== 'opencode' && agent !== 'claudecode') {
           return reply.status(400).send({
             error: true,
-            message: 'Invalid agent parameter. Must be "opencode" or "claudcode"',
+            message: 'Invalid agent parameter. Must be "opencode" or "claudecode"',
           });
         }
 
         // Force refresh the models cache for the specific agent
-        await modelsCache.refresh(agent as 'opencode' | 'claudcode');
-        const models = modelsCache.getModels(agent as 'opencode' | 'claudcode');
+        await modelsCache.refresh(agent as 'opencode' | 'claudecode');
+        const models = modelsCache.getModels(agent as 'opencode' | 'claudecode');
         const response = ModelsResponseSchema.parse({ data: models });
         return reply.status(200).send(response);
       } catch (error) {
@@ -382,12 +419,13 @@ export async function projectsRoutes(server: FastifyInstance) {
       // If a new commit was created, use that SHA; otherwise use current HEAD of relay branch
       // (if no changes, it means everything is already synced)
       // Use default branch for commit SHA (relay has been merged into default)
-      const commitShaToUse = syncCommitSha || gitService.getRefSha(project.sourceRepoPath, project.defaultBranch);
+      const commitShaToUse =
+        syncCommitSha || gitService.getRefSha(project.sourceRepoPath, project.defaultBranch);
 
       // Mark all merged PRs as synced
       const mergedPRs = await pullRequestsRepository.findByProjectId(project.id);
       const unsyncedMergedPRs = mergedPRs.filter(
-        (pr) => pr.status === 'merged' && !pr.syncedCommitSha
+        (pr) => pr.status === PR_STATUS_MERGED && !pr.syncedCommitSha
       );
 
       // Update all unsynced merged PRs with the sync commit SHA
@@ -481,7 +519,7 @@ export async function projectsRoutes(server: FastifyInstance) {
         const existingWorkItems = await workItemsRepository.findByProjectId(project.id);
         const existingManualWorkItem = existingWorkItems.find(
           (wi) =>
-            wi.status === 'open' &&
+            wi.status === WORKITEM_STATUS_OPEN &&
             (wi.title === 'Manual edit session' ||
               wi.title.startsWith('Manual edit session') ||
               (body.title && wi.title === body.title))
@@ -489,10 +527,15 @@ export async function projectsRoutes(server: FastifyInstance) {
 
         if (existingManualWorkItem) {
           // Ensure workspace is initialized for existing WorkItem
-          const updatedWorkItem = await workspaceService.ensureWorkspace(
-            existingManualWorkItem,
-            project
-          );
+          await workspaceService.ensureWorkspace(existingManualWorkItem, project);
+          // Fetch updated WorkItem from repository
+          const updatedWorkItem = await workItemsRepository.findById(existingManualWorkItem.id);
+          if (!updatedWorkItem) {
+            return reply.status(404).send({
+              error: true,
+              message: 'WorkItem not found',
+            });
+          }
           return reply.status(200).send(workItemToDTO(updatedWorkItem));
         }
 
@@ -506,7 +549,15 @@ export async function projectsRoutes(server: FastifyInstance) {
         });
 
         // Initialize workspace for the WorkItem
-        const updatedWorkItem = await workspaceService.initWorkspace(workItem, project);
+        await workspaceService.initWorkspace(workItem.id, project);
+        // Fetch updated WorkItem from repository
+        const updatedWorkItem = await workItemsRepository.findById(workItem.id);
+        if (!updatedWorkItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found',
+          });
+        }
 
         return reply.status(201).send(workItemToDTO(updatedWorkItem));
       } catch (error) {
@@ -991,7 +1042,7 @@ export async function projectsRoutes(server: FastifyInstance) {
           success: true,
           message: 'Changes committed successfully',
           commitSha,
-          workItem: finalWorkItem ? workItemToDTO(finalWorkItem) : workItemToDTO(updatedWorkItem),
+          workItem: finalWorkItem ? workItemToDTO(finalWorkItem) : workItemToDTO(workItem),
         });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -1048,7 +1099,7 @@ export async function projectsRoutes(server: FastifyInstance) {
         }
 
         // Check if PR already exists (idempotency)
-        const existingPR = await pullRequestsRepository.findByWorkItemId(updatedWorkItem.id);
+        const existingPR = await pullRequestsRepository.findByWorkItemId(workItem.id);
         if (existingPR) {
           return reply.status(200).send(pullRequestToDTO(existingPR));
         }
@@ -1057,22 +1108,30 @@ export async function projectsRoutes(server: FastifyInstance) {
         if (gitService.hasAnyChanges(updatedWorkItem.worktreePath)) {
           const commitMessage = 'Finish manual editing session';
           const commitSha = gitService.commitChanges(updatedWorkItem.worktreePath, commitMessage);
-          await workItemsRepository.update(updatedWorkItem.id, {
+          await workItemsRepository.update(workItem.id, {
             headSha: commitSha,
           });
           // Refresh workItem to get updated headSha
-          const refreshedWorkItem = await workItemsRepository.findById(updatedWorkItem.id);
+          const refreshedWorkItem = await workItemsRepository.findById(workItem.id);
           if (refreshedWorkItem) {
             // Create PR using PRService
-            const pr = await prService.openPR(refreshedWorkItem, project);
+            const pr = await prService.openPR(
+              refreshedWorkItem.id,
+              project.id,
+              refreshedWorkItem.title,
+              refreshedWorkItem.body,
+              refreshedWorkItem.headBranch || project.defaultBranch,
+              project.defaultBranch
+            );
+            if (!pr) {
+              return reply.status(400).send({
+                error: true,
+                message: 'No changes detected, cannot create PR',
+              });
+            }
             return reply.status(201).send(pullRequestToDTO(pr));
           }
         }
-
-        // Create PR using PRService
-        const pr = await prService.openPR(updatedWorkItem, project);
-
-        return reply.status(201).send(pullRequestToDTO(pr));
       } catch (error) {
         return reply.status(400).send({
           error: true,

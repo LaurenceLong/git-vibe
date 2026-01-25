@@ -7,7 +7,7 @@
  */
 
 // ============================================================================
-// Re-export shared types for backward compatibility
+// Re-export shared types
 // ============================================================================
 
 export type {
@@ -26,7 +26,6 @@ export type {
   AgentKey,
 } from 'git-vibe-shared';
 
-// Type alias for backward compatibility
 export type PRStatus = import('git-vibe-shared').PullRequestStatus;
 
 // ============================================================================
@@ -43,11 +42,9 @@ export type {
 } from 'git-vibe-shared';
 
 // ============================================================================
-// Type aliases for backward compatibility
+// Type aliases (DTO → component names)
 // ============================================================================
 
-// Type aliases for components that still use the old names
-// These will be phased out in favor of DTO types
 export type WorkItem = import('git-vibe-shared').WorkItemDTO;
 export type Project = import('git-vibe-shared').ProjectDTO;
 export type PullRequest = import('git-vibe-shared').PullRequestDTO;

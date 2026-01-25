@@ -38,9 +38,20 @@ export function PullRequestsTab({
     setSelectedPRId(initialPrId);
   }, [initialPrId]);
 
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
+
   const { data: response, isLoading } = useQuery({
-    queryKey: ['pull-requests', project.id, currentPage, itemsPerPage],
-    queryFn: () => pullRequestsApi.list(project.id, currentPage, itemsPerPage),
+    queryKey: ['pull-requests', project.id, currentPage, itemsPerPage, statusFilter],
+    queryFn: () =>
+      pullRequestsApi.list(
+        project.id,
+        currentPage,
+        itemsPerPage,
+        statusFilter === 'all' ? undefined : statusFilter
+      ),
   });
 
   const pullRequests = response?.data?.data || [];
@@ -53,20 +64,12 @@ export function PullRequestsTab({
       }
     : undefined;
 
-  // Sort by createdAt descending (newest first) - memoized
+  // Backend returns filtered + paginated; sort by createdAt descending (newest first)
   const sortedPRs = useMemo(() => {
     return [...pullRequests].sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [pullRequests]);
-
-  // Filter pull requests - memoized for performance
-  const filteredPRs = useMemo(() => {
-    return sortedPRs.filter((pr: PullRequest) => {
-      if (statusFilter !== 'all' && pr.status !== statusFilter) return false;
-      return true;
-    });
-  }, [sortedPRs, statusFilter]);
 
   const handlePRClick = (prId: string) => {
     setSelectedPRId(prId);
@@ -79,6 +82,7 @@ export function PullRequestsTab({
 
   const handleBackToList = () => {
     setSelectedPRId(null);
+    setCurrentPage(1);
     navigate({
       to: '/projects/$projectName/pullrequests',
       params: { projectName: project.name },
@@ -125,9 +129,9 @@ export function PullRequestsTab({
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
           <p className="mt-2 text-sm text-gray-600">Loading pull requests...</p>
         </div>
-      ) : filteredPRs.length > 0 ? (
+      ) : sortedPRs.length > 0 ? (
         <div className="space-y-3">
-          {filteredPRs.map((pr: PullRequest) => (
+          {sortedPRs.map((pr: PullRequest) => (
             <div
               key={pr.id}
               onClick={() => handlePRClick(pr.id)}
@@ -194,7 +198,9 @@ export function PullRequestsTab({
         <EmptyState
           title="No pull requests found"
           description={
-            statusFilter !== 'all' ? 'Try adjusting your filters' : 'No pull requests available'
+            statusFilter !== 'all'
+              ? `No pull requests with status "${statusFilter}"`
+              : 'No pull requests available'
           }
         />
       )}

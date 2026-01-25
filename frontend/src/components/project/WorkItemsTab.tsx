@@ -9,6 +9,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { workItemsApi, agentRunsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { Project, WorkItem, WorkItemType, WorkItemStatus, AgentRun, AgentRunStatus } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -142,8 +143,13 @@ export function WorkItemsTab({
   }, [initialWorkItemId]);
 
   const { data: response, isLoading } = useQuery({
-    queryKey: ['workitems', project.id, currentPage, itemsPerPage],
+    queryKey: queryKeys.workitems({
+      projectId: project.id,
+      page: currentPage,
+      limit: itemsPerPage,
+    }),
     queryFn: () => workItemsApi.list(project.id, currentPage, itemsPerPage),
+    refetchOnWindowFocus: true,
   });
 
   const workItems = response?.data?.data || [];

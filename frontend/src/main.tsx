@@ -11,8 +11,8 @@ import './index.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 1000 * 60,
+      refetchOnWindowFocus: true,
+      staleTime: 1000 * 30, // 30s so refetch/invalidation is visible
     },
     mutations: {
       retry: 1,

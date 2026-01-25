@@ -14,6 +14,7 @@ export { useKeyboardShortcuts } from './useKeyboardShortcuts';
 export {
   useWorkItem,
   useWorkItems,
+  useTasks,
   useCreateWorkItem,
   useUpdateWorkItem,
   useDeleteWorkItem,

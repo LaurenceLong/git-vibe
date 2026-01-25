@@ -1,17 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateWorkItemDTOSchema, UpdateWorkItemDTOSchema } from 'git-vibe-shared';
+import {
+  CreateWorkItemDTOSchema,
+  UpdateWorkItemDTOSchema,
+  WORKITEM_STATUS_CLOSED,
+} from 'git-vibe-shared';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
-import { agentService } from '../services/AgentService.js';
+import { agentService } from '../services/agent/AgentService.js';
 import { workspaceService } from '../services/WorkspaceService.js';
 import { prService } from '../services/PRService.js';
 import { workItemEventService } from '../services/WorkItemEventService.js';
 import { toDTO as workItemToDTO } from '../mappers/workItems.js';
 import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
 import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
+import { workflowEventBus } from '../services/workflow/WorkflowEventBus.js';
 
 export async function workitemsRoutes(server: FastifyInstance) {
   // POST /api/workitems - Create new WorkItem and automatically start agent
@@ -210,10 +215,29 @@ export async function workitemsRoutes(server: FastifyInstance) {
         }
 
         // Find the most recent agent run for this WorkItem that has a sessionId
-        const allAgentRuns = await agentService.getWorkItemTasks(request.params.id);
-        const latestRunWithSession = allAgentRuns
-          .filter((run) => run.sessionId)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        const allTasks = await agentService.getWorkItemTasks(request.params.id);
+        // Get agent runs for tasks that have them
+        const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+        const tasksWithRuns = await Promise.all(
+          allTasks
+            .filter((t) => t.currentAgentRunId)
+            .map(async (t) => {
+              const run = await agentRunsRepository.findById(t.currentAgentRunId!);
+              return run ? { task: t, run } : null;
+            })
+        );
+        const latestRunWithSession = tasksWithRuns
+          .filter(
+            (
+              tr
+            ): tr is {
+              task: (typeof allTasks)[0];
+              run: NonNullable<(typeof tasksWithRuns)[0]>['run'];
+            } => tr !== null && tr.run.sessionId !== null
+          )
+          .sort(
+            (a, b) => new Date(b.run.createdAt).getTime() - new Date(a.run.createdAt).getTime()
+          )[0];
 
         if (!latestRunWithSession) {
           return reply.status(400).send({
@@ -222,8 +246,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
           });
         }
 
-        // Resume the task using the same session
-        const agentRun = await agentService.resumeTask(latestRunWithSession.id, prompt);
+        // Resume the task using the same session; returns AgentRun
+        const agentRun = await agentService.resumeTask(latestRunWithSession.task.id, prompt);
         return reply.status(201).send(agentRunToDTO(agentRun));
       } catch (error) {
         return reply.status(400).send({
@@ -328,7 +352,21 @@ export async function workitemsRoutes(server: FastifyInstance) {
         const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
 
         // Create PR using PRService
-        const pr = await prService.openPR(updatedWorkItem, project);
+        const pr = await prService.openPR(
+          updatedWorkItem.id,
+          project.id,
+          updatedWorkItem.title,
+          updatedWorkItem.body,
+          updatedWorkItem.headBranch || project.defaultBranch,
+          project.defaultBranch
+        );
+
+        if (!pr) {
+          return reply.status(400).send({
+            error: true,
+            message: 'No changes detected, cannot create PR',
+          });
+        }
 
         return reply.status(201).send(pullRequestToDTO(pr));
       } catch (error) {
@@ -354,7 +392,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
     return pr ? [pullRequestToDTO(pr)] : [];
   });
 
-  // GET /api/workitems/:id/tasks - Get all agent tasks for a WorkItem
+  // GET /api/workitems/:id/tasks - Get all tasks for a WorkItem
   server.get<{ Params: { id: string } }>('/api/workitems/:id/tasks', async (request, reply) => {
     const workItem = await workItemsRepository.findById(request.params.id);
     if (!workItem) {
@@ -365,7 +403,54 @@ export async function workitemsRoutes(server: FastifyInstance) {
     }
 
     const tasks = await agentService.getWorkItemTasks(request.params.id);
-    return tasks.map(agentRunToDTO);
+    const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+    const result = await Promise.all(
+      tasks.map(async (task) => {
+        if (task.currentAgentRunId) {
+          const agentRun = await agentRunsRepository.findById(task.currentAgentRunId);
+          if (agentRun) {
+            return agentRunToDTO(agentRun);
+          }
+        }
+        // If no agent run, return a synthetic AgentRunDTO from task
+        return {
+          id: task.id,
+          projectId: workItem.projectId,
+          workItemId: task.workItemId,
+          taskId: task.id,
+          agentKey: 'opencode' as const,
+          status:
+            task.status === 'pending'
+              ? 'queued'
+              : task.status === 'running'
+                ? 'running'
+                : task.status === 'succeeded'
+                  ? 'succeeded'
+                  : task.status === 'failed'
+                    ? 'failed'
+                    : 'cancelled',
+          inputSummary: task.taskType,
+          inputJson: JSON.stringify({ taskType: task.taskType, ...task.input }),
+          sessionId: null,
+          linkedAgentRunId: null,
+          log: null,
+          logPath: null,
+          stdoutPath: null,
+          stderrPath: null,
+          headShaBefore: null,
+          headShaAfter: null,
+          commitSha: null,
+          pid: null,
+          idempotencyKey: task.idempotencyKey,
+          nodeRunId: task.nodeRunId ?? null,
+          startedAt: null,
+          finishedAt: null,
+          createdAt: task.createdAt.toISOString(),
+          updatedAt: task.updatedAt.toISOString(),
+        };
+      })
+    );
+    return result;
   });
 
   // POST /api/workitems/:id/tasks/:taskId/cancel - Cancel a running task
@@ -408,8 +493,20 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       try {
-        const agentRun = await agentService.restartTask(request.params.taskId);
-        return reply.status(201).send(agentRunToDTO(agentRun));
+        const task = await agentService.restartTask(request.params.taskId);
+        if (task.currentAgentRunId) {
+          const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+          const agentRun = await agentRunsRepository.findById(task.currentAgentRunId);
+          if (agentRun) {
+            return reply.status(201).send(agentRunToDTO(agentRun));
+          }
+        }
+        // Return task info if no agent run
+        return reply.status(201).send({
+          id: task.id,
+          taskType: task.taskType,
+          status: task.status,
+        });
       } catch (error) {
         return reply.status(404).send({
           error: true,
@@ -432,8 +529,18 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       try {
-        const status = await agentService.getTaskStatus(request.params.taskId);
-        return status;
+        const statusResult = await agentService.getTaskStatus(request.params.taskId);
+        if (statusResult.agentRun) {
+          return {
+            status: statusResult.status,
+            agentRun: agentRunToDTO(statusResult.agentRun),
+          };
+        }
+        // Return task status if no agent run
+        return {
+          status: statusResult.status,
+          task: statusResult.task,
+        };
       } catch (error) {
         return reply.status(404).send({
           error: true,
@@ -488,7 +595,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       // Check if WorkItem is already closed
-      if (workItem.status === 'closed') {
+      if (workItem.status === WORKITEM_STATUS_CLOSED) {
         return reply.status(400).send({
           error: true,
           message: 'Cannot start task for a closed WorkItem',
@@ -511,10 +618,12 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
         // Emit workitem.task.start event to trigger workflow
         // The workflow will handle starting the agent run via AgentNodeExecutor
-        const { workflowEventBus } = await import('../services/WorkflowEventBus.js');
         console.log(`[workitemsRoutes] Emitting workitem.task.start event for ${workItem.id}`);
 
         await workflowEventBus.emit({
+          eventId: crypto.randomUUID(),
+          at: new Date().toISOString(),
+          subject: { kind: 'workitem', id: workItem.id },
           type: 'workitem.task.start',
           workItemId: workItem.id,
           data: {
@@ -559,8 +668,17 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
     try {
       // Refresh head_sha using workspace service
-      const updatedWorkItem = await workspaceService.refreshHeadSha(workItem);
-      return reply.status(200).send(workItemToDTO(updatedWorkItem));
+      if (!workItem.worktreePath) {
+        return reply.status(400).send({
+          error: true,
+          message: 'WorkItem has no worktree initialized',
+        });
+      }
+      const headSha = await workspaceService.refreshHeadSha(workItem.worktreePath);
+      const updatedWorkItem = await workItemsRepository.update(workItem.id, {
+        headSha,
+      });
+      return reply.status(200).send(workItemToDTO(updatedWorkItem!));
     } catch (error) {
       return reply.status(500).send({
         error: true,

@@ -1,7 +1,8 @@
-import { eq, isNotNull } from 'drizzle-orm';
+import { eq, isNotNull, desc } from 'drizzle-orm';
 import { workItems } from '../models/schema.js';
 import type { WorkItem } from '../types/models.js';
 import { getDb } from '../db/client.js';
+import { agentRunsRepository } from './AgentRunsRepository.js';
 
 export class WorkItemsRepository {
   private db: Awaited<ReturnType<typeof getDb>> | null = null;
@@ -28,7 +29,7 @@ export class WorkItemsRepository {
     headSha?: string;
   }): Promise<WorkItem> {
     const db = await this.getDbInstance();
-    const [workItem] = await db
+    const result = await db
       .insert(workItems)
       .values({
         id: data.id,
@@ -46,12 +47,13 @@ export class WorkItemsRepository {
       .returning()
       .execute();
 
+    const [workItem] = Array.isArray(result) ? result : [result];
     return workItem as WorkItem;
   }
 
   async findAll(): Promise<WorkItem[]> {
     const db = await this.getDbInstance();
-    const result = await db.select().from(workItems).execute();
+    const result = await db.select().from(workItems).orderBy(desc(workItems.createdAt)).execute();
     return result as WorkItem[];
   }
 
@@ -61,6 +63,7 @@ export class WorkItemsRepository {
       .select()
       .from(workItems)
       .where(eq(workItems.projectId, projectId))
+      .orderBy(desc(workItems.createdAt))
       .execute();
     return result as WorkItem[];
   }
@@ -88,15 +91,39 @@ export class WorkItemsRepository {
     }
   ): Promise<WorkItem | undefined> {
     const db = await this.getDbInstance();
-    const [workItem] = await db
+
+    // Check if work item exists
+    const [existing] = await db.select().from(workItems).where(eq(workItems.id, id)).execute();
+
+    if (!existing) {
+      return undefined;
+    }
+
+    // Filter out undefined/null values to avoid Drizzle ORM errors
+    const updateFields: Record<string, any> = {
+      updatedAt: new Date(),
+    };
+
+    // Only include fields that are actually provided and not undefined/null
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined && value !== null) {
+        updateFields[key] = value;
+      }
+    }
+
+    // If no fields to update (only updatedAt), return existing work item
+    if (Object.keys(updateFields).length === 1) {
+      return existing as WorkItem;
+    }
+
+    const result = await db
       .update(workItems)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
+      .set(updateFields)
       .where(eq(workItems.id, id))
       .returning()
       .execute();
+
+    const [workItem] = Array.isArray(result) ? result : [result];
 
     return workItem as WorkItem | undefined;
   }
@@ -173,7 +200,6 @@ export class WorkItemsRepository {
    * Check if a lock is stale (i.e., the owner run is no longer active)
    */
   private async isLockStale(ownerRunId: string): Promise<boolean> {
-    const { agentRunsRepository } = await import('./AgentRunsRepository.js');
     const agentRun = await agentRunsRepository.findById(ownerRunId);
 
     // If run doesn't exist, lock is stale
@@ -286,7 +312,6 @@ export class WorkItemsRepository {
    */
   async releaseStaleLocks(): Promise<number> {
     const db = await this.getDbInstance();
-    const { agentRunsRepository } = await import('./AgentRunsRepository.js');
     const now = new Date();
 
     // Find all locked work items (those with a non-null lockOwnerRunId)

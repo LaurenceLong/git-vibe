@@ -4,264 +4,18 @@ import {
   CreateWorkflowDTOSchema,
   UpdateWorkflowDTOSchema,
   ExecuteWorkflowDTOSchema,
+  type Workflow,
 } from 'git-vibe-shared';
-import { workflowValidationService } from '../services/WorkflowValidationService.js';
-import { workflowExecutionService } from '../services/WorkflowExecutionService.js';
-import type { WorkflowRecord } from '../repositories/WorkflowsRepository.js';
-import type { Workflow } from 'git-vibe-shared';
-
-/**
- * Creates a default workflow when none exists in the database
- * This implements the exact default workflow backbone from WORKFLOW_DESIGN.md
- */
-export function createDefaultWorkflow(projectId?: string): Workflow {
-  const workflowId = projectId ? `workitem-default-${projectId}` : 'workitem-default';
-  return {
-    version: 1,
-    workflow: {
-      id: workflowId,
-      name: 'Work Item Lifecycle (Competitive)',
-      description:
-        'Workflow for work items. The backbone is immutable; custom steps can only be inserted between backbone nodes.',
-      context: {
-        workitem: {
-          titleRef: 'workitem.title',
-          descriptionRef: 'workitem.description',
-          descriptionUserEditable: true,
-          normalization: {
-            trimWhitespace: true,
-            stripHtml: true,
-            maxChars: 6000,
-          },
-        },
-      },
-      prompts: {
-        templates: {
-          // Shared fragment for workitem information
-          workitem_info_prompt:
-            '## Title: {{workitem.title}}\n## Description: {{workitem.description}}',
-          // Shared fragment for context from previous agent runs
-          agent_context_prompt: '## Context: {{agent.previousContext}}',
-        },
-      },
-      backbone: [
-        {
-          id: 'workitem_created',
-          type: 'event',
-          immutable: true,
-          display: { name: 'Work item created' },
-          event: 'workitem.created',
-          outputs: {
-            artifacts: [{ id: 'workitem_snapshot', kind: 'json', ref: 'context.workitem' }],
-          },
-        },
-        {
-          id: 'process_workitem',
-          type: 'agent',
-          immutable: true,
-          display: { name: 'Agent: process work item' },
-          session: { mode: 'new', export: true },
-          input: { useWorkitemContext: true },
-          prompt:
-            '# Complete the task below:\n## Type: {{workitem.type}}\n{{templates.workitem_info_prompt}}',
-          outputs: {
-            exports: ['session.id'],
-            artifacts: [
-              { id: 'session_recording', kind: 'session', ref: 'agent.session' },
-              { id: 'plan_summary', kind: 'text', ref: 'agent.summary' },
-            ],
-          },
-        },
-        {
-          id: 'commit_changes',
-          type: 'agent',
-          immutable: true,
-          display: { name: 'Agent: craft commit (same session)' },
-          session: { mode: 'reuse', from: 'process_workitem' },
-          input: { useWorkitemContext: true },
-          prompt:
-            '# Complete the task below:\n## Type: Commit Request\n## Title: Commit necessary changes for: {{workitem.title}}\n{{templates.workitem_info_prompt}}\n{{templates.agent_context_prompt}}',
-          outputs: {
-            artifacts: [
-              { id: 'commit_metadata', kind: 'json', ref: 'git.commit' },
-              { id: 'staging_plan', kind: 'text', ref: 'agent.stagingPlan' },
-            ],
-          },
-        },
-        {
-          id: 'create_pr',
-          type: 'github',
-          immutable: true,
-          display: { name: 'Create PR' },
-          action: 'pr.create',
-          with: {
-            base: 'main',
-            head: 'current_branch',
-            titleFrom: 'workitem.title',
-            bodyFrom: 'workitem.description',
-            draft: false,
-          },
-          retry: { maxAttempts: 2, backoffSeconds: 15 },
-          outputs: {
-            exports: ['github.pr.number', 'github.pr.url'],
-            artifacts: [{ id: 'pr_ref', kind: 'json', ref: 'github.pr' }],
-          },
-        },
-        {
-          id: 'review_and_lint',
-          type: 'agent',
-          immutable: true,
-          display: { name: 'Agent: review + lint' },
-          session: { mode: 'new', export: false },
-          input: { useWorkitemContext: true, extra: { prRef: '{{github.pr.number}}' } },
-          prompt:
-            '# Complete the task below:\n## Type: Review and Lint\n## PR: {{prRef}}\n{{templates.workitem_info_prompt}}\n{{templates.agent_context_prompt}}',
-          outputs: {
-            artifacts: [
-              { id: 'review_summary', kind: 'text', ref: 'agent.summary' },
-              { id: 'ci_results', kind: 'json', ref: 'ci.checks' },
-            ],
-          },
-        },
-        {
-          id: 'merge_pr',
-          type: 'github',
-          immutable: true,
-          display: { name: 'Merge PR' },
-          when: { expr: 'ci.requiredChecksGreen == true' },
-          action: 'pr.merge',
-          with: {
-            method: 'squash',
-            requireGreenChecks: true,
-          },
-          retry: { maxAttempts: 2, backoffSeconds: 30 },
-        },
-        {
-          id: 'merged',
-          type: 'event',
-          immutable: true,
-          display: { name: 'Merged' },
-          event: 'pr.merged',
-        },
-      ],
-      slots: [
-        {
-          id: 'between_created_and_process',
-          after: 'workitem_created',
-          before: 'process_workitem',
-          allowInsert: true,
-          allowedNodeTypes: ['event', 'agent', 'ci', 'github', 'git'],
-        },
-        {
-          id: 'between_process_and_commit',
-          after: 'process_workitem',
-          before: 'commit_changes',
-          allowInsert: true,
-          allowedNodeTypes: ['agent', 'ci'],
-        },
-        {
-          id: 'between_commit_and_pr',
-          after: 'commit_changes',
-          before: 'create_pr',
-          allowInsert: true,
-          allowedNodeTypes: ['ci', 'github', 'git'],
-        },
-        {
-          id: 'between_pr_and_review',
-          after: 'create_pr',
-          before: 'review_and_lint',
-          allowInsert: true,
-          allowedNodeTypes: ['agent', 'ci'],
-        },
-        {
-          id: 'between_review_and_merge',
-          after: 'review_and_lint',
-          before: 'merge_pr',
-          allowInsert: true,
-          allowedNodeTypes: ['ci', 'github', 'agent'],
-        },
-        {
-          id: 'between_merge_and_merged',
-          after: 'merge_pr',
-          before: 'merged',
-          allowInsert: true,
-          allowedNodeTypes: ['github', 'ci'],
-        },
-      ],
-      extensions: {
-        nodes: [
-          {
-            id: 'workitem_restarted',
-            type: 'event',
-            slot: 'between_created_and_process',
-            display: { name: 'Work item restarted' },
-            event: 'workitem.restarted',
-          },
-        ],
-      },
-      control: {
-        extraNodes: [
-          {
-            id: 'resolve_conflicts',
-            type: 'agent',
-            immutable: true,
-            display: { name: 'Agent: resolve merge conflicts' },
-            session: { mode: 'new' },
-            input: { useWorkitemContext: true, extra: { prRef: '{{github.pr.number}}' } },
-            prompt:
-              '# Complete the task below:\n## Type: Resolve Merge Conflicts\n## PR: {{prRef}}\n{{templates.workitem_info_prompt}}\n{{templates.agent_context_prompt}}',
-            retry: { maxAttempts: 2, backoffSeconds: 30 },
-            outputs: {
-              artifacts: [
-                { id: 'conflict_resolution_summary', kind: 'text', ref: 'agent.summary' },
-              ],
-            },
-          },
-        ],
-        transitions: [
-          { from: 'merge_pr', on: 'conflict', to: 'resolve_conflicts' },
-          { from: 'resolve_conflicts', on: 'success', to: 'merge_pr' },
-        ],
-        sync: {
-          mode: 'reconcile',
-          sources: ['github.events', 'ci.checks', 'git.state'],
-          rules: [
-            {
-              when: { expr: 'github.pr.exists == true' },
-              satisfyStep: 'create_pr',
-              setOutputs: {
-                'github.pr.number': '{{github.pr.number}}',
-                'github.pr.url': '{{github.pr.url}}',
-              },
-            },
-            {
-              when: { expr: 'github.pr.merged == true' },
-              satisfyStep: 'merge_pr',
-            },
-            {
-              when: { expr: 'github.pr.merged == true' },
-              satisfyStep: 'merged',
-            },
-            {
-              when: { expr: 'ci.requiredChecksGreen == true' },
-              satisfyStep: 'review_and_lint',
-            },
-          ],
-        },
-      },
-      policy: {
-        commit: {
-          requireIntentionalStaging: true,
-          allowGitAddAll: false,
-          requireCommitBody: true,
-          message: { subjectMaxLen: 72 },
-        },
-        ci: { requiredChecks: ['lint', 'unit-tests'] },
-        merge: { requireGreenChecks: true, method: 'squash', onConflict: 'transition' },
-      },
-    },
-  };
-}
+import { workflowValidationService } from '../services/workflow/WorkflowValidationService.js';
+import { workflowExecutionService } from '../services/workflow/WorkflowExecutionService.js';
+import type { WorkflowRecord, NodeRunRecord } from '../repositories/WorkflowsRepository.js';
+import {
+  createDefaultWorkflow,
+  getDefaultWorkflowVersion,
+  getWorkflowVersion,
+} from '../services/workflow/defaultWorkflow.js';
+import { workflowsRepository } from '../repositories/WorkflowsRepository.js';
+import { projectsRepository } from '../repositories/ProjectsRepository.js';
 
 export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.get<{ Querystring: { projectId?: string; page?: string; limit?: string } }>(
@@ -279,10 +33,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
           });
         }
 
-        const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-          (m) => m.workflowsRepository
-        );
-        const { projectsRepository } = await import('../repositories/ProjectsRepository.js');
+        const workflowsRepo = workflowsRepository;
 
         // Verify project exists
         const project = await projectsRepository.findById(projectId);
@@ -295,14 +46,14 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
 
         let allWorkflows = await workflowsRepo.findByProjectId(projectId);
 
-        // Ensure default workflow exists and has the correct structure for this project
+        // Ensure default workflow exists and has the correct version
         const expectedDefaultWorkflow = createDefaultWorkflow(projectId);
-        const expectedBackboneLength = expectedDefaultWorkflow.workflow.backbone.length;
+        const CURRENT_VERSION = getDefaultWorkflowVersion();
         const expectedWorkflowId = expectedDefaultWorkflow.workflow.id;
 
         let defaultWorkflowRecord = await workflowsRepo.findDefault(projectId);
 
-        // Check if default workflow exists and has correct structure
+        // Check if default workflow exists and has correct version
         if (!defaultWorkflowRecord) {
           // No default workflow exists for this project, create it
           defaultWorkflowRecord = await workflowsRepo.create({
@@ -311,36 +62,59 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
             name: expectedDefaultWorkflow.workflow.name,
             definition: expectedDefaultWorkflow,
             isDefault: true,
+            version: CURRENT_VERSION,
           });
         } else {
-          // Default workflow exists, check if it needs updating
-          const existingWorkflow: Workflow =
-            typeof defaultWorkflowRecord.definition === 'string'
-              ? JSON.parse(defaultWorkflowRecord.definition)
-              : defaultWorkflowRecord.definition;
+          // Default workflow exists, check version
+          const dbVersion =
+            defaultWorkflowRecord.version ||
+            getWorkflowVersion(defaultWorkflowRecord.definition) ||
+            1;
 
-          const existingBackboneLength = existingWorkflow.workflow.backbone?.length || 0;
-
-          // If backbone doesn't match expected structure, update it
-          if (existingBackboneLength !== expectedBackboneLength) {
-            // Update the existing default workflow with correct structure
+          if (dbVersion < CURRENT_VERSION) {
+            // Version is outdated, update it
             const oldId = defaultWorkflowRecord.id;
-            defaultWorkflowRecord = await workflowsRepo.update(oldId, {
-              name: expectedDefaultWorkflow.workflow.name,
-              definition: expectedDefaultWorkflow,
-              isDefault: true,
-            });
 
-            // If update failed or returned undefined, delete old and create new
-            if (!defaultWorkflowRecord) {
-              await workflowsRepo.delete(oldId);
+            // If ID changed (due to version change), preserve old version and create new default
+            if (oldId !== expectedWorkflowId) {
+              // Mark old workflow as non-default (preserve for traceability)
+              await workflowsRepo.update(oldId, {
+                isDefault: false,
+              });
+              // Create new default workflow with new ID
               defaultWorkflowRecord = await workflowsRepo.create({
                 id: expectedWorkflowId,
                 projectId,
                 name: expectedDefaultWorkflow.workflow.name,
                 definition: expectedDefaultWorkflow,
                 isDefault: true,
+                version: CURRENT_VERSION,
               });
+            } else {
+              // Same ID, just update the definition (preserve old version in history if needed)
+              defaultWorkflowRecord = await workflowsRepo.update(oldId, {
+                name: expectedDefaultWorkflow.workflow.name,
+                definition: expectedDefaultWorkflow,
+                version: CURRENT_VERSION,
+                isDefault: true,
+              });
+
+              // If update failed, create new workflow with new ID and preserve old one
+              if (!defaultWorkflowRecord) {
+                // Mark old as non-default
+                await workflowsRepo.update(oldId, {
+                  isDefault: false,
+                });
+                // Create new default
+                defaultWorkflowRecord = await workflowsRepo.create({
+                  id: expectedWorkflowId,
+                  projectId,
+                  name: expectedDefaultWorkflow.workflow.name,
+                  definition: expectedDefaultWorkflow,
+                  isDefault: true,
+                  version: CURRENT_VERSION,
+                });
+              }
             }
           }
         }
@@ -387,9 +161,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
   fastify.get<{ Params: { id: string } }>('/api/workflows/:id', async (request, reply) => {
     try {
       const { id } = request.params;
-      const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-        (m) => m.workflowsRepository
-      );
+      const workflowsRepo = workflowsRepository;
 
       const workflowRecord = await workflowsRepo.findById(id);
 
@@ -400,7 +172,11 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
         });
       }
 
-      const workflow: Workflow = JSON.parse(workflowRecord.definition);
+      // Handle both string and object definitions
+      const workflow: Workflow =
+        typeof workflowRecord.definition === 'string'
+          ? JSON.parse(workflowRecord.definition)
+          : (workflowRecord.definition as Workflow);
 
       return reply.send({
         data: {
@@ -435,8 +211,11 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
 
         const body = CreateWorkflowDTOSchema.parse(request.body);
 
+        // Use version from body.definition if provided, otherwise default to 1
+        const workflowVersion = body.definition?.version ?? 1;
+
         const validated = WorkflowSchema.safeParse({
-          version: 1,
+          version: workflowVersion,
           workflow: {
             ...body.definition,
             name: body.name,
@@ -462,10 +241,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
           });
         }
 
-        const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-          (m) => m.workflowsRepository
-        );
-        const { projectsRepository } = await import('../repositories/ProjectsRepository.js');
+        const workflowsRepo = workflowsRepository;
 
         // Verify project exists
         const project = await projectsRepository.findById(projectId);
@@ -494,7 +270,11 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
           isDefault: body.isDefault ?? false,
         });
 
-        const workflow: Workflow = JSON.parse(workflowRecord.definition);
+        // Handle both string and object definitions
+        const workflow: Workflow =
+          typeof workflowRecord.definition === 'string'
+            ? JSON.parse(workflowRecord.definition)
+            : (workflowRecord.definition as Workflow);
 
         return reply.code(201).send({
           data: {
@@ -528,9 +308,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
         });
       }
 
-      const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-        (m) => m.workflowsRepository
-      );
+      const workflowsRepo = workflowsRepository;
       const existing = await workflowsRepo.findById(id);
 
       if (!existing) {
@@ -540,8 +318,16 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
         });
       }
 
+      // Use version from body.definition if provided, otherwise use existing version
+      const existingWorkflow: Workflow =
+        typeof existing.definition === 'string'
+          ? JSON.parse(existing.definition)
+          : (existing.definition as Workflow);
+      const workflowVersion =
+        body.definition?.version ?? existingWorkflow.version ?? existing.version ?? 1;
+
       const validated = WorkflowSchema.safeParse({
-        version: 1,
+        version: workflowVersion,
         workflow: {
           ...body.definition,
           name: body.name ?? body.definition.name,
@@ -568,10 +354,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
       }
 
       // Validate backbone modifications for immutable nodes
-      const existingWorkflow: Workflow =
-        typeof existing.definition === 'string'
-          ? JSON.parse(existing.definition)
-          : existing.definition;
+      // existingWorkflow already parsed above
       const backboneValidation = workflowValidationService.validateBackboneModification(
         existingWorkflow,
         validated.data
@@ -608,7 +391,11 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
         });
       }
 
-      const workflow: Workflow = JSON.parse(updated.definition);
+      // Handle both string and object definitions
+      const workflow: Workflow =
+        typeof updated.definition === 'string'
+          ? JSON.parse(updated.definition)
+          : (updated.definition as Workflow);
 
       return reply.send({
         data: {
@@ -632,9 +419,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
   fastify.delete<{ Params: { id: string } }>('/api/workflows/:id', async (request, reply) => {
     try {
       const { id } = request.params;
-      const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-        (m) => m.workflowsRepository
-      );
+      const workflowsRepo = workflowsRepository;
       const existing = await workflowsRepo.findById(id);
 
       if (!existing) {
@@ -669,9 +454,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
         const { workflowId } = request.params;
         const { workItemId } = ExecuteWorkflowDTOSchema.parse(request.body);
 
-        const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-          (m) => m.workflowsRepository
-        );
+        const workflowsRepo = workflowsRepository;
         const workflowRecord = await workflowsRepo.findById(workflowId);
 
         if (!workflowRecord) {
@@ -711,9 +494,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
         const { workflowId } = request.params;
         const { workItemId } = request.query;
 
-        const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-          (m) => m.workflowsRepository
-        );
+        const workflowsRepo = workflowsRepository;
         const workflowRecord = await workflowsRepo.findById(workflowId);
 
         if (!workflowRecord) {
@@ -753,9 +534,7 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
     async (request, reply) => {
       try {
         const { runId } = request.params;
-        const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-          (m) => m.workflowsRepository
-        );
+        const workflowsRepo = workflowsRepository;
 
         const runRecord = await workflowsRepo.findRunById(runId);
 
@@ -766,18 +545,17 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
           });
         }
 
-        const steps = await workflowsRepo.findStepExecutionsByRunId(runId);
+        const steps = await workflowsRepo.findNodeRunsByWorkflowRunId(runId);
 
-        const stepsData = steps.map((s) => ({
+        const stepsData = steps.map((s: NodeRunRecord) => ({
           id: s.id,
           runId: s.runId,
           nodeId: s.nodeId,
           status: s.status,
           startedAt: s.startedAt?.toISOString() ?? null,
           finishedAt: s.finishedAt?.toISOString() ?? null,
-          errorMessage: s.errorMessage ?? null,
-          outputs: typeof s.outputs === 'string' ? JSON.parse(s.outputs) : s.outputs,
-          artifacts: typeof s.artifacts === 'string' ? JSON.parse(s.artifacts) : s.artifacts,
+          error: s.error ?? null,
+          output: typeof s.output === 'string' ? JSON.parse(s.output) : s.output,
         }));
 
         return reply.send({
@@ -798,22 +576,19 @@ export const workflowRoutes = async (fastify: FastifyInstance): Promise<void> =>
     async (request, reply) => {
       try {
         const { runId } = request.params;
-        const workflowsRepo = await import('../repositories/WorkflowsRepository.js').then(
-          (m) => m.workflowsRepository
-        );
+        const workflowsRepo = workflowsRepository;
 
-        const steps = await workflowsRepo.findStepExecutionsByRunId(runId);
+        const steps = await workflowsRepo.findNodeRunsByWorkflowRunId(runId);
 
-        const stepsData = steps.map((s) => ({
+        const stepsData = steps.map((s: NodeRunRecord) => ({
           id: s.id,
           runId: s.runId,
           nodeId: s.nodeId,
           status: s.status,
           startedAt: s.startedAt?.toISOString() ?? null,
           finishedAt: s.finishedAt?.toISOString() ?? null,
-          errorMessage: s.errorMessage ?? null,
-          outputs: typeof s.outputs === 'string' ? JSON.parse(s.outputs) : s.outputs,
-          artifacts: typeof s.artifacts === 'string' ? JSON.parse(s.artifacts) : s.artifacts,
+          error: s.error ?? null,
+          output: typeof s.output === 'string' ? JSON.parse(s.output) : s.output,
         }));
 
         return reply.send({

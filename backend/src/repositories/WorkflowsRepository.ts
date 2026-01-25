@@ -1,5 +1,5 @@
-import { eq, and } from 'drizzle-orm';
-import { workflows, workflowRuns, stepExecutions } from '../models/schema.js';
+import { eq, and, desc } from 'drizzle-orm';
+import { workflows, workflowRuns, nodeRuns } from '../models/schema.js';
 import type { Workflow } from '../types/models.js';
 import { getDb } from '../db/client.js';
 
@@ -9,6 +9,7 @@ export interface WorkflowRecord {
   name: string;
   definition: string;
   isDefault: boolean;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,16 +25,24 @@ export interface WorkflowRunRecord {
   createdAt: Date;
 }
 
-export interface StepExecutionRecord {
+export interface NodeRunRecord {
   id: string;
   runId: string;
+  workflowRunId: string;
   nodeId: string;
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'skipped';
+  resourceType: string;
+  subjectKind: string;
+  subjectId: string;
+  subjectVersionAtStart: number;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'blocked';
+  attempt: number;
+  idempotencyKey: string | null;
+  input: string;
+  output: string;
+  error: string | null;
   startedAt: Date | null;
   finishedAt: Date | null;
-  errorMessage: string | null;
-  outputs: string;
-  artifacts: string;
+  createdAt: Date;
 }
 
 export class WorkflowsRepository {
@@ -52,9 +61,10 @@ export class WorkflowsRepository {
     name: string;
     definition: Workflow;
     isDefault?: boolean;
+    version?: number;
   }): Promise<WorkflowRecord> {
     const db = await this.getDbInstance();
-    const [workflow] = await db
+    const result = await db
       .insert(workflows)
       .values({
         id: data.id,
@@ -62,9 +72,12 @@ export class WorkflowsRepository {
         name: data.name,
         definition: JSON.stringify(data.definition),
         isDefault: data.isDefault ?? false,
+        version: data.version ?? data.definition.version ?? 1,
       })
       .returning()
       .execute();
+
+    const [workflow] = Array.isArray(result) ? result : [result];
 
     return workflow as WorkflowRecord;
   }
@@ -75,26 +88,27 @@ export class WorkflowsRepository {
     if (projectId) {
       query = query.where(eq(workflows.projectId, projectId)) as typeof query;
     }
+    query = query.orderBy(desc(workflows.createdAt)) as typeof query;
     const result = await query.execute();
     return result as WorkflowRecord[];
   }
 
   async findById(id: string): Promise<WorkflowRecord | undefined> {
     const db = await this.getDbInstance();
-    const [workflow] = await db.select().from(workflows).where(eq(workflows.id, id)).execute();
+    const result = await db.select().from(workflows).where(eq(workflows.id, id)).execute();
 
-    return workflow as WorkflowRecord | undefined;
+    return result[0] as WorkflowRecord | undefined;
   }
 
   async findDefault(projectId: string): Promise<WorkflowRecord | undefined> {
     const db = await this.getDbInstance();
-    const [workflow] = await db
+    const result = await db
       .select()
       .from(workflows)
       .where(and(eq(workflows.projectId, projectId), eq(workflows.isDefault, true)))
       .execute();
 
-    return workflow as WorkflowRecord | undefined;
+    return result[0] as WorkflowRecord | undefined;
   }
 
   async findByProjectId(projectId: string): Promise<WorkflowRecord[]> {
@@ -103,19 +117,20 @@ export class WorkflowsRepository {
       .select()
       .from(workflows)
       .where(eq(workflows.projectId, projectId))
+      .orderBy(desc(workflows.createdAt))
       .execute();
     return result as WorkflowRecord[];
   }
 
   async findByName(name: string, projectId: string): Promise<WorkflowRecord | undefined> {
     const db = await this.getDbInstance();
-    const [workflow] = await db
+    const result = await db
       .select()
       .from(workflows)
       .where(and(eq(workflows.projectId, projectId), eq(workflows.name, name)))
       .execute();
 
-    return workflow as WorkflowRecord | undefined;
+    return result[0] as WorkflowRecord | undefined;
   }
 
   async update(
@@ -124,20 +139,24 @@ export class WorkflowsRepository {
       name?: string;
       definition?: Workflow;
       isDefault?: boolean;
+      version?: number;
     }
   ): Promise<WorkflowRecord | undefined> {
     const db = await this.getDbInstance();
-    const [workflow] = await db
+    const result = await db
       .update(workflows)
       .set({
         name: data.name,
         definition: data.definition ? JSON.stringify(data.definition) : undefined,
         isDefault: data.isDefault,
+        version: data.version,
         updatedAt: new Date(),
       })
       .where(eq(workflows.id, id))
       .returning()
       .execute();
+
+    const [workflow] = Array.isArray(result) ? result : [result];
 
     return workflow as WorkflowRecord | undefined;
   }
@@ -153,7 +172,7 @@ export class WorkflowsRepository {
     workItemId: string;
   }): Promise<WorkflowRunRecord> {
     const db = await this.getDbInstance();
-    const [run] = await db
+    const result = await db
       .insert(workflowRuns)
       .values({
         id: data.id,
@@ -163,6 +182,8 @@ export class WorkflowsRepository {
       })
       .returning()
       .execute();
+
+    const [run] = Array.isArray(result) ? result : [result];
 
     return run as WorkflowRunRecord;
   }
@@ -189,9 +210,9 @@ export class WorkflowsRepository {
 
   async findRunById(id: string): Promise<WorkflowRunRecord | undefined> {
     const db = await this.getDbInstance();
-    const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, id)).execute();
+    const result = await db.select().from(workflowRuns).where(eq(workflowRuns.id, id)).execute();
 
-    return run as WorkflowRunRecord | undefined;
+    return result[0] as WorkflowRunRecord | undefined;
   }
 
   async updateRun(
@@ -204,7 +225,7 @@ export class WorkflowsRepository {
     }
   ): Promise<WorkflowRunRecord | undefined> {
     const db = await this.getDbInstance();
-    const [run] = await db
+    const result = await db
       .update(workflowRuns)
       .set({
         ...data,
@@ -212,6 +233,8 @@ export class WorkflowsRepository {
       .where(eq(workflowRuns.id, id))
       .returning()
       .execute();
+
+    const [run] = Array.isArray(result) ? result : [result];
 
     return run as WorkflowRunRecord | undefined;
   }
@@ -221,83 +244,87 @@ export class WorkflowsRepository {
     await db.delete(workflowRuns).where(eq(workflowRuns.id, id)).execute();
   }
 
-  async createStepExecution(data: {
+  async createNodeRun(data: {
     id: string;
     runId: string;
+    workflowRunId: string;
     nodeId: string;
-    outputs: Record<string, unknown>;
-    artifacts: unknown[];
-  }): Promise<StepExecutionRecord> {
+    resourceType: string;
+    subjectKind: string;
+    subjectId: string;
+    subjectVersionAtStart: number;
+    input: Record<string, unknown>;
+  }): Promise<NodeRunRecord> {
     const db = await this.getDbInstance();
-    const [stepExecution] = await db
-      .insert(stepExecutions)
-      .values({
-        id: data.id,
-        runId: data.runId,
-        nodeId: data.nodeId,
-        status: 'pending',
-        outputs: JSON.stringify(data.outputs),
-        artifacts: JSON.stringify(data.artifacts),
-      })
-      .returning()
-      .execute();
+    await db.insert(nodeRuns).values({
+      id: data.id,
+      runId: data.runId,
+      workflowRunId: data.workflowRunId,
+      nodeId: data.nodeId,
+      resourceType: data.resourceType,
+      subjectKind: data.subjectKind,
+      subjectId: data.subjectId,
+      subjectVersionAtStart: data.subjectVersionAtStart,
+      status: 'pending',
+      input: JSON.stringify(data.input),
+      output: '{}',
+    });
 
-    return stepExecution as StepExecutionRecord;
+    // Fetch created record
+    const result = await db.select().from(nodeRuns).where(eq(nodeRuns.id, data.id)).execute();
+
+    return result[0] as NodeRunRecord;
   }
 
-  async findStepExecutionsByRunId(runId: string): Promise<StepExecutionRecord[]> {
+  async findNodeRunsByWorkflowRunId(workflowRunId: string): Promise<NodeRunRecord[]> {
     const db = await this.getDbInstance();
     const result = await db
       .select()
-      .from(stepExecutions)
-      .where(eq(stepExecutions.runId, runId))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.workflowRunId, workflowRunId))
       .execute();
-    return result as StepExecutionRecord[];
+    return result as NodeRunRecord[];
   }
 
-  async findStepExecutionById(id: string): Promise<StepExecutionRecord | undefined> {
+  async findNodeRunById(id: string): Promise<NodeRunRecord | undefined> {
     const db = await this.getDbInstance();
-    const [stepExecution] = await db
-      .select()
-      .from(stepExecutions)
-      .where(eq(stepExecutions.id, id))
-      .execute();
+    const result = await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)).execute();
 
-    return stepExecution as StepExecutionRecord | undefined;
+    return result[0] as NodeRunRecord | undefined;
   }
 
-  async updateStepExecution(
+  async updateNodeRun(
     id: string,
     data: {
-      status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'skipped';
+      status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'blocked';
       startedAt?: Date | null;
       finishedAt?: Date | null;
-      errorMessage?: string | null;
-      outputs?: Record<string, unknown>;
-      artifacts?: unknown[];
+      error?: string | null;
+      output?: Record<string, unknown>;
     }
-  ): Promise<StepExecutionRecord | undefined> {
+  ): Promise<NodeRunRecord | undefined> {
     const db = await this.getDbInstance();
-    const [stepExecution] = await db
-      .update(stepExecutions)
+    await db
+      .update(nodeRuns)
       .set({
         status: data.status,
         startedAt: data.startedAt,
         finishedAt: data.finishedAt,
-        errorMessage: data.errorMessage,
-        outputs: data.outputs ? JSON.stringify(data.outputs) : undefined,
-        artifacts: data.artifacts ? JSON.stringify(data.artifacts) : undefined,
+        error: data.error,
+        output: data.output ? JSON.stringify(data.output) : undefined,
       })
-      .where(eq(stepExecutions.id, id))
-      .returning()
+      .where(eq(nodeRuns.id, id))
       .execute();
 
-    return stepExecution as StepExecutionRecord | undefined;
+    // Fetch updated record
+    const result = await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)).execute();
+
+    return result[0] as NodeRunRecord | undefined;
   }
 
-  async deleteStepExecution(id: string): Promise<void> {
+  async deleteNodeRun(id: string): Promise<void> {
     const db = await this.getDbInstance();
-    await db.delete(stepExecutions).where(eq(stepExecutions.id, id)).execute();
+    await db.delete(nodeRuns).where(eq(nodeRuns.id, id)).execute();
   }
 }
 
