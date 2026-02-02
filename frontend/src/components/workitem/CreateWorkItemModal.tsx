@@ -58,7 +58,7 @@ export function CreateWorkItemModal({
     resolver: zodResolver(CreateWorkItemSchema),
     defaultValues: {
       projectId,
-      type: 'issue',
+      type: 'feature-request',
       title: '',
       body: '',
     },
@@ -79,7 +79,13 @@ export function CreateWorkItemModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Create New Work Item" size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Create New Work Item"
+      size="lg"
+      closeOnBackdropClick={false}
+    >
       <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
         {/* Type Selection */}
         <div>

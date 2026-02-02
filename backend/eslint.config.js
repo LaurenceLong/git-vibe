@@ -38,6 +38,9 @@ export default [
       ...tseslint.configs.recommended.rules,
       ...eslintConfigPrettier.rules,
       'prettier/prettier': 'error',
+      // TypeScript already type-checks undefined identifiers; this rule commonly
+      // misfires on Node/Web globals in ESM/TS projects.
+      'no-undef': 'off',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-function-return-type': 'off',

@@ -1,16 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateWorkItemDTOSchema, UpdateWorkItemDTOSchema } from 'git-vibe-shared';
+import {
+  CreateWorkItemDTOSchema,
+  UpdateWorkItemDTOSchema,
+  WORKITEM_STATUS_CLOSED,
+} from 'git-vibe-shared';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
-import { agentService } from '../services/AgentService.js';
+import { agentService } from '../services/agent/AgentService.js';
 import { workspaceService } from '../services/WorkspaceService.js';
 import { prService } from '../services/PRService.js';
+import { workItemEventService } from '../services/WorkItemEventService.js';
 import { toDTO as workItemToDTO } from '../mappers/workItems.js';
 import { toDTO as pullRequestToDTO } from '../mappers/pullRequests.js';
 import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
+import { workflowEventBus } from '../services/workflow/WorkflowEventBus.js';
 
 export async function workitemsRoutes(server: FastifyInstance) {
   // POST /api/workitems - Create new WorkItem and automatically start agent
@@ -27,8 +33,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
         });
       }
 
-      // Create WorkItem in database
-      const workItem = await workItemsRepository.create({
+      // Create WorkItem via event service (emits workitem.created event which triggers workflow)
+      const workItem = await workItemEventService.createWorkItem({
         id: uuidv4(),
         projectId: body.projectId,
         type: body.type,
@@ -36,18 +42,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
         body: body.body,
       });
 
-      // Automatically execute task: initialize workspace and start agent
-      // This runs asynchronously and doesn't block the response
-      agentService
-        .executeTask(workItem.projectId, workItem.id, workItem.title, workItem.body || undefined)
-        .then(() => {
-          console.log(`Task started successfully for work item ${workItem.id}`);
-        })
-        .catch((error) => {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error(`Failed to execute task for work item ${workItem.id}:`, errorMessage);
-          console.error('Full error details:', error);
-        });
+      // Event service emits workitem.created event, which triggers workflow execution
+      // No need to call agentService.executeTask directly
 
       return reply.status(201).send(workItemToDTO(workItem));
     } catch (error) {
@@ -80,8 +76,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
           });
         }
 
-        // Create WorkItem in database
-        const workItem = await workItemsRepository.create({
+        // Create WorkItem via event service (emits workitem.created event which triggers workflow)
+        const workItem = await workItemEventService.createWorkItem({
           id: uuidv4(),
           projectId,
           type: body.type,
@@ -89,18 +85,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
           body: body.body,
         });
 
-        // Automatically execute task: initialize workspace and start agent
-        // This runs asynchronously and doesn't block the response
-        agentService
-          .executeTask(workItem.projectId, workItem.id, workItem.title, workItem.body || undefined)
-          .then(() => {
-            console.log(`Task started successfully for work item ${workItem.id}`);
-          })
-          .catch((error) => {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error(`Failed to execute task for work item ${workItem.id}:`, errorMessage);
-            console.error('Full error details:', error);
-          });
+        // Event service emits workitem.created event, which triggers workflow execution
+        // No need to call agentService.executeTask directly
 
         return reply.status(201).send(workItemToDTO(workItem));
       } catch (error) {
@@ -183,7 +169,19 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       try {
-        const updatedWorkItem = await workspaceService.initWorkspace(workItem, project);
+        // Initialize workspace (stateless - returns state)
+        const workspaceState = await workspaceService.initWorkspace(workItem.id, project);
+        // Update WorkItem state via event service (which emits events and triggers workflow)
+        const updatedWorkItem = await workItemEventService.updateWorkItemState(
+          workItem.id,
+          workspaceState
+        );
+        if (!updatedWorkItem) {
+          return reply.status(404).send({
+            error: true,
+            message: 'WorkItem not found after workspace initialization',
+          });
+        }
         return reply.status(200).send(workItemToDTO(updatedWorkItem));
       } catch (error) {
         return reply.status(500).send({
@@ -217,10 +215,29 @@ export async function workitemsRoutes(server: FastifyInstance) {
         }
 
         // Find the most recent agent run for this WorkItem that has a sessionId
-        const allAgentRuns = await agentService.getWorkItemTasks(request.params.id);
-        const latestRunWithSession = allAgentRuns
-          .filter((run) => run.sessionId)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        const allTasks = await agentService.getWorkItemTasks(request.params.id);
+        // Get agent runs for tasks that have them
+        const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+        const tasksWithRuns = await Promise.all(
+          allTasks
+            .filter((t) => t.currentAgentRunId)
+            .map(async (t) => {
+              const run = await agentRunsRepository.findById(t.currentAgentRunId!);
+              return run ? { task: t, run } : null;
+            })
+        );
+        const latestRunWithSession = tasksWithRuns
+          .filter(
+            (
+              tr
+            ): tr is {
+              task: (typeof allTasks)[0];
+              run: NonNullable<(typeof tasksWithRuns)[0]>['run'];
+            } => tr !== null && tr.run.sessionId !== null
+          )
+          .sort(
+            (a, b) => new Date(b.run.createdAt).getTime() - new Date(a.run.createdAt).getTime()
+          )[0];
 
         if (!latestRunWithSession) {
           return reply.status(400).send({
@@ -229,8 +246,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
           });
         }
 
-        // Resume the task using the same session
-        const agentRun = await agentService.resumeTask(latestRunWithSession.id, prompt);
+        // Resume the task using the same session; returns AgentRun
+        const agentRun = await agentService.resumeTask(latestRunWithSession.task.id, prompt);
         return reply.status(201).send(agentRunToDTO(agentRun));
       } catch (error) {
         return reply.status(400).send({
@@ -254,7 +271,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
         });
       }
 
-      const updated = await workItemsRepository.update(request.params.id, body);
+      // Update WorkItem via event service (emits workitem.updated/status.changed events)
+      const updated = await workItemEventService.updateWorkItem(request.params.id, body);
 
       if (!updated) {
         return reply.status(404).send({
@@ -263,15 +281,8 @@ export async function workitemsRoutes(server: FastifyInstance) {
         });
       }
 
-      // If WorkItem is being closed, clean up its worktree
-      if (body.status === 'closed') {
-        const project = await projectsRepository.findById(workItem.projectId);
-        if (project) {
-          workspaceService.removeWorktree(workItem, project).catch((error) => {
-            console.error(`Failed to clean up worktree for WorkItem ${request.params.id}:`, error);
-          });
-        }
-      }
+      // If WorkItem is being closed, workflow will handle cleanup via workitem.closed event
+      // No need to directly call workspaceService.removeWorktree
 
       return reply.status(200).send(workItemToDTO(updated));
     } catch (error) {
@@ -341,7 +352,21 @@ export async function workitemsRoutes(server: FastifyInstance) {
         const updatedWorkItem = await workspaceService.ensureWorkspace(workItem, project);
 
         // Create PR using PRService
-        const pr = await prService.openPR(updatedWorkItem, project);
+        const pr = await prService.openPR(
+          updatedWorkItem.id,
+          project.id,
+          updatedWorkItem.title,
+          updatedWorkItem.body,
+          updatedWorkItem.headBranch || project.defaultBranch,
+          project.defaultBranch
+        );
+
+        if (!pr) {
+          return reply.status(400).send({
+            error: true,
+            message: 'No changes detected, cannot create PR',
+          });
+        }
 
         return reply.status(201).send(pullRequestToDTO(pr));
       } catch (error) {
@@ -367,7 +392,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
     return pr ? [pullRequestToDTO(pr)] : [];
   });
 
-  // GET /api/workitems/:id/tasks - Get all agent tasks for a WorkItem
+  // GET /api/workitems/:id/tasks - Get all tasks for a WorkItem
   server.get<{ Params: { id: string } }>('/api/workitems/:id/tasks', async (request, reply) => {
     const workItem = await workItemsRepository.findById(request.params.id);
     if (!workItem) {
@@ -378,7 +403,54 @@ export async function workitemsRoutes(server: FastifyInstance) {
     }
 
     const tasks = await agentService.getWorkItemTasks(request.params.id);
-    return tasks.map(agentRunToDTO);
+    const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+    const result = await Promise.all(
+      tasks.map(async (task) => {
+        if (task.currentAgentRunId) {
+          const agentRun = await agentRunsRepository.findById(task.currentAgentRunId);
+          if (agentRun) {
+            return agentRunToDTO(agentRun);
+          }
+        }
+        // If no agent run, return a synthetic AgentRunDTO from task
+        return {
+          id: task.id,
+          projectId: workItem.projectId,
+          workItemId: task.workItemId,
+          taskId: task.id,
+          agentKey: 'opencode' as const,
+          status:
+            task.status === 'pending'
+              ? 'queued'
+              : task.status === 'running'
+                ? 'running'
+                : task.status === 'succeeded'
+                  ? 'succeeded'
+                  : task.status === 'failed'
+                    ? 'failed'
+                    : 'cancelled',
+          inputSummary: task.taskType,
+          inputJson: JSON.stringify({ taskType: task.taskType, ...task.input }),
+          sessionId: null,
+          linkedAgentRunId: null,
+          log: null,
+          logPath: null,
+          stdoutPath: null,
+          stderrPath: null,
+          headShaBefore: null,
+          headShaAfter: null,
+          commitSha: null,
+          pid: null,
+          idempotencyKey: task.idempotencyKey,
+          nodeRunId: task.nodeRunId ?? null,
+          startedAt: null,
+          finishedAt: null,
+          createdAt: task.createdAt.toISOString(),
+          updatedAt: task.updatedAt.toISOString(),
+        };
+      })
+    );
+    return result;
   });
 
   // POST /api/workitems/:id/tasks/:taskId/cancel - Cancel a running task
@@ -421,8 +493,20 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       try {
-        const agentRun = await agentService.restartTask(request.params.taskId);
-        return reply.status(201).send(agentRunToDTO(agentRun));
+        const task = await agentService.restartTask(request.params.taskId);
+        if (task.currentAgentRunId) {
+          const { agentRunsRepository } = await import('../repositories/AgentRunsRepository.js');
+          const agentRun = await agentRunsRepository.findById(task.currentAgentRunId);
+          if (agentRun) {
+            return reply.status(201).send(agentRunToDTO(agentRun));
+          }
+        }
+        // Return task info if no agent run
+        return reply.status(201).send({
+          id: task.id,
+          taskType: task.taskType,
+          status: task.status,
+        });
       } catch (error) {
         return reply.status(404).send({
           error: true,
@@ -445,8 +529,18 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       try {
-        const status = await agentService.getTaskStatus(request.params.taskId);
-        return status;
+        const statusResult = await agentService.getTaskStatus(request.params.taskId);
+        if (statusResult.agentRun) {
+          return {
+            status: statusResult.status,
+            agentRun: agentRunToDTO(statusResult.agentRun),
+          };
+        }
+        // Return task status if no agent run
+        return {
+          status: statusResult.status,
+          task: statusResult.task,
+        };
       } catch (error) {
         return reply.status(404).send({
           error: true,
@@ -501,7 +595,7 @@ export async function workitemsRoutes(server: FastifyInstance) {
       }
 
       // Check if WorkItem is already closed
-      if (workItem.status === 'closed') {
+      if (workItem.status === WORKITEM_STATUS_CLOSED) {
         return reply.status(400).send({
           error: true,
           message: 'Cannot start task for a closed WorkItem',
@@ -522,16 +616,29 @@ export async function workitemsRoutes(server: FastifyInstance) {
         // Get user message from request body if provided (for conversation messages)
         const userMessage = request.body?.message;
 
-        // Execute task: initialize workspace and start agent
-        const result = await agentService.executeTask(
-          workItem.projectId,
-          workItem.id,
-          workItem.title,
-          workItem.body || undefined,
-          userMessage
-        );
+        // Emit workitem.task.start event to trigger workflow
+        // The workflow will handle starting the agent run via AgentNodeExecutor
+        console.log(`[workitemsRoutes] Emitting workitem.task.start event for ${workItem.id}`);
 
-        return reply.status(201).send(agentRunToDTO(result.agentRun));
+        await workflowEventBus.emit({
+          eventId: crypto.randomUUID(),
+          at: new Date().toISOString(),
+          subject: { kind: 'workitem', id: workItem.id },
+          type: 'workitem.task.start',
+          workItemId: workItem.id,
+          data: {
+            title: workItem.title,
+            body: workItem.body ?? '',
+            userMessage,
+          },
+        });
+
+        // Return a placeholder response - the actual agent run will be created by the workflow
+        // The client should poll for tasks or use SSE to get the actual agent run
+        return reply.status(202).send({
+          message: 'Task start request accepted. Workflow will handle agent execution.',
+          workItemId: workItem.id,
+        });
       } catch (error) {
         return reply.status(400).send({
           error: true,
@@ -561,8 +668,17 @@ export async function workitemsRoutes(server: FastifyInstance) {
 
     try {
       // Refresh head_sha using workspace service
-      const updatedWorkItem = await workspaceService.refreshHeadSha(workItem);
-      return reply.status(200).send(workItemToDTO(updatedWorkItem));
+      if (!workItem.worktreePath) {
+        return reply.status(400).send({
+          error: true,
+          message: 'WorkItem has no worktree initialized',
+        });
+      }
+      const headSha = await workspaceService.refreshHeadSha(workItem.worktreePath);
+      const updatedWorkItem = await workItemsRepository.update(workItem.id, {
+        headSha,
+      });
+      return reply.status(200).send(workItemToDTO(updatedWorkItem!));
     } catch (error) {
       return reply.status(500).send({
         error: true,

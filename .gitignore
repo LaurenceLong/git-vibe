@@ -43,5 +43,9 @@ disassemble.py
 clean_js.py
 
 *.md
+
+!/docs/
+!/docs/**/*.md
+
 *.png
 *.mdx

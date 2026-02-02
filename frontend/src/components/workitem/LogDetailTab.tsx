@@ -13,7 +13,6 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Terminal } from 'lucide-react';
 import { useStreamingLogs } from '@/hooks/useStreamingLogs';
 import { LogPane } from '@/components/ui/LogPane';
 import { agentRunsApi } from '@/lib/api';

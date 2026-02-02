@@ -25,6 +25,8 @@ import { WorktreeStatusComponent } from '@/components/worktree/WorktreeStatus';
 import { useWorktreeManagement } from '@/hooks/useWorktreeManagement';
 import { workItemsApi } from '@/lib/api';
 import { formatDateTime, sortDates } from '@/lib/datetime';
+import { useConfirmModal } from '@/components/ConfirmModal';
+import { useToast } from '@/components/Toast';
 
 export interface WorkItemDetailProps {
   workItemId: string;
@@ -53,6 +55,8 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
   const { closeWorkItem, isLoading: isClosing } = useCloseWorkItem(workItemId);
   const { deleteWorkItem, isLoading: isDeleting } = useDeleteWorkItem(workItemId, onDeleteSuccess);
   const { startTask, isLoading: isStarting } = useStartWorkItemTask(workItemId);
+  const { confirm } = useConfirmModal();
+  const { error: showError } = useToast();
 
   // Worktree management
   const worktreeManagement = useWorktreeManagement({
@@ -68,7 +72,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
     return workItem?.worktreePath ? 'present' : 'missing';
   };
 
-  // Fetch tasks to check status - only when logs tab is active or when we need task status
+  // Fetch tasks to check status - load when tasks or logs tab is active, or on mount to check button state
   const fetchTasks = useCallback(async () => {
     try {
       const response = await workItemsApi.getTasks(workItemId);
@@ -85,22 +89,31 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
   // Get the latest task (first in sorted array, or last if not sorted)
   const latestTask = tasks.length > 0 ? tasks[0] : null;
 
-  // Only fetch tasks when logs tab is active
+  // Fetch tasks on mount (to determine button state) and when tasks or logs tab is active
   useEffect(() => {
-    if (activeTab === 'logs') {
+    fetchTasks();
+  }, [workItemId, fetchTasks]);
+
+  // Also refresh tasks when switching to tasks or logs tabs
+  useEffect(() => {
+    if (activeTab === 'logs' || activeTab === 'tasks') {
       fetchTasks();
     }
-  }, [workItemId, activeTab, fetchTasks]);
+  }, [activeTab, fetchTasks]);
 
   const handleClose = async () => {
-    if (window.confirm('Are you sure you want to close this WorkItem?')) {
+    if (await confirm({ message: 'Are you sure you want to close this WorkItem?' })) {
       await closeWorkItem();
     }
   };
 
   const handleDelete = async () => {
     if (
-      window.confirm('Are you sure you want to delete this WorkItem? This action cannot be undone.')
+      await confirm({
+        message: 'Are you sure you want to delete this WorkItem? This action cannot be undone.',
+        variant: 'danger',
+        confirmLabel: 'Delete',
+      })
     ) {
       await deleteWorkItem();
     }
@@ -119,7 +132,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
 
   const handleCancel = async () => {
     if (!latestTask) return;
-    if (!window.confirm('Are you sure you want to cancel this task?')) return;
+    if (!(await confirm({ message: 'Are you sure you want to cancel this task?' }))) return;
 
     setActionLoading(true);
     try {
@@ -127,7 +140,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
       await fetchTasks();
     } catch (err) {
       console.error('Failed to cancel task:', err);
-      alert('Failed to cancel task. Please try again.');
+      showError('Failed to cancel task. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -135,10 +148,8 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
 
   const handleRestart = async () => {
     if (!latestTask) return;
-    // First confirmation
-    if (!window.confirm('Are you sure you want to restart this task?')) return;
-    // Second confirmation for safety
-    if (!window.confirm('This will restart the task. Are you really sure?')) return;
+    if (!(await confirm({ message: 'Are you sure you want to restart this task?' }))) return;
+    if (!(await confirm({ message: 'This will restart the task. Are you really sure?' }))) return;
 
     setActionLoading(true);
     try {
@@ -146,7 +157,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
       await fetchTasks();
     } catch (err) {
       console.error('Failed to restart task:', err);
-      alert('Failed to restart task. Please try again.');
+      showError('Failed to restart task. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -158,23 +169,8 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
       return null;
     }
 
-    // If tasks haven't been loaded yet (not on logs tab), show Start button
-    if (tasks.length === 0 && activeTab !== 'logs') {
-      return (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleStart}
-          loading={isStarting || actionLoading}
-        >
-          <Play className="mr-1 h-3 w-3" />
-          Start
-        </Button>
-      );
-    }
-
+    // If no tasks exist, show Start button
     if (!latestTask) {
-      // No task yet, show Start button
       return (
         <Button
           variant="primary"
@@ -188,6 +184,7 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
       );
     }
 
+    // Determine button based on latest task status
     switch (latestTask.status) {
       case 'queued':
       case 'running':
@@ -200,15 +197,8 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
         );
       case 'failed':
       case 'cancelled':
-        // Show Restart button for failed/cancelled tasks
-        return (
-          <Button variant="primary" size="sm" onClick={handleRestart} loading={actionLoading}>
-            <RefreshCw className="mr-1 h-3 w-3" />
-            Restart
-          </Button>
-        );
       case 'succeeded':
-        // Show Restart button for completed tasks
+        // Show Restart button for failed/cancelled/succeeded tasks
         return (
           <Button variant="primary" size="sm" onClick={handleRestart} loading={actionLoading}>
             <RefreshCw className="mr-1 h-3 w-3" />
@@ -216,7 +206,18 @@ export function WorkItemDetail({ workItemId, onDeleteSuccess }: WorkItemDetailPr
           </Button>
         );
       default:
-        return null;
+        // For unknown status, show Start button as fallback
+        return (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleStart}
+            loading={isStarting || actionLoading}
+          >
+            <Play className="mr-1 h-3 w-3" />
+            Start
+          </Button>
+        );
     }
   };
 

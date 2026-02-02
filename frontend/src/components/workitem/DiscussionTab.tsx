@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/Toast';
+import { extractErrorMessage } from '@/lib/errorUtils';
 import { formatDateTime } from '@/lib/datetime';
 
 export interface DiscussionTabProps {
@@ -63,8 +64,9 @@ export function DiscussionTab({ workItemId }: DiscussionTabProps) {
       setNewComment('');
       success('Comment added successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to add comment: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to add comment');
+      showError(errorMessage);
     },
   });
 

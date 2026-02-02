@@ -53,7 +53,7 @@ export type ReviewThreadSeverity = 'info' | 'warning' | 'error';
 /**
  * Agent key
  */
-export type AgentKey = 'opencode' | 'claudcode';
+export type AgentKey = 'opencode' | 'claudecode';
 
 // ============================================================================
 // Zod Schemas for Enums
@@ -73,7 +73,7 @@ export const AgentRunStatusSchema = z.enum([
 ]);
 export const ReviewThreadStatusSchema = z.enum(['open', 'resolved', 'outdated']);
 export const ReviewThreadSeveritySchema = z.enum(['info', 'warning', 'error']);
-export const AgentKeySchema = z.enum(['opencode', 'claudcode']);
+export const AgentKeySchema = z.enum(['opencode', 'claudecode']);
 
 // ============================================================================
 // Model Types
@@ -134,6 +134,7 @@ export interface Project {
   name: string;
   sourceRepoPath: string;
   sourceRepoUrl: string | null;
+  mirrorRepoPath: string;
   relayRepoPath: string;
   defaultBranch: string;
   defaultAgent: AgentKey;
@@ -151,35 +152,12 @@ export const ProjectSchema = z.object({
   name: z.string(),
   sourceRepoPath: z.string(),
   sourceRepoUrl: z.string().nullable(),
+  mirrorRepoPath: z.string(),
   relayRepoPath: z.string(),
   defaultBranch: z.string(),
   defaultAgent: AgentKeySchema,
   agentParams: z.string().nullable(), // JSON stringified
   maxAgentConcurrency: z.number(), // Maximum concurrent agent tasks
-  createdAt: zIsoDateTimeString,
-  updatedAt: zIsoDateTimeString,
-});
-
-/**
- * TargetRepo represents a target repository for imports
- */
-export interface TargetRepo {
-  id: string;
-  name: string;
-  repoPath: string;
-  defaultBranch: string;
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
-}
-
-/**
- * Zod schema for TargetRepo validation
- */
-export const TargetRepoSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  repoPath: z.string(),
-  defaultBranch: z.string(),
   createdAt: zIsoDateTimeString,
   updatedAt: zIsoDateTimeString,
 });
@@ -273,17 +251,116 @@ export const ReviewCommentSchema = z.object({
 });
 
 /**
- * AgentRun represents an AI agent execution on a work item
+ * Task represents a Domain resource - a unit of work orchestration
+ */
+export interface Task {
+  id: string;
+  workItemId: string;
+  taskType: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'blocked';
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  currentAgentRunId: string | null; // Link to the current AgentRun executing this task
+  idempotencyKey: string | null;
+  nodeRunId: string | null;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+/**
+ * Zod schema for Task validation
+ */
+export const TaskSchema = z.object({
+  id: z.string().uuid(),
+  workItemId: z.string().uuid(),
+  taskType: z.string(),
+  status: z.enum(['pending', 'running', 'succeeded', 'failed', 'canceled', 'blocked']),
+  input: z.record(z.unknown()),
+  output: z.record(z.unknown()),
+  currentAgentRunId: z.string().uuid().nullable(),
+  idempotencyKey: z.string().nullable(),
+  nodeRunId: z.string().uuid().nullable(),
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
+});
+
+/**
+ * Worktree represents an Op resource - a git worktree
+ */
+export interface Worktree {
+  id: string;
+  workItemId: string;
+  path: string;
+  branch: string;
+  repoSha: string | null;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled';
+  idempotencyKey: string | null;
+  nodeRunId: string | null;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+/**
+ * Zod schema for Worktree validation
+ */
+export const WorktreeSchema = z.object({
+  id: z.string().uuid(),
+  workItemId: z.string().uuid(),
+  path: z.string(),
+  branch: z.string(),
+  repoSha: z.string().nullable(),
+  status: z.enum(['pending', 'running', 'succeeded', 'failed', 'canceled']),
+  idempotencyKey: z.string().nullable(),
+  nodeRunId: z.string().uuid().nullable(),
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
+});
+
+/**
+ * GitOp represents an Op resource - a git operation (commit, push, merge, etc.)
+ */
+export interface GitOp {
+  id: string;
+  workItemId: string;
+  operation: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled';
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  idempotencyKey: string | null;
+  nodeRunId: string | null;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+/**
+ * Zod schema for GitOp validation
+ */
+export const GitOpSchema = z.object({
+  id: z.string().uuid(),
+  workItemId: z.string().uuid(),
+  operation: z.string(),
+  status: z.enum(['pending', 'running', 'succeeded', 'failed', 'canceled']),
+  input: z.record(z.unknown()),
+  output: z.record(z.unknown()),
+  idempotencyKey: z.string().nullable(),
+  nodeRunId: z.string().uuid().nullable(),
+  createdAt: zIsoDateTimeString,
+  updatedAt: zIsoDateTimeString,
+});
+
+/**
+ * AgentRun represents an AI agent execution on a work item (Op resource)
  */
 export interface AgentRun {
   id: string;
   projectId: string;
   workItemId: string;
+  taskId: string | null; // Link to Task (Domain resource)
   agentKey: AgentKey;
   status: AgentRunStatus;
   inputSummary: string | null;
   inputJson: string; // JSON stringified
-  sessionId: string; // Agent session ID for resuming (required)
+  sessionId: string | null; // Agent session ID for resuming (null if no session available - task cannot be resumed)
   linkedAgentRunId: string | null; // ID of the original agent run if this is a resumed task
   log: string | null;
   logPath: string | null;
@@ -292,6 +369,8 @@ export interface AgentRun {
   headShaBefore: string | null;
   headShaAfter: string | null;
   commitSha: string | null; // The auto-commit SHA if created
+  pid: number | null; // Process ID for tracking running processes
+  idempotencyKey: string | null;
   startedAt: string | null; // ISO 8601
   finishedAt: string | null; // ISO 8601
   createdAt: string; // ISO 8601
@@ -305,11 +384,12 @@ export const AgentRunSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
   workItemId: z.string().uuid(),
+  taskId: z.string().uuid().nullable(),
   agentKey: AgentKeySchema,
   status: AgentRunStatusSchema,
   inputSummary: z.string().nullable(),
   inputJson: z.string(), // JSON stringified
-  sessionId: z.string(), // Agent session ID for resuming (required)
+  sessionId: z.string().nullable(), // Agent session ID for resuming (null if no session available - task cannot be resumed)
   linkedAgentRunId: z.string().uuid().nullable(), // ID of the original agent run if this is a resumed task
   log: z.string().nullable(),
   logPath: z.string().nullable(),
@@ -318,6 +398,9 @@ export const AgentRunSchema = z.object({
   headShaBefore: z.string().nullable(),
   headShaAfter: z.string().nullable(),
   commitSha: z.string().nullable(), // The auto-commit SHA if created
+  pid: z.number().nullable(), // Process ID for tracking running processes
+  idempotencyKey: z.string().nullable(),
+  nodeRunId: z.string().nullable(),
   startedAt: zIsoDateTimeNullable,
   finishedAt: zIsoDateTimeNullable,
   createdAt: zIsoDateTimeString,
@@ -431,12 +514,6 @@ export type WorkItemDTO = z.infer<typeof WorkItemSchema>;
 export type ProjectDTO = z.infer<typeof ProjectSchema>;
 
 /**
- * Inferred type from TargetRepoSchema
- * Use this for type-safe data validated against TargetRepoSchema
- */
-export type TargetRepoDTO = z.infer<typeof TargetRepoSchema>;
-
-/**
  * Inferred type from PullRequestSchema
  * Use this for type-safe data validated against PullRequestSchema
  */
@@ -453,6 +530,24 @@ export type ReviewThreadDTO = z.infer<typeof ReviewThreadSchema>;
  * Use this for type-safe data validated against ReviewCommentSchema
  */
 export type ReviewCommentDTO = z.infer<typeof ReviewCommentSchema>;
+
+/**
+ * Inferred type from TaskSchema
+ * Use this for type-safe data validated against TaskSchema
+ */
+export type TaskDTO = z.infer<typeof TaskSchema>;
+
+/**
+ * Inferred type from WorktreeSchema
+ * Use this for type-safe data validated against WorktreeSchema
+ */
+export type WorktreeDTO = z.infer<typeof WorktreeSchema>;
+
+/**
+ * Inferred type from GitOpSchema
+ * Use this for type-safe data validated against GitOpSchema
+ */
+export type GitOpDTO = z.infer<typeof GitOpSchema>;
 
 /**
  * Inferred type from AgentRunSchema

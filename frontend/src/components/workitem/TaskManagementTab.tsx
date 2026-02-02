@@ -5,10 +5,16 @@
  * Supports cancel, resume, and restart operations
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { workItemsApi, agentRunsApi } from '@/lib/api';
-import { useStartWorkItemTask } from '@/hooks/useWorkItem';
+import { agentRunsApi } from '@/lib/api';
+import {
+  useTasks,
+  useStartWorkItemTask,
+  useCancelWorkItemTask,
+  useRestartWorkItemTask,
+  useResumeWorkItemTask,
+} from '@/hooks/useWorkItem';
 import type { AgentRun } from 'git-vibe-shared';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -26,14 +32,14 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { formatDateTime } from '@/lib/datetime';
+import { formatDateTime, sortDates } from '@/lib/datetime';
+import { useConfirmModal } from '@/components/ConfirmModal';
+import Convert from 'ansi-to-html';
 
 export interface TaskManagementTabProps {
   workItemId: string;
   isActive?: boolean;
 }
-
-type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 /**
  * LogPreview component for displaying log previews
@@ -55,8 +61,8 @@ function LogPreview({
     queryKey: ['agent-run-preview', agentRunId],
     queryFn: async () => {
       const [stdout, stderr] = await Promise.all([
-        agentRunsApi.getStdoutTail(agentRunId, 5),
-        agentRunsApi.getStderrTail(agentRunId, 5),
+        agentRunsApi.getStdoutTail(agentRunId, 3),
+        agentRunsApi.getStderrTail(agentRunId, 3),
       ]);
       return { stdout, stderr };
     },
@@ -64,47 +70,84 @@ function LogPreview({
     staleTime: 5000, // Cache for 5 seconds
   });
 
+  // Initialize ANSI to HTML converter (same as LogPane)
+  const ansiConverter = useMemo(
+    () =>
+      new Convert({
+        fg: '#fff',
+        bg: '#000',
+        newline: true,
+        escapeXML: true,
+        stream: false,
+      }),
+    []
+  );
+
+  // Convert ANSI escape codes to HTML for stdout
+  const stdoutHtml = useMemo(() => {
+    if (!logs?.stdout) return '';
+    return ansiConverter.toHtml(logs.stdout);
+  }, [logs?.stdout, ansiConverter]);
+
+  // Convert ANSI escape codes to HTML for stderr
+  const stderrHtml = useMemo(() => {
+    if (!logs?.stderr) return '';
+    return ansiConverter.toHtml(logs.stderr);
+  }, [logs?.stderr, ansiConverter]);
+
   if (!isExpanded) {
     return null;
   }
 
   return (
-    <div className="mt-3 rounded-md bg-gray-900 p-3">
+    <div className="mt-3">
       {isLoading ? (
-        <div className="flex items-center space-x-2 text-sm text-gray-400">
+        <div className="flex items-center justify-center space-x-2 rounded-md bg-gray-900 p-3 text-sm text-gray-400">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-blue-400" />
           <span>Loading preview...</span>
         </div>
       ) : error ? (
-        <div className="flex items-center space-x-2 text-sm text-red-400">
+        <div className="flex items-center justify-center space-x-2 rounded-md bg-gray-900 p-3 text-sm text-red-400">
           <AlertCircle className="h-4 w-4" />
           <span>Unable to load preview</span>
         </div>
       ) : (
-        <div className="space-y-2">
-          {logs?.stdout && (
-            <div>
-              <div className="mb-1 flex items-center space-x-2">
-                <Terminal className="h-3 w-3 text-green-400" />
-                <span className="text-xs font-medium text-gray-400">Stdout</span>
-              </div>
-              <pre className="overflow-x-auto text-xs text-gray-300">
-                {logs.stdout || <span className="text-gray-500">No output</span>}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Stdout Pane */}
+          <div className="rounded-md bg-gray-900 p-3">
+            <div className="mb-1 flex items-center space-x-2">
+              <Terminal className="h-3 w-3 text-green-400" />
+              <span className="text-xs font-medium text-gray-400">Stdout</span>
+            </div>
+            {stdoutHtml ? (
+              <pre
+                className="overflow-x-auto whitespace-pre-wrap font-mono text-xs text-gray-300"
+                dangerouslySetInnerHTML={{ __html: stdoutHtml }}
+              />
+            ) : (
+              <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-xs text-gray-500">
+                No output
               </pre>
+            )}
+          </div>
+
+          {/* Stderr Pane */}
+          <div className="rounded-md bg-gray-900 p-3">
+            <div className="mb-1 flex items-center space-x-2">
+              <Terminal className="h-3 w-3 text-red-400" />
+              <span className="text-xs font-medium text-gray-400">Stderr</span>
             </div>
-          )}
-          {logs?.stderr && (
-            <div className="mt-2">
-              <div className="mb-1 flex items-center space-x-2">
-                <Terminal className="h-3 w-3 text-red-400" />
-                <span className="text-xs font-medium text-gray-400">Stderr</span>
-              </div>
-              <pre className="overflow-x-auto text-xs text-red-300">{logs.stderr}</pre>
-            </div>
-          )}
-          {!logs?.stdout && !logs?.stderr && (
-            <p className="text-xs text-gray-500">No logs available</p>
-          )}
+            {stderrHtml ? (
+              <pre
+                className="overflow-x-auto whitespace-pre-wrap font-mono text-xs text-red-300"
+                dangerouslySetInnerHTML={{ __html: stderrHtml }}
+              />
+            ) : (
+              <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-xs text-gray-500">
+                No output
+              </pre>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -117,125 +160,74 @@ function LogPreview({
  * @param workItemId - The ID of WorkItem to display tasks for
  */
 export function TaskManagementTab({ workItemId, isActive = true }: TaskManagementTabProps) {
-  const [tasks, setTasks] = useState<AgentRun[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pollingTaskId, setPollingTaskId] = useState<string | null>(null);
   const [resumePrompt, setResumePrompt] = useState('');
   const [showResumeDialog, setShowResumeDialog] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
+  const { confirm } = useConfirmModal();
+
+  const {
+    data: tasksData,
+    isLoading: loading,
+    isError,
+    error: queryError,
+  } = useTasks(workItemId, {
+    enabled: isActive,
+    refetchInterval: (data) =>
+      data?.some((t) => t.status === 'running' || t.status === 'queued') ? 2000 : false,
+  });
+
+  const tasks = useMemo(() => {
+    if (!tasksData) return [];
+    return [...tasksData].sort((a, b) =>
+      sortDates(a.createdAt || '', b.createdAt || '', 'asc')
+    ) as AgentRun[];
+  }, [tasksData]);
+
   const { startTask, isLoading: isStarting } = useStartWorkItemTask(workItemId);
+  const {
+    cancelTask,
+    isLoading: isCancelling,
+    isCancellingTaskId,
+  } = useCancelWorkItemTask(workItemId);
+  const {
+    restartTask,
+    isLoading: isRestarting,
+    isRestartingTaskId,
+  } = useRestartWorkItemTask(workItemId);
+  const { resumeTask, isLoading: isResuming } = useResumeWorkItemTask(workItemId);
 
-  // Fetch tasks
-  const fetchTasks = useCallback(async () => {
-    try {
-      setError(null);
-      const response = await workItemsApi.getTasks(workItemId);
-      setTasks(response.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
-    } finally {
-      setLoading(false);
-    }
-  }, [workItemId]);
+  const error = isError
+    ? queryError instanceof Error
+      ? queryError.message
+      : 'Failed to fetch tasks'
+    : null;
 
-  // Only fetch when tab is active
-  useEffect(() => {
-    if (isActive) {
-      fetchTasks();
-    }
-  }, [workItemId, isActive, fetchTasks]);
-
-  // Poll for running tasks
-  useEffect(() => {
-    const runningTasks = tasks.filter((t) => t.status === 'running');
-    if (runningTasks.length === 0) {
-      setPollingTaskId(null);
-      return;
-    }
-
-    // Poll the first running task
-    const taskId = runningTasks[0].id;
-    if (pollingTaskId !== taskId) {
-      setPollingTaskId(taskId);
-    }
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await workItemsApi.getTaskStatus(workItemId, taskId);
-        // Update the task status in the list
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === taskId
-              ? { ...t, status: (response.data?.status as TaskStatus) ?? t.status }
-              : t
-          )
-        );
-      } catch (err) {
-        console.error('Failed to poll task status:', err);
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [tasks, pollingTaskId, workItemId]);
-
-  // Cancel task
   const handleCancel = async (taskId: string) => {
-    if (!window.confirm('Are you sure you want to cancel this task?')) {
-      return;
-    }
-
-    try {
-      await workItemsApi.cancelTask(workItemId, taskId);
-      await fetchTasks();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cancel task');
-    }
+    if (!(await confirm({ message: 'Are you sure you want to cancel this task?' }))) return;
+    await cancelTask(taskId);
   };
 
-  // Restart task
   const handleRestart = async (taskId: string) => {
     if (
-      !window.confirm(
-        'Are you sure you want to restart this task? This will create a new task with the same prompt.'
-      )
-    ) {
+      !(await confirm({
+        message:
+          'Are you sure you want to restart this task? This will create a new task with the same prompt.',
+      }))
+    )
       return;
-    }
-
-    try {
-      await workItemsApi.restartTask(workItemId, taskId);
-      await fetchTasks();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to restart task');
-    }
+    await restartTask(taskId);
   };
 
-  // Resume task
   const handleResume = async (taskId: string) => {
-    if (!resumePrompt.trim()) {
-      setError('Please enter a prompt to resume the task');
-      return;
-    }
-
-    try {
-      await workItemsApi.resumeTask(workItemId, taskId, resumePrompt);
-      setResumePrompt('');
-      setShowResumeDialog(null);
-      await fetchTasks();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resume task');
-    }
+    if (!resumePrompt.trim()) return;
+    await resumeTask(taskId, resumePrompt);
+    setResumePrompt('');
+    setShowResumeDialog(null);
   };
 
-  // Handle start task
   const handleStart = async () => {
-    try {
-      await startTask();
-      await fetchTasks();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start task');
-    }
+    await startTask();
   };
 
   // Toggle expanded state for task log preview
@@ -249,6 +241,27 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
       }
       return next;
     });
+  };
+
+  // Toggle expanded state for prompt
+  const togglePromptExpanded = (taskId: string) => {
+    setExpandedPrompts((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  };
+
+  // Check if prompt has multiple lines or exceeds 5 lines
+  const hasMultipleLines = (text: string | null | undefined): boolean => {
+    if (!text) return false;
+    const lines = text.split('\n');
+    // Show expand button if there are more than 5 lines, or if it's multi-line with substantial content
+    return lines.length > 5 || (lines.length > 1 && text.length > 200);
   };
 
   // Get status type for badge
@@ -343,6 +356,8 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
       <div className="space-y-3">
         {tasks.map((task, index) => {
           const isExpanded = expandedTasks.has(task.id);
+          // Number tasks in order since they're sorted oldest first (Task #1 is oldest)
+          const taskNumber = index + 1;
           return (
             <div
               key={task.id}
@@ -351,7 +366,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="mb-2 flex items-center space-x-2">
-                    <span className="text-xs font-medium text-gray-500">Task #{index + 1}</span>
+                    <span className="text-xs font-medium text-gray-500">Task #{taskNumber}</span>
                     <StatusBadge status={getStatusType(task.status)}>
                       <span className="flex items-center space-x-1">
                         {getStatusIcon(task.status)}
@@ -366,7 +381,25 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
                   </div>
 
                   {task.inputSummary && (
-                    <p className="mb-3 text-sm text-gray-700">{task.inputSummary}</p>
+                    <div className="mb-3">
+                      <div className="relative">
+                        <p
+                          className={`whitespace-pre-wrap text-sm text-gray-700 ${
+                            expandedPrompts.has(task.id) ? '' : 'line-clamp-5'
+                          }`}
+                        >
+                          {task.inputSummary}
+                        </p>
+                        {hasMultipleLines(task.inputSummary) && (
+                          <button
+                            onClick={() => togglePromptExpanded(task.id)}
+                            className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                          >
+                            {expandedPrompts.has(task.id) ? 'Show less' : 'Show more'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   )}
 
                   {/* Metadata */}
@@ -408,6 +441,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
                       variant="danger"
                       size="sm"
                       onClick={() => handleCancel(task.id)}
+                      loading={isCancelling && isCancellingTaskId === task.id}
                       className="w-full"
                     >
                       <Square className="mr-1 h-3 w-3" />
@@ -429,6 +463,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRestart(task.id)}
+                        loading={isRestarting && isRestartingTaskId === task.id}
                         className="w-full"
                       >
                         <RotateCcw className="mr-1 h-3 w-3" />
@@ -441,6 +476,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
                       variant="ghost"
                       size="sm"
                       onClick={() => handleRestart(task.id)}
+                      loading={isRestarting && isRestartingTaskId === task.id}
                       className="w-full"
                     >
                       <RotateCcw className="mr-1 h-3 w-3" />
@@ -483,7 +519,7 @@ export function TaskManagementTab({ workItemId, isActive = true }: TaskManagemen
                     >
                       Cancel
                     </Button>
-                    <Button size="sm" onClick={() => handleResume(task.id)}>
+                    <Button size="sm" onClick={() => handleResume(task.id)} loading={isResuming}>
                       <Play className="mr-1 h-3 w-3" />
                       Resume
                     </Button>

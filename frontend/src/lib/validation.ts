@@ -49,22 +49,10 @@ export type CreatePullRequestInput = z.infer<typeof CreatePullRequestSchema>;
 export const CreateProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
   sourceRepoPath: z.string().min(1, 'Repository path is required'),
-  sourceRepoUrl: z.string().url('Invalid URL format').optional().or(z.literal('')),
   defaultBranch: z.string().min(1, 'Default branch is required').optional(),
 });
 
 export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
-
-/**
- * Schema for creating a new target repository (with custom error messages)
- */
-export const CreateTargetRepoSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
-  repoPath: z.string().min(1, 'Repository path is required'),
-  defaultBranch: z.string().min(1, 'Default branch is required').default('main'),
-});
-
-export type CreateTargetRepoInput = z.infer<typeof CreateTargetRepoSchema>;
 
 /**
  * Schema for creating a new agent run (with custom error messages)

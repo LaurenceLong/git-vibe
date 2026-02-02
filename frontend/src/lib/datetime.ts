@@ -4,14 +4,6 @@
  */
 
 /**
- * Default date format options for date-time display.
- */
-const DEFAULT_DATETIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-};
-
-/**
  * Default date format options for date-only display.
  */
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
@@ -24,14 +16,14 @@ const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
 const NULL_DATE_PLACEHOLDER = '—';
 
 /**
- * Formats a date for display with both date and time components.
+ * Formats a date for display with both date and time components including seconds.
  *
  * @param date - The date to format (ISO string, Date object, or null/undefined)
  * @param options - Optional Intl.DateTimeFormatOptions to customize the format
- * @returns Formatted date string, or placeholder if date is null/undefined
+ * @returns Formatted date string with seconds (mm:ss), or placeholder if date is null/undefined
  *
  * @example
- * formatDateTime('2024-01-15T10:30:00Z') // "Jan 15, 2024, 10:30 AM"
+ * formatDateTime('2024-01-15T10:30:45Z') // "Jan 15, 2024, 10:30:45 AM"
  * formatDateTime(null) // "—"
  */
 export function formatDateTime(
@@ -48,7 +40,8 @@ export function formatDateTime(
   }
 
   return new Intl.DateTimeFormat(undefined, {
-    ...DEFAULT_DATETIME_OPTIONS,
+    dateStyle: 'medium',
+    timeStyle: 'medium', // medium includes seconds
     ...options,
   }).format(dateObj);
 }

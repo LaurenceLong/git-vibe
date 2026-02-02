@@ -4,11 +4,12 @@ import { TriggerAgentRunDTOSchema, CancelAgentRunResponseSchema } from 'git-vibe
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { projectsRepository } from '../repositories/ProjectsRepository.js';
-import { agentService } from '../services/AgentService.js';
+import { agentService } from '../services/agent/AgentService.js';
 import { promises as fs } from 'node:fs';
 import { watch } from 'node:fs';
 import path from 'node:path';
 import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
+import { STORAGE_CONFIG } from '../config/storage.js';
 
 export async function agentRunsRoutes(server: FastifyInstance) {
   // POST /api/work-items/:id/agent-runs - Start agent run for a WorkItem
@@ -284,7 +285,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
             stderrPosition = initialStderr.length;
           }
         }
-      } catch (error) {
+      } catch {
         // Files might not exist yet
       }
 
@@ -296,7 +297,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
               stdoutPosition = await readAndSendLogs(agentRun.stdoutPath, 'stdout', stdoutPosition);
             }
           });
-        } catch (error) {
+        } catch {
           // File might not exist yet, will be created later
         }
       }
@@ -308,7 +309,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
               stderrPosition = await readAndSendLogs(agentRun.stderrPath, 'stderr', stderrPosition);
             }
           });
-        } catch (error) {
+        } catch {
           // File might not exist yet, will be created later
         }
       }
@@ -320,7 +321,6 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         }
         // If path not in database yet, try to derive it
         try {
-          const { STORAGE_CONFIG } = await import('../config/storage.js');
           const logsDir = STORAGE_CONFIG.logsDir;
           const derivedPath = path.join(logsDir, `agent-run-${request.params.id}-stdout.log`);
           const stats = await fs.stat(derivedPath);
@@ -339,7 +339,6 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         }
         // If path not in database yet, try to derive it
         try {
-          const { STORAGE_CONFIG } = await import('../config/storage.js');
           const logsDir = STORAGE_CONFIG.logsDir;
           const derivedPath = path.join(logsDir, `agent-run-${request.params.id}-stderr.log`);
           const stats = await fs.stat(derivedPath);
@@ -369,7 +368,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
       const keepAliveInterval = setInterval(() => {
         try {
           reply.raw.write(': keepalive\n\n');
-        } catch (error) {
+        } catch {
           // Connection might be closed
         }
       }, 30000);
@@ -386,7 +385,7 @@ export async function agentRunsRoutes(server: FastifyInstance) {
         }
         try {
           reply.raw.end();
-        } catch (error) {
+        } catch {
           // Connection might already be closed
         }
       };

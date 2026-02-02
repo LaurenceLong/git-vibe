@@ -14,6 +14,41 @@
 export { zIsoDateTimeString, zIsoDateTimeNullable } from './codec/datetime.js';
 
 // ============================================================================
+// Status Constants
+// ============================================================================
+
+export {
+  PR_STATUS_OPEN,
+  PR_STATUS_MERGED,
+  PR_STATUS_CLOSED,
+  WORKITEM_STATUS_OPEN,
+  WORKITEM_STATUS_CLOSED,
+  WORKSPACE_STATUS_NOT_INITIALIZED,
+  WORKSPACE_STATUS_READY,
+  WORKSPACE_STATUS_ERROR,
+  AGENT_RUN_STATUS_QUEUED,
+  AGENT_RUN_STATUS_RUNNING,
+  AGENT_RUN_STATUS_SUCCEEDED,
+  AGENT_RUN_STATUS_FAILED,
+  AGENT_RUN_STATUS_CANCELED,
+  RESOURCE_STATUS_SUCCEEDED,
+  RESOURCE_STATUS_FAILED,
+  RESOURCE_STATUS_CANCELED,
+  WORKFLOW_RUN_STATUS_PENDING,
+  WORKFLOW_RUN_STATUS_RUNNING,
+  WORKFLOW_RUN_STATUS_SUCCEEDED,
+  WORKFLOW_RUN_STATUS_FAILED,
+  WORKFLOW_RUN_STATUS_BLOCKED,
+  WORKFLOW_RUN_STATUS_SKIPPED,
+  NODE_RUN_STATUS_PENDING,
+  NODE_RUN_STATUS_RUNNING,
+  NODE_RUN_STATUS_SUCCEEDED,
+  NODE_RUN_STATUS_FAILED,
+  NODE_RUN_STATUS_CANCELED,
+  NODE_RUN_STATUS_BLOCKED,
+} from './constants/status.js';
+
+// ============================================================================
 // Common Types
 // ============================================================================
 
@@ -35,7 +70,6 @@ export type {
   WorkItemStatus,
   WorkspaceStatus,
   Project,
-  TargetRepo,
   PullRequest,
   PullRequestStatus,
   MergeStrategy,
@@ -43,6 +77,9 @@ export type {
   ReviewThreadStatus,
   ReviewThreadSeverity,
   ReviewComment,
+  Task,
+  Worktree,
+  GitOp,
   AgentRun,
   AgentRunStatus,
   AgentKey,
@@ -54,10 +91,12 @@ export type {
   // Schema-first DTO types (inferred from Zod schemas)
   WorkItemDTO,
   ProjectDTO,
-  TargetRepoDTO,
   PullRequestDTO,
   ReviewThreadDTO,
   ReviewCommentDTO,
+  TaskDTO,
+  WorktreeDTO,
+  GitOpDTO,
   AgentRunDTO,
 } from './types/models.js';
 
@@ -73,10 +112,12 @@ export {
   AgentKeySchema,
   WorkItemSchema,
   ProjectSchema,
-  TargetRepoSchema,
   PullRequestSchema,
   ReviewThreadSchema,
   ReviewCommentSchema,
+  TaskSchema,
+  WorktreeSchema,
+  GitOpSchema,
   AgentRunSchema,
   RepoFileSchema,
   CommitSchema,
@@ -96,10 +137,17 @@ export type {
   CreateThreadDTO,
   AddressWithAgentDTO,
   CreateCommentDTO,
-  CreateTargetRepoDTO,
   CreateWorkItemDTO,
   UpdateWorkItemDTO,
   RemoveWorktreeDTO,
+  CreateFileDTO,
+  UpdateFileDTO,
+  DeleteFileDTO,
+  CommitChangesDTO,
+  GetOrCreateManualWorkItemDTO,
+  CreateWorkflowDTO,
+  UpdateWorkflowDTO,
+  ExecuteWorkflowDTO,
 } from './types/requests.js';
 
 export {
@@ -109,10 +157,17 @@ export {
   CreateThreadDTOSchema,
   AddressWithAgentDTOSchema,
   CreateCommentDTOSchema,
-  CreateTargetRepoDTOSchema,
   CreateWorkItemDTOSchema,
   UpdateWorkItemDTOSchema,
   RemoveWorktreeDTOSchema,
+  CreateFileDTOSchema,
+  UpdateFileDTOSchema,
+  DeleteFileDTOSchema,
+  CommitChangesDTOSchema,
+  GetOrCreateManualWorkItemDTOSchema,
+  CreateWorkflowDTOSchema,
+  UpdateWorkflowDTOSchema,
+  ExecuteWorkflowDTOSchema,
 } from './types/requests.js';
 
 // ============================================================================
@@ -131,6 +186,9 @@ export type {
   DeleteProjectResponse,
   ResolveThreadResponse,
   UnresolveThreadResponse,
+  ProjectStatsDTO,
+  ProjectsListResponseDTO,
+  SearchResponseDTO,
 } from './types/responses.js';
 
 export {
@@ -145,4 +203,50 @@ export {
   DeleteProjectResponseSchema,
   ResolveThreadResponseSchema,
   UnresolveThreadResponseSchema,
+  ProjectStatsSchema,
+  ProjectsListResponseSchema,
+  SearchResponseSchema,
+  WorkflowResponseSchema,
+  WorkflowListItemSchema,
+  WorkflowRunResponseSchema,
 } from './types/responses.js';
+
+export type {
+  ResourceKind,
+  ResourceStatus,
+  ResourceType,
+  NodeRunStatus,
+  WorkflowEvent,
+  EventSubject,
+  EventCausedBy,
+  NodeSpec,
+  NodeRun,
+  Workflow,
+  WorkflowDefinition,
+  WorkflowBackbone,
+  WorkflowExtensions,
+  Slot,
+  ExecutorRegistry,
+  WorkflowPolicies,
+  WorkflowRun,
+  WorkflowDTO,
+  WorkflowRunDTO,
+  NodeRunDTO,
+} from './types/workflow.js';
+
+export {
+  ResourceKindSchema,
+  ResourceStatusSchema,
+  ResourceTypeSchema,
+  NodeRunStatusSchema,
+  NodeSpecSchema,
+  SlotSchema,
+  ExecutorRegistrySchema,
+  WorkflowPoliciesSchema,
+  WorkflowBackboneSchema,
+  WorkflowExtensionsSchema,
+  WorkflowDefinitionSchema,
+  WorkflowSchema,
+  NodeRunSchema,
+  WorkflowRunSchema,
+} from './types/workflow.js';

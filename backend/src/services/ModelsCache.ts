@@ -1,4 +1,6 @@
-import type { AgentModel } from './AgentAdapter.js';
+import type { AgentModel } from './agent/AgentAdapter.js';
+import { openCodeAgentAdapter } from './agent/OpenCodeAgentAdapter.js';
+import { claudeCodeAgentAdapter } from './agent/ClaudeCodeAgentAdapter.js';
 
 export type AgentKey = 'opencode' | 'claudecode';
 
@@ -28,10 +30,8 @@ class ModelsCache {
       try {
         let adapter;
         if (agent === 'opencode') {
-          const { openCodeAgentAdapter } = await import('./OpenCodeAgentAdapter.js');
           adapter = openCodeAgentAdapter;
         } else if (agent === 'claudecode') {
-          const { claudeCodeAgentAdapter } = await import('./ClaudeCodeAgentAdapter.js');
           adapter = claudeCodeAgentAdapter;
         } else {
           throw new Error(`Unknown agent: ${agent}`);

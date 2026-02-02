@@ -21,8 +21,10 @@
  * ```
  */
 
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { agentRunsApi } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import type { AgentRunDTO } from 'git-vibe-shared';
 
 interface UseAgentRunPollingResult {
@@ -77,12 +79,20 @@ export function useAgentRunPolling(agentRunId: string): UseAgentRunPollingResult
     queryClient.invalidateQueries({ queryKey: ['agent-run', agentRunId] });
   };
 
-  // Auto-refresh WorkItem data after successful run completion
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = query.data as any;
-  if (data?.status === 'succeeded' && data?.workItemId && data?.headShaAfter) {
-    queryClient.invalidateQueries({ queryKey: ['workitem', data.workItemId] });
-  }
+  const terminalStatuses = ['succeeded', 'failed', 'cancelled'];
+
+  useEffect(() => {
+    if (
+      data?.workItemId &&
+      typeof data?.status === 'string' &&
+      terminalStatuses.includes(data.status)
+    ) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(data.workItemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(data.workItemId) });
+    }
+  }, [data?.workItemId, data?.status, queryClient]);
 
   return {
     agentRun: query.data,

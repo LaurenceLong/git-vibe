@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { workItemsApi, projectsApi, pullRequestsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { Project } from '@/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,8 @@ import {
   FileCode,
   RefreshCw,
 } from 'lucide-react';
-import { formatDateTime, formatDate } from '@/lib/datetime';
+import { formatDateTime, sortDates } from '@/lib/datetime';
+import { useConfirmModal } from '@/components/ConfirmModal';
 
 export interface OverviewTabProps {
   project: Project;
@@ -31,9 +33,10 @@ export interface OverviewTabProps {
 export function OverviewTab({ project }: OverviewTabProps) {
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
+  const { confirm } = useConfirmModal();
 
   const { data: workItems, isLoading: isLoadingWorkItems } = useQuery({
-    queryKey: ['workitems', project.id],
+    queryKey: queryKeys.workitems({ projectId: project.id }),
     queryFn: () => workItemsApi.list(project.id).then((res) => res.data.data),
   });
 
@@ -62,9 +65,10 @@ export function OverviewTab({ project }: OverviewTabProps) {
 
   const handleSync = async () => {
     if (
-      window.confirm(
-        'Sync all merged PRs to source repo? This will copy all changes from the relay repo to the source repo.'
-      )
+      await confirm({
+        message:
+          'Sync all merged PRs to source repo? This will copy all changes from the relay repo to the source repo.',
+      })
     ) {
       setIsSyncing(true);
       syncMutation.mutate();
@@ -99,8 +103,21 @@ export function OverviewTab({ project }: OverviewTabProps) {
         pr.status === 'merged' && !pr.syncedCommitSha
     ).length || 0;
 
-  const recentWorkItems = workItems?.slice(0, 5) || [];
-  const recentPRs = pullRequests?.slice(0, 5) || [];
+  // Sort by createdAt descending (newest first) and take top 3
+  const recentWorkItems =
+    workItems
+      ?.slice()
+      .sort((a: { createdAt: string }, b: { createdAt: string }) =>
+        sortDates(a.createdAt, b.createdAt, 'desc')
+      )
+      .slice(0, 3) || [];
+  const recentPRs =
+    pullRequests
+      .slice()
+      .sort((a: { createdAt: string }, b: { createdAt: string }) =>
+        sortDates(a.createdAt, b.createdAt, 'desc')
+      )
+      .slice(0, 3) || [];
 
   return (
     <div className="space-y-8">
@@ -295,7 +312,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
                         </Badge>
                       </div>
                       <div className="mt-2 text-sm text-gray-600">
-                        Created {formatDate(workItem.createdAt)}
+                        Created {formatDateTime(workItem.createdAt)}
                       </div>
                     </div>
                   </div>
@@ -373,7 +390,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
                         {pr.sourceBranch} → {pr.targetBranch}
                       </div>
                       <div className="mt-1 text-sm text-gray-600">
-                        Created {formatDate(pr.createdAt)}
+                        Created {formatDateTime(pr.createdAt)}
                       </div>
                     </div>
                   </div>

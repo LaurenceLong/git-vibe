@@ -1,21 +1,22 @@
 import { Link, useLocation } from '@tanstack/react-router';
-import { useState } from 'react';
-import { Input } from '@/components/ui/Input';
+import { SearchInput } from '@/components/SearchDropdown';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement search functionality
-    console.log('Searching for:', searchQuery);
-  };
 
   // Check if we're on a project detail page
   const projectPageMatch = location.pathname.match(/^\/projects\/([^/]+)(\/.*)?$/);
   const isProjectPage = !!projectPageMatch;
   const projectName = projectPageMatch ? projectPageMatch[1] : null;
+
+  // Check if we're on the projects index page
+  const isProjectsIndexPage =
+    location.pathname === '/projects' || location.pathname === '/projects/';
+
+  // Check if we're on global dashboard or settings (same level as projects)
+  const isDashboardPage = location.pathname === '/dashboard' || location.pathname === '/dashboard/';
+  const isSettingsPage = location.pathname === '/settings' || location.pathname === '/settings/';
+  const isGlobalTopLevelPage = isProjectsIndexPage || isDashboardPage || isSettingsPage;
 
   // Determine active tab from current path
   const getActiveTab = (): string => {
@@ -24,6 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     if (path.includes('/workitems')) return 'workitems';
     if (path.includes('/pullrequests')) return 'pullrequests';
     if (path.includes('/actions')) return 'actions';
+    if (path.includes('/dashboard')) return 'dashboard';
     if (path.includes('/settings')) return 'settings';
     return 'overview';
   };
@@ -42,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         },
         { id: 'actions', label: 'Actions', path: `/projects/${projectName}/actions` },
         { id: 'settings', label: 'Settings', path: `/projects/${projectName}/settings` },
+        { id: 'dashboard', label: 'Dashboard', path: `/projects/${projectName}/dashboard` },
       ]
     : [];
 
@@ -66,19 +69,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                 </div>
               )}
+              {isGlobalTopLevelPage && !isProjectPage && (
+                <nav className="flex items-center space-x-4 text-sm">
+                  <Link
+                    to="/projects"
+                    className={`font-medium ${
+                      isProjectsIndexPage ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Projects
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className={`font-medium ${
+                      isSettingsPage ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Settings
+                  </Link>
+                  <Link
+                    to="/dashboard"
+                    className={`font-medium ${
+                      isDashboardPage ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                </nav>
+              )}
             </div>
 
             {/* Search bar */}
-            {isProjectPage && (
-              <form onSubmit={handleSearch} className="ml-8 max-w-md flex-1">
-                <Input
-                  type="text"
-                  placeholder="Search or jump to..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full text-sm"
-                />
-              </form>
+            {(isProjectPage || isGlobalTopLevelPage) && (
+              <div className="ml-8 max-w-md flex-1">
+                <SearchInput projectId={projectName ?? undefined} />
+              </div>
             )}
           </div>
 

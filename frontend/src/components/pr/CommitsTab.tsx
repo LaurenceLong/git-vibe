@@ -10,7 +10,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { pullRequestsApi, workItemsApi } from '@/lib/api';
+import { pullRequestsApi } from '@/lib/api';
 import { GitCommit, FileText, Hash, User, Clock, ListTodo } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { AgentRun } from '@/types';
@@ -29,6 +29,7 @@ export interface CommitsTabProps {
  * @param workItemId - The ID of WorkItem associated with this PR
  */
 export function CommitsTab({ prId, workItemId, isActive = true }: CommitsTabProps) {
+  void workItemId;
   // Fetch commits with task grouping - only when tab is active
   const {
     data: commitsWithTasks,
@@ -41,16 +42,6 @@ export function CommitsTab({ prId, workItemId, isActive = true }: CommitsTabProp
       return response.data;
     },
     enabled: isActive,
-  });
-
-  // Get workItem for navigation - only when tab is active
-  const { data: workItem } = useQuery({
-    queryKey: ['workitem', workItemId],
-    queryFn: async () => {
-      const response = await workItemsApi.get(workItemId);
-      return response.data;
-    },
-    enabled: isActive && !!workItemId,
   });
 
   // Loading state

@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/Toast';
+import { extractErrorMessage } from '@/lib/errorUtils';
 import { workItemsApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/datetime';
 import { LogPane } from '@/components/ui/LogPane';
@@ -229,8 +230,9 @@ export function ConversationTab({
       setNewMessage('');
       success('Task created and started');
     },
-    onError: (err: Error) => {
-      showError(`Failed to create task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create task');
+      showError(errorMessage);
     },
   });
 

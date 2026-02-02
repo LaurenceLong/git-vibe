@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { default as Database } from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { STORAGE_CONFIG } from '../config/storage.js';
 import { ensureStorageDirectories } from '../utils/storage.js';
@@ -18,6 +18,6 @@ export async function getDb() {
   return db;
 }
 
-export function getSqlite() {
+export function getSqlite(): Database.Database {
   return new Database(STORAGE_CONFIG.dbPath);
 }

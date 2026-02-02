@@ -1,9 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import path from 'node:path';
+import { PR_STATUS_OPEN, PR_STATUS_MERGED, PR_STATUS_CLOSED } from 'git-vibe-shared';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
-import { gitService } from './GitService.js';
+import { projectsRepository } from '../repositories/ProjectsRepository.js';
+import { gitService } from './git/GitService.js';
 import type { WorkItem, PullRequest, Project, AgentRun } from '../types/models.js';
 
 /**
@@ -17,31 +19,82 @@ import type { WorkItem, PullRequest, Project, AgentRun } from '../types/models.j
  */
 export class PRService {
   /**
-   * Open a PR for a WorkItem
+   * Open a PR for a WorkItem (stateless)
    * Creates a PullRequest record if one doesn't exist
+   * Does not update WorkItem - workflow will handle state updates
+   * Checks for diffs before creating PR - returns null if no changes
    */
-  async openPR(workItem: WorkItem, project: Project): Promise<PullRequest> {
+  async openPR(
+    workItemId: string,
+    projectId: string,
+    title: string,
+    description: string | null | undefined,
+    headBranch: string,
+    baseBranch: string
+  ): Promise<PullRequest | null> {
     // Check if PR already exists for this WorkItem
-    const existingPR = await pullRequestsRepository.findByWorkItemId(workItem.id);
+    const existingPR = await pullRequestsRepository.findByWorkItemId(workItemId);
     if (existingPR) {
       return existingPR;
     }
 
-    // Ensure workspace is initialized
-    if (!workItem.worktreePath || !workItem.headBranch || !workItem.baseBranch) {
-      throw new Error(`WorkItem ${workItem.id} workspace is not initialized`);
+    // Get workItem to check for diffs
+    const workItem = await workItemsRepository.findById(workItemId);
+    if (!workItem) {
+      throw new Error(`WorkItem ${workItemId} not found`);
+    }
+
+    // Get project to find repo path
+    const project = await projectsRepository.findById(projectId);
+    if (!project) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+
+    // Check if there are any diffs between base and head
+    const repoPath = project.relayRepoPath || project.sourceRepoPath;
+    const worktreePath = workItem.worktreePath || repoPath;
+    const hasDedicatedWorktree = worktreePath && worktreePath !== repoPath && workItem.worktreePath;
+
+    try {
+      // Get base SHA (worktree creation or branch tip)
+      const baseSha = workItem.baseSha || gitService.getRefSha(repoPath, baseBranch);
+      // Use current worktree HEAD when we have a dedicated worktree so agent commits
+      // are included even if workItem.headSha was not yet updated
+      const headSha = hasDedicatedWorktree
+        ? gitService.getHeadSha(worktreePath)
+        : workItem.headSha || gitService.getRefSha(worktreePath, headBranch);
+
+      // Check if there are any changes
+      const diff = gitService.getDiff(baseSha, headSha, repoPath);
+      if (!diff || diff.trim().length === 0) {
+        console.log(
+          `[PRService] No changes detected between ${baseSha} and ${headSha}, skipping PR creation`
+        );
+        return null;
+      }
+
+      // Persist current HEAD so workItem stays in sync for getDiff/getCommits etc.
+      if (hasDedicatedWorktree && headSha !== workItem.headSha) {
+        await workItemsRepository.update(workItemId, { headSha });
+      }
+    } catch (error) {
+      // If we can't check diffs (e.g., branches don't exist yet), still create PR
+      console.warn(
+        `[PRService] Could not check diffs for ${workItemId}, creating PR anyway:`,
+        error instanceof Error ? error.message : String(error)
+      );
     }
 
     // Create new PR
     const pr = await pullRequestsRepository.create({
       id: uuidv4(),
-      projectId: project.id,
-      workItemId: workItem.id,
-      title: workItem.title,
-      description: workItem.body || undefined,
-      status: 'open',
-      sourceBranch: workItem.headBranch,
-      targetBranch: workItem.baseBranch,
+      projectId,
+      workItemId,
+      title,
+      description: description || undefined,
+      status: PR_STATUS_OPEN,
+      sourceBranch: headBranch,
+      targetBranch: baseBranch,
       mergeStrategy: 'merge',
     });
 
@@ -87,7 +140,7 @@ export class PRService {
    * Optimized to only fetch commits that belong to this workitem
    */
   async getCommitsWithTasks(
-    pr: PullRequest,
+    _pr: PullRequest,
     workItem: WorkItem,
     project: Project
   ): Promise<
@@ -260,7 +313,7 @@ export class PRService {
    * Get PR statistics (files changed, additions, deletions)
    */
   async getStatistics(
-    pr: PullRequest,
+    _pr: PullRequest,
     workItem: WorkItem,
     project: Project
   ): Promise<{
@@ -291,7 +344,7 @@ export class PRService {
     const reasons: string[] = [];
 
     // Check 1: PR status must be open
-    if (pr.status !== 'open') {
+    if (pr.status !== PR_STATUS_OPEN) {
       reasons.push(`PR is ${pr.status}`);
       return { canMerge: false, reasons };
     }
@@ -396,7 +449,7 @@ export class PRService {
         mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
 
-      case 'rebase':
+      case 'rebase': {
         // Strategy: rebase
         // For rebase, source branch might also be in a worktree
         const sourceBranchWorktree = gitService.findWorktreeForBranch(repoPath, pr.sourceBranch);
@@ -408,6 +461,7 @@ export class PRService {
         gitService.mergeFFOnly(mergePath, pr.sourceBranch);
         mergeCommitSha = gitService.getHeadSha(mergePath);
         break;
+      }
 
       default:
         throw new Error(`Unknown merge strategy: ${strategy}`);
@@ -415,7 +469,7 @@ export class PRService {
 
     // Update PR status
     const updatedPR = await pullRequestsRepository.update(pr.id, {
-      status: 'merged',
+      status: PR_STATUS_MERGED,
       mergedAt: new Date(),
       mergedBy: 'system', // Could be user ID in the future
       mergeCommitSha,
@@ -433,7 +487,7 @@ export class PRService {
    */
   async closePR(pr: PullRequest): Promise<PullRequest> {
     const updatedPR = await pullRequestsRepository.update(pr.id, {
-      status: 'closed',
+      status: PR_STATUS_CLOSED,
     });
 
     if (!updatedPR) {

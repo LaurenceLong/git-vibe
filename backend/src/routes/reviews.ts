@@ -13,7 +13,7 @@ import { reviewCommentsRepository } from '../repositories/ReviewCommentsReposito
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
-import { agentService } from '../services/AgentService.js';
+import { agentService } from '../services/agent/AgentService.js';
 import { reviewThreadToDTO, reviewCommentToDTO } from '../mappers/reviews.js';
 import { toDTO as agentRunToDTO } from '../mappers/agentRuns.js';
 

@@ -28,6 +28,7 @@ import { useQuery, useMutation, useQueryClient, UseQueryResult } from '@tanstack
 import { pullRequestsApi } from '../lib/api';
 import type { PullRequestDTO } from 'git-vibe-shared';
 import { useToast } from '../components/Toast';
+import { extractErrorMessage } from '../lib/errorUtils';
 
 /**
  * Hook to fetch a single PR by ID
@@ -68,8 +69,9 @@ export function useMergePR(id: string) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR merged successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to merge PR: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to merge PR');
+      showError(errorMessage);
     },
   });
 
@@ -102,8 +104,9 @@ export function useClosePR(id: string) {
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR closed successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to close PR: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to close PR');
+      showError(errorMessage);
     },
   });
 

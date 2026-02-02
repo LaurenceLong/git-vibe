@@ -24,6 +24,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { GitMerge, X as GitClose, CheckCircle, Clock } from 'lucide-react';
 import { formatDateTime } from '@/lib/datetime';
 import { Badge } from '@/components/ui/badge';
+import { useConfirmModal } from '@/components/ConfirmModal';
 
 // Import tabs components directly
 import { Tab, TabPanel, TabList, TabPanels } from '@/components/ui/Tabs';
@@ -46,6 +47,7 @@ export function PRDetail({ prId }: PRDetailProps) {
   // Merge/Close actions - MUST be called before any early returns (Rules of Hooks)
   const { mergePR, isLoading: isMerging } = useMergePR(prId);
   const { closePR, isLoading: isClosing } = useClosePR(prId);
+  const { confirm } = useConfirmModal();
 
   // Fetch PR data
   const {
@@ -129,7 +131,7 @@ export function PRDetail({ prId }: PRDetailProps) {
   };
 
   const handleMerge = async () => {
-    if (window.confirm('Are you sure you want to merge this PR?')) {
+    if (await confirm({ message: 'Are you sure you want to merge this PR?' })) {
       try {
         await mergePR(pr.mergeStrategy);
       } catch (error) {
@@ -139,7 +141,7 @@ export function PRDetail({ prId }: PRDetailProps) {
   };
 
   const handleClose = async () => {
-    if (window.confirm('Are you sure you want to close this PR?')) {
+    if (await confirm({ message: 'Are you sure you want to close this PR?' })) {
       try {
         await closePR();
       } catch (error) {
@@ -343,7 +345,11 @@ export function PRDetail({ prId }: PRDetailProps) {
           </TabPanel>
           <TabPanel value="files" className={activeTab === 'files' ? '' : 'hidden'}>
             {activeTab === 'files' && (
-              <FilesChangedTab prId={prId} isActive={activeTab === 'files'} />
+              <FilesChangedTab
+                prId={prId}
+                workItemId={pr.workItemId}
+                isActive={activeTab === 'files'}
+              />
             )}
           </TabPanel>
           <TabPanel value="checks" className={activeTab === 'checks' ? '' : 'hidden'}>

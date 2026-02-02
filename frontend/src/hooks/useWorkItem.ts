@@ -28,9 +28,11 @@
 
 import { useQuery, useMutation, useQueryClient, UseQueryResult } from '@tanstack/react-query';
 import { workItemsApi } from '../lib/api';
-import type { WorkItemDTO } from 'git-vibe-shared';
+import type { WorkItemDTO, AgentRunDTO } from 'git-vibe-shared';
 import { CreateWorkItemInput, UpdateWorkItemInput } from '../types';
 import { useToast } from '../components/Toast';
+import { extractErrorMessage } from '../lib/errorUtils';
+import { queryKeys } from '../lib/queryKeys';
 
 /**
  * Hook to fetch a single WorkItem by ID
@@ -40,7 +42,7 @@ import { useToast } from '../components/Toast';
  */
 export function useWorkItem(id: string): UseQueryResult<WorkItemDTO, Error> {
   return useQuery({
-    queryKey: ['workitem', id],
+    queryKey: queryKeys.workitem(id),
     queryFn: async () => {
       const response = await workItemsApi.get(id);
       return response.data;
@@ -57,7 +59,7 @@ export function useWorkItem(id: string): UseQueryResult<WorkItemDTO, Error> {
  */
 export function useWorkItems(projectId?: string): UseQueryResult<WorkItemDTO[], Error> {
   return useQuery({
-    queryKey: ['workitems', projectId],
+    queryKey: queryKeys.workitems({ projectId }),
     queryFn: async () => {
       const response = await workItemsApi.list(projectId);
       // Backend returns { data: WorkItem[], total, page, pageSize }
@@ -85,14 +87,15 @@ export function useCreateWorkItem() {
       return response.data;
     },
     onSuccess: (_, variables) => {
-      // Invalidate WorkItems list for project
-      queryClient.invalidateQueries({ queryKey: ['workitems', variables.projectId] });
-      // Invalidate all WorkItems list
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workitems({ projectId: variables.projectId }),
+      });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem created successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to create WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -119,14 +122,13 @@ export function useUpdateWorkItem(id: string) {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate specific WorkItem query
-      queryClient.invalidateQueries({ queryKey: ['workitem', id] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(id) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem updated successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to update WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to update WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -154,9 +156,7 @@ export function useDeleteWorkItem(id: string, onSuccess?: () => void) {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate specific WorkItem query
-      queryClient.invalidateQueries({ queryKey: ['workitem', id] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(id) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem deleted successfully');
       // Execute optional callback after showing success message
@@ -164,8 +164,9 @@ export function useDeleteWorkItem(id: string, onSuccess?: () => void) {
         onSuccess();
       }
     },
-    onError: (err: Error) => {
-      showError(`Failed to delete WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to delete WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -192,14 +193,13 @@ export function useCloseWorkItem(id: string) {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate specific WorkItem query
-      queryClient.invalidateQueries({ queryKey: ['workitem', id] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(id) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('WorkItem closed successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to close WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to close WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -226,16 +226,14 @@ export function useCreatePRFromWorkItem(workItemId: string) {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate WorkItem query to update PR linkage
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
-      // Invalidate pull-requests lists
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('PR created successfully from WorkItem');
     },
-    onError: (err: Error) => {
-      showError(`Failed to create PR from WorkItem: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to create PR from WorkItem');
+      showError(errorMessage);
     },
   });
 
@@ -244,6 +242,36 @@ export function useCreatePRFromWorkItem(workItemId: string) {
     isLoading: mutation.isPending,
     error: mutation.error as Error | null,
   };
+}
+
+/**
+ * Hook to fetch task list for a WorkItem
+ *
+ * @param workItemId - The ID of WorkItem
+ * @returns Query result with task (agent run) array
+ */
+export function useTasks(
+  workItemId: string,
+  options?: {
+    enabled?: boolean;
+    refetchInterval?: number | false | ((data: AgentRunDTO[] | undefined) => number | false);
+  }
+) {
+  const intervalOpt = options?.refetchInterval;
+  const refetchInterval =
+    typeof intervalOpt === 'function'
+      ? (query: { state: { data: AgentRunDTO[] | undefined } }) => intervalOpt(query.state.data)
+      : intervalOpt;
+
+  return useQuery({
+    queryKey: queryKeys.tasks(workItemId),
+    queryFn: async () => {
+      const response = await workItemsApi.getTasks(workItemId);
+      return (response.data || []) as AgentRunDTO[];
+    },
+    enabled: !!workItemId && options?.enabled !== false,
+    refetchInterval,
+  });
 }
 
 /**
@@ -262,16 +290,15 @@ export function useStartWorkItemTask(workItemId: string) {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate WorkItem query to update task status
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
-      // Invalidate pull-requests lists
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('Task started successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to start task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to start task');
+      showError(errorMessage);
     },
   });
 
@@ -286,33 +313,33 @@ export function useStartWorkItemTask(workItemId: string) {
  * Hook to cancel a task for a WorkItem
  *
  * @param workItemId - The ID of WorkItem
- * @param taskId - The ID of the task to cancel
- * @returns Mutation object with cancel task function
+ * @returns Mutation object; call cancelTask(taskId) for the task to cancel
  */
-export function useCancelWorkItemTask(workItemId: string, taskId: string) {
+export function useCancelWorkItemTask(workItemId: string) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (taskId: string) => {
       const response = await workItemsApi.cancelTask(workItemId, taskId);
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate WorkItem query to update task status
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
       success('Task cancelled successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to cancel task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to cancel task');
+      showError(errorMessage);
     },
   });
 
   return {
     cancelTask: mutation.mutateAsync,
     isLoading: mutation.isPending,
+    isCancellingTaskId: mutation.variables,
     error: mutation.error as Error | null,
   };
 }
@@ -321,35 +348,34 @@ export function useCancelWorkItemTask(workItemId: string, taskId: string) {
  * Hook to restart a task for a WorkItem
  *
  * @param workItemId - The ID of WorkItem
- * @param taskId - The ID of the task to restart
- * @returns Mutation object with restart task function
+ * @returns Mutation object; call restartTask(taskId) for the task to restart
  */
-export function useRestartWorkItemTask(workItemId: string, taskId: string) {
+export function useRestartWorkItemTask(workItemId: string) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (taskId: string) => {
       const response = await workItemsApi.restartTask(workItemId, taskId);
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate WorkItem query to update task status
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
-      // Invalidate pull-requests lists
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('Task restarted successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to restart task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to restart task');
+      showError(errorMessage);
     },
   });
 
   return {
     restartTask: mutation.mutateAsync,
     isLoading: mutation.isPending,
+    isRestartingTaskId: mutation.variables,
     error: mutation.error as Error | null,
   };
 }
@@ -358,35 +384,32 @@ export function useRestartWorkItemTask(workItemId: string, taskId: string) {
  * Hook to resume a task for a WorkItem
  *
  * @param workItemId - The ID of WorkItem
- * @param taskId - The ID of the task to resume
- * @param prompt - The prompt to resume with
- * @returns Mutation object with resume task function
+ * @returns Mutation object; call resumeTask(taskId, prompt) for the task to resume
  */
-export function useResumeWorkItemTask(workItemId: string, taskId: string, prompt: string) {
+export function useResumeWorkItemTask(workItemId: string) {
   const queryClient = useQueryClient();
   const { success, error: showError } = useToast();
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ taskId, prompt }: { taskId: string; prompt: string }) => {
       const response = await workItemsApi.resumeTask(workItemId, taskId, prompt);
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate WorkItem query to update task status
-      queryClient.invalidateQueries({ queryKey: ['workitem', workItemId] });
-      // Invalidate WorkItems lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.workitem(workItemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workItemId) });
       queryClient.invalidateQueries({ queryKey: ['workitems'] });
-      // Invalidate pull-requests lists
       queryClient.invalidateQueries({ queryKey: ['pull-requests'] });
       success('Task resumed successfully');
     },
-    onError: (err: Error) => {
-      showError(`Failed to resume task: ${err.message}`);
+    onError: (err: unknown) => {
+      const errorMessage = extractErrorMessage(err, 'Failed to resume task');
+      showError(errorMessage);
     },
   });
 
   return {
-    resumeTask: mutation.mutateAsync,
+    resumeTask: (taskId: string, prompt: string) => mutation.mutateAsync({ taskId, prompt }),
     isLoading: mutation.isPending,
     error: mutation.error as Error | null,
   };

@@ -1,10 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import { projectsApi } from '@/lib/api';
 import { ActionsTab } from '@/components/project/ActionsTab';
 
+type ActionsSelectionState = {
+  workflowId: string | null;
+  runId: string | null;
+  viewMode: 'runs' | 'run-details' | 'config';
+};
+
 export const Route = createFileRoute('/projects/$projectName/actions')({
   component: ProjectActions,
+  validateSearch: z.object({
+    workflowId: z.string().optional(),
+    runId: z.string().optional(),
+    view: z.enum(['runs', 'run-details', 'config']).optional(),
+  }),
 });
 
 /**
@@ -13,6 +25,8 @@ export const Route = createFileRoute('/projects/$projectName/actions')({
  */
 function ProjectActions() {
   const { projectName } = Route.useParams();
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   const {
     data: project,
@@ -45,8 +59,22 @@ function ProjectActions() {
   }
 
   return (
-    <div className="min-h-[400px] rounded-lg border bg-white p-6 shadow-sm">
-      <ActionsTab project={project} />
-    </div>
+    <ActionsTab
+      project={project}
+      initialWorkflowId={search.workflowId ?? null}
+      initialRunId={search.runId ?? null}
+      initialView={search.view ?? 'runs'}
+      onSelectionChange={(next: ActionsSelectionState) =>
+        navigate({
+          search: (prev) => ({
+            ...prev,
+            workflowId: next.workflowId ?? undefined,
+            runId: next.runId ?? undefined,
+            view: next.viewMode,
+          }),
+          replace: false,
+        })
+      }
+    />
   );
 }

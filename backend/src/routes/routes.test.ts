@@ -16,15 +16,8 @@ import { projectsRepository } from '../repositories/ProjectsRepository.js';
 import { workItemsRepository } from '../repositories/WorkItemsRepository.js';
 import { pullRequestsRepository } from '../repositories/PullRequestsRepository.js';
 import { agentRunsRepository } from '../repositories/AgentRunsRepository.js';
-import { targetReposRepository } from '../repositories/TargetReposRepository.js';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  ProjectSchema,
-  WorkItemSchema,
-  PullRequestSchema,
-  AgentRunSchema,
-  TargetRepoSchema,
-} from 'git-vibe-shared';
+import { ProjectSchema, WorkItemSchema, PullRequestSchema, AgentRunSchema } from 'git-vibe-shared';
 
 // Helper to create a test server
 async function createTestServer() {
@@ -33,7 +26,6 @@ async function createTestServer() {
   await server.register((await import('./workitems.js')).workitemsRoutes);
   await server.register((await import('./pullRequests.js')).pullRequestsRoutes);
   await server.register((await import('./agentRuns.js')).agentRunsRoutes);
-  await server.register((await import('./targetRepos.js')).targetReposRoutes);
   return server;
 }
 
@@ -79,6 +71,7 @@ describe('Backend Routes - Response Schema Validation', () => {
         id: uuidv4(),
         name: `test-route-project-${Date.now()}`,
         sourceRepoPath: '/tmp/test/source',
+        mirrorRepoPath: '/tmp/test/mirror.git',
         relayRepoPath: '/tmp/test/relay',
         defaultBranch: 'main',
       });
@@ -123,6 +116,7 @@ describe('Backend Routes - Response Schema Validation', () => {
         id: uuidv4(),
         name: `test-workitem-project-${Date.now()}`,
         sourceRepoPath: '/tmp/test/source',
+        mirrorRepoPath: '/tmp/test/mirror.git',
         relayRepoPath: '/tmp/test/relay',
         defaultBranch: 'main',
       });
@@ -207,6 +201,7 @@ describe('Backend Routes - Response Schema Validation', () => {
         id: uuidv4(),
         name: `test-pr-project-${Date.now()}`,
         sourceRepoPath: '/tmp/test/source',
+        mirrorRepoPath: '/tmp/test/mirror.git',
         relayRepoPath: '/tmp/test/relay',
         defaultBranch: 'main',
       });
@@ -301,6 +296,7 @@ describe('Backend Routes - Response Schema Validation', () => {
         id: uuidv4(),
         name: `test-agentrun-project-${Date.now()}`,
         sourceRepoPath: '/tmp/test/source',
+        mirrorRepoPath: '/tmp/test/mirror.git',
         relayRepoPath: '/tmp/test/relay',
         defaultBranch: 'main',
       });
@@ -405,52 +401,6 @@ describe('Backend Routes - Response Schema Validation', () => {
 
       const result = AgentRunSchema.safeParse(body);
       expect(result.success).toBe(true);
-    });
-  });
-
-  describe('TargetRepos routes', () => {
-    it('GET /api/target-repos returns array matching schema', async () => {
-      const response = await server.inject({
-        method: 'GET',
-        url: '/api/target-repos',
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.payload);
-
-      // Validate each target repo in array
-      if (Array.isArray(body) && body.length > 0) {
-        body.forEach((repo: any) => {
-          const result = TargetRepoSchema.safeParse(repo);
-          expect(result.success).toBe(true);
-        });
-      }
-    });
-
-    it('GET /api/target-repos/:id returns single target repo matching schema', async () => {
-      // Create a test target repo
-      const targetRepo = await targetReposRepository.create({
-        id: uuidv4(),
-        name: `test-target-repo-${Date.now()}`,
-        repoPath: '/tmp/test/target',
-        defaultBranch: 'main',
-      });
-
-      const response = await server.inject({
-        method: 'GET',
-        url: `/api/target-repos/${targetRepo.id}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.payload);
-
-      // Validate against shared schema
-      const result = TargetRepoSchema.safeParse(body);
-      expect(result.success).toBe(true);
-
-      // Verify date fields are in canonical ISO format
-      expect(body.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-      expect(body.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
   });
 });

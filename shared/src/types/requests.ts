@@ -149,26 +149,6 @@ export const CreateCommentDTOSchema = z.object({
 });
 
 // ============================================================================
-// TargetRepo Request DTOs
-// ============================================================================
-
-/**
- * DTO for creating a new target repository
- */
-export interface CreateTargetRepoDTO {
-  name: string;
-  repoPath: string;
-}
-
-/**
- * Zod schema for CreateTargetRepoDTO validation
- */
-export const CreateTargetRepoDTOSchema = z.object({
-  name: z.string().min(1),
-  repoPath: z.string().min(1),
-});
-
-// ============================================================================
 // WorkItem Request DTOs
 // ============================================================================
 
@@ -226,4 +206,118 @@ export interface RemoveWorktreeDTO {
  */
 export const RemoveWorktreeDTOSchema = z.object({
   worktreePath: z.string().min(1),
+});
+
+// ============================================================================
+// Manual File Operations Request DTOs
+// ============================================================================
+
+/**
+ * DTO for creating a new file
+ */
+export interface CreateFileDTO {
+  path: string;
+  content: string;
+}
+
+/**
+ * Zod schema for CreateFileDTO validation
+ */
+export const CreateFileDTOSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+});
+
+/**
+ * DTO for updating an existing file
+ */
+export interface UpdateFileDTO {
+  path: string;
+  content: string;
+}
+
+/**
+ * Zod schema for UpdateFileDTO validation
+ */
+export const UpdateFileDTOSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+});
+
+/**
+ * DTO for deleting a file
+ */
+export interface DeleteFileDTO {
+  path: string;
+}
+
+/**
+ * Zod schema for DeleteFileDTO validation
+ */
+export const DeleteFileDTOSchema = z.object({
+  path: z.string().min(1),
+});
+
+/**
+ * DTO for committing changes
+ */
+export interface CommitChangesDTO {
+  message: string;
+}
+
+/**
+ * Zod schema for CommitChangesDTO validation
+ */
+export const CommitChangesDTOSchema = z.object({
+  message: z.string().min(1),
+});
+
+/**
+ * DTO for getting or creating a manual WorkItem
+ */
+export interface GetOrCreateManualWorkItemDTO {
+  title?: string;
+}
+
+/**
+ * Zod schema for GetOrCreateManualWorkItemDTO validation
+ */
+export const GetOrCreateManualWorkItemDTOSchema = z.object({
+  title: z.string().optional(),
+});
+
+export interface CreateWorkflowDTO {
+  name: string;
+  description: string;
+  definition: any;
+  isDefault?: boolean;
+}
+
+export const CreateWorkflowDTOSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  definition: z.any(),
+  isDefault: z.boolean().optional(),
+});
+
+export interface UpdateWorkflowDTO {
+  name?: string;
+  description?: string;
+  definition?: any;
+  isDefault?: boolean;
+}
+
+export const UpdateWorkflowDTOSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  definition: z.any().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export interface ExecuteWorkflowDTO {
+  workItemId: string;
+}
+
+export const ExecuteWorkflowDTOSchema = z.object({
+  workItemId: z.string().uuid(),
 });

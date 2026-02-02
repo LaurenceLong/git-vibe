@@ -8,6 +8,7 @@
 import { WorktreeStatus } from '@/types';
 import { WorktreeStatusBadge } from './WorktreeStatusBadge';
 import { Button } from '@/components/ui/Button';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import { AlertCircle, RefreshCw, Trash2, GitBranch, Calendar } from 'lucide-react';
 import { formatDateTime } from '@/lib/datetime';
 
@@ -65,17 +66,22 @@ export function WorktreeStatusComponent({
   isRemoving = false,
   error = null,
 }: WorktreeStatusProps) {
+  const { confirm } = useConfirmModal();
+
   const handleRecreate = async () => {
-    if (window.confirm('Are you sure you want to recreate this worktree?')) {
+    if (await confirm({ message: 'Are you sure you want to recreate this worktree?' })) {
       onRecreate?.();
     }
   };
 
   const handleRemove = async () => {
     if (
-      window.confirm(
-        'Are you sure you want to remove this worktree? This will delete the worktree directory.'
-      )
+      await confirm({
+        message:
+          'Are you sure you want to remove this worktree? This will delete the worktree directory.',
+        variant: 'danger',
+        confirmLabel: 'Remove',
+      })
     ) {
       onRemove?.();
     }
